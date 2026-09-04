@@ -1,0 +1,23 @@
+# 引擎与工具(绿色软件,体积大,不入库)
+tools/
+
+# 临时产物(随时整个删掉)
+temp/
+*.log
+
+# 含API密钥的本地配置
+story-engine/config.json
+
+# 生成出来的世界(可随时重新生成)
+story-engine/worlds/
+
+# Godot 工程缓存
+.godot/
+
+# Node
+node_modules/
+
+# 基线约定的本地文件（WP-01 起）
+.tmp/
+.env
+config/runtime.local.json

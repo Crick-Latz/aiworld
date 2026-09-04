@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.aiworld/schemas/world-spec-0.1.json",
+  "title": "AIWorld WorldSpec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generator_version",
+    "world_id",
+    "title",
+    "seed",
+    "premise",
+    "starting_region_id",
+    "rules",
+    "facts",
+    "regions",
+    "factions",
+    "characters",
+    "initial_relationships"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "generator_version": { "type": "string", "pattern": "^worldgen-[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "world_id": { "$ref": "#/$defs/id" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+    "premise": { "type": "string", "minLength": 20, "maxLength": 1000 },
+    "starting_region_id": { "$ref": "#/$defs/id" },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["truths", "forbidden_claims"],
+      "properties": {
+        "truths": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 4, "maxLength": 200 }
+        },
+        "forbidden_claims": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 4, "maxLength": 200 }
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/fact" }
+    },
+    "regions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/region" }
+    },
+    "factions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/faction" }
+    },
+    "characters": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 24,
+      "items": { "$ref": "#/$defs/character" }
+    },
+    "initial_relationships": {
+      "type": "array",
+      "maxItems": 276,
+      "items": { "$ref": "#/$defs/initial_relationship" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,47}$"
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "source", "public"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "type": "string", "minLength": 4, "maxLength": 300 },
+        "source": { "enum": ["world_rule", "history", "observation"] },
+        "public": { "type": "boolean" }
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "biome", "size", "terrain_weights", "poi_rules"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "biome": {
+          "enum": ["plains", "forest", "mountain", "desert", "snow", "swamp", "coast", "urban", "ruins"]
+        },
+        "size": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "depth"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 32, "maximum": 256 },
+            "depth": { "type": "integer", "minimum": 32, "maximum": 256 }
+          }
+        },
+        "terrain_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ground", "water", "obstacle"],
+          "properties": {
+            "ground": { "type": "number", "minimum": 0, "maximum": 1 },
+            "water": { "type": "number", "minimum": 0, "maximum": 1 },
+            "obstacle": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "poi_rules": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "kind"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "kind": { "enum": ["home", "work", "social", "landmark", "danger", "resource"] }
+            }
+          }
+        }
+      }
+    },
+    "faction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "goal", "home_region_id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "goal": { "type": "string", "minLength": 4, "maxLength": 200 },
+        "home_region_id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "character": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "role", "faction_id", "home_poi_id", "public_traits", "goal", "schedule"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "role": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "faction_id": { "$ref": "#/$defs/id" },
+        "home_poi_id": { "$ref": "#/$defs/id" },
+        "public_traits": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 5,
+          "items": { "type": "string", "minLength": 1, "maxLength": 20 }
+        },
+        "goal": { "type": "string", "minLength": 4, "maxLength": 200 },
+        "schedule": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/schedule_entry" }
+        }
+      }
+    },
+    "schedule_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_minute", "end_minute", "days", "preferred_action", "target_id", "priority", "condition"],
+      "properties": {
+        "start_minute": { "type": "integer", "minimum": 0, "maximum": 1439 },
+        "end_minute": { "type": "integer", "minimum": 1, "maximum": 1440 },
+        "days": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "preferred_action": { "enum": ["move_to", "work", "rest", "talk_to", "inspect", "wait"] },
+        "target_id": { "$ref": "#/$defs/id" },
+        "priority": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "condition": { "enum": ["always", "energy_gte_250", "hunger_lte_750", "quest_active"] }
+      }
+    },
+    "initial_relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_actor_id", "to_actor_id", "trust", "affection", "fear", "debt"],
+      "properties": {
+        "from_actor_id": { "$ref": "#/$defs/id" },
+        "to_actor_id": { "$ref": "#/$defs/id" },
+        "trust": { "type": "integer", "minimum": -1000, "maximum": 1000 },
+        "affection": { "type": "integer", "minimum": -1000, "maximum": 1000 },
+        "fear": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "debt": { "type": "integer", "minimum": -1000, "maximum": 1000 }
+      }
+    }
+  }
+}

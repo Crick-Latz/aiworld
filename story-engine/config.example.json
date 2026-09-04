@@ -1,0 +1,5 @@
+{
+  "apiKey": "把智谱开放平台 open.bigmodel.cn 的API Key粘贴到这里",
+  "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+  "model": "glm-4-flash"
+}
