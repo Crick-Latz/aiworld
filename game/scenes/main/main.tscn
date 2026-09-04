@@ -1,6 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b3k2main0q1a4"]
 
 [ext_resource type="Script" path="res://scenes/main/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://src/map/map_controller.gd" id="2_mapctl"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -8,9 +9,6 @@ background_color = Color(0.58, 0.66, 0.78, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.75, 0.78, 0.85, 1)
 ambient_light_energy = 0.7
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_preview"]
-size = Vector2(24, 24)
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -24,8 +22,22 @@ environment = SubResource("Environment_main")
 shadow_enabled = true
 directional_shadow_max_distance = 40.0
 
-[node name="PreviewGround" type="MeshInstance3D" parent="World"]
-mesh = SubResource("PlaneMesh_preview")
+[node name="GroundGrid" type="GridMap" parent="World"]
+cell_size = Vector3(1, 0.5, 1)
+
+[node name="ObstacleGrid" type="GridMap" parent="World"]
+cell_size = Vector3(1, 0.5, 1)
+
+[node name="PropRoot" type="Node3D" parent="World"]
+
+[node name="PoiRoot" type="Node3D" parent="World"]
+
+[node name="ActorRoot" type="Node3D" parent="World"]
+
+[node name="TriggerRoot" type="Node3D" parent="World"]
+
+[node name="MapController" type="Node" parent="World"]
+script = ExtResource("2_mapctl")
 
 [node name="CameraRig" type="Node3D" parent="World"]
 position = Vector3(12, 12, 12)
@@ -51,8 +63,12 @@ mouse_filter = 2
 unique_name_in_owner = true
 offset_left = 24.0
 offset_top = 16.0
-offset_right = 760.0
-offset_bottom = 84.0
+offset_right = 860.0
+offset_bottom = 96.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 24
 text = "AIWorld Prototype"
 
 [node name="ErrorPanel" type="Control" parent="Ui"]
@@ -86,10 +102,10 @@ anchor_bottom = 1.0
 mouse_filter = 2
 
 [node name="DebugPanel" type="PanelContainer" parent="Ui/DebugOverlay"]
-offset_left = 860.0
+offset_left = 800.0
 offset_top = 16.0
-offset_right = 1264.0
-offset_bottom = 250.0
+offset_right = 1268.0
+offset_bottom = 420.0
 
 [node name="DebugVBox" type="VBoxContainer" parent="Ui/DebugOverlay/DebugPanel"]
 
@@ -120,5 +136,21 @@ text = "error: -"
 [node name="DebugCameraLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
 unique_name_in_owner = true
 text = "camera: -"
+
+[node name="DebugMapHashLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "map: -"
+
+[node name="DebugMapRatioLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "ratios: -"
+
+[node name="DebugMapCellsLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "cells: -"
+
+[node name="DebugMapSpawnLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "spawn: -"
 
 [node name="Audio" type="Node" parent="."]
