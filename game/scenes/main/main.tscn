@@ -1,0 +1,124 @@
+[gd_scene load_steps=4 format=3 uid="uid://b3k2main0q1a4"]
+
+[ext_resource type="Script" path="res://scenes/main/main.gd" id="1_main"]
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.58, 0.66, 0.78, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.78, 0.85, 1)
+ambient_light_energy = 0.7
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_preview"]
+size = Vector2(24, 24)
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="Environment" type="WorldEnvironment" parent="World"]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="World"]
+shadow_enabled = true
+directional_shadow_max_distance = 40.0
+
+[node name="PreviewGround" type="MeshInstance3D" parent="World"]
+mesh = SubResource("PlaneMesh_preview")
+
+[node name="CameraRig" type="Node3D" parent="World"]
+position = Vector3(12, 12, 12)
+
+[node name="YawPivot" type="Node3D" parent="World/CameraRig"]
+
+[node name="MainCamera" type="Camera3D" parent="World/CameraRig/YawPivot"]
+projection = 1
+current = true
+size = 20.0
+near = 0.1
+far = 200.0
+unique_name_in_owner = true
+
+[node name="Ui" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="Control" parent="Ui"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="TitleLabel" type="Label" parent="Ui/Hud"]
+unique_name_in_owner = true
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 760.0
+offset_bottom = 84.0
+text = "AIWorld Prototype"
+
+[node name="ErrorPanel" type="Control" parent="Ui"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+
+[node name="ErrorBox" type="PanelContainer" parent="Ui/ErrorPanel"]
+offset_left = 240.0
+offset_top = 240.0
+offset_right = 1040.0
+offset_bottom = 480.0
+
+[node name="ErrorVBox" type="VBoxContainer" parent="Ui/ErrorPanel/ErrorBox"]
+
+[node name="ErrorCodeLabel" type="Label" parent="Ui/ErrorPanel/ErrorBox/ErrorVBox"]
+unique_name_in_owner = true
+text = "ERROR"
+
+[node name="ErrorMessageLabel" type="Label" parent="Ui/ErrorPanel/ErrorBox/ErrorVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(720, 0)
+autowrap_mode = 3
+text = "message"
+
+[node name="DebugOverlay" type="Control" parent="Ui"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="DebugPanel" type="PanelContainer" parent="Ui/DebugOverlay"]
+offset_left = 860.0
+offset_top = 16.0
+offset_right = 1264.0
+offset_bottom = 250.0
+
+[node name="DebugVBox" type="VBoxContainer" parent="Ui/DebugOverlay/DebugPanel"]
+
+[node name="DebugWorldLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "world_id: -"
+
+[node name="DebugSchemaLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "schema_version: -"
+
+[node name="DebugSeedLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "seed: -"
+
+[node name="DebugGenLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "generator_version: -"
+
+[node name="DebugModeLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "mode: -"
+
+[node name="DebugErrorLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "error: -"
+
+[node name="DebugCameraLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "camera: -"
+
+[node name="Audio" type="Node" parent="."]

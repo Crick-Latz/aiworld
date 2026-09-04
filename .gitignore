@@ -21,3 +21,4 @@ node_modules/
 .tmp/
 .env
 config/runtime.local.json
+game/config/runtime.local.json

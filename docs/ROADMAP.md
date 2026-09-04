@@ -5,7 +5,7 @@
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| 0 环境 | Godot 4.7.2（tools/godot.exe）、Node、git | ✅ |
+| 0 环境 | Godot 4.7.2（tools/Godot_v4.7.2-stable_win64_console.exe）、Node、git | ✅ |
 | 1 文字故事引擎 | lore→世界JSON+文字冒险；通过标准：5次生成校验PASS率≥80% | 🚧 骨架完成，待真实API压测 |
 | 2 Godot程序化地图 | 地貌约束的随机地图 | ⬜ |
 | 3 剧本驱动世界 | JSON刷NPC/任务/对话，玩家行为回传LLM推进剧情 | ⬜ |

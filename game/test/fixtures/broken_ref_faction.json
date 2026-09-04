@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.1",
+  "generator_version": "worldgen-0.1.0",
+  "world_id": "mist_harbor",
+  "title": "灰雾港（断裂引用夹具）",
+  "seed": 20260904,
+  "premise": "大陆边缘的走私港城。黑雾退潮后的第三周，灯塔的光开始不稳定，而三份彼此冲突的货物清单正在城里换手。",
+  "starting_region_id": "harbor_district",
+  "rules": {
+    "truths": [
+      "灰雾只在无风的夜里漫过防波堤",
+      "灯塔的火需要风晶粉末才能维持",
+      "离开海港的航道只有一条且经过暗礁区"
+    ],
+    "forbidden_claims": []
+  },
+  "facts": [
+    { "id": "fact_tide_rule", "statement": "灰雾只在无风的夜里漫过防波堤", "source": "world_rule", "public": true },
+    { "id": "fact_lighthouse", "statement": "灯塔的火需要风晶粉末才能维持", "source": "world_rule", "public": true },
+    { "id": "fact_channel", "statement": "离开海港的航道只有一条且经过暗礁区", "source": "history", "public": true }
+  ],
+  "regions": [
+    {
+      "id": "harbor_district",
+      "name": "港区",
+      "biome": "coast",
+      "size": { "width": 64, "depth": 64 },
+      "terrain_weights": { "ground": 0.72, "water": 0.08, "obstacle": 0.2 },
+      "poi_rules": [
+        { "id": "post_house", "name": "风铃驿站", "kind": "work" },
+        { "id": "tide_market", "name": "潮汐市集", "kind": "social" },
+        { "id": "old_lighthouse", "name": "旧灯塔", "kind": "landmark" }
+      ]
+    }
+  ],
+  "factions": [
+    { "id": "harbor_watch", "name": "港务守望会", "goal": "守住灯塔与航道，撑到大陆援军到来", "home_region_id": "nope_region" },
+    { "id": "smuggler_ring", "name": "灰缆走私帮", "goal": "在港口关闭前把货物和账本一起运出海", "home_region_id": "harbor_district" }
+  ],
+  "characters": [
+    {
+      "id": "npc_kadga",
+      "name": "卡德加",
+      "role": "港口老船匠",
+      "faction_id": "harbor_watch",
+      "home_poi_id": "post_house",
+      "public_traits": ["固执", "惜命", "手巧"],
+      "goal": "修好最后一艘能出海的船，带愿意走的人撤离",
+      "schedule": [
+        { "start_minute": 480, "end_minute": 720, "days": [1, 2, 3, 4, 5, 6, 7], "preferred_action": "work", "target_id": "post_house", "priority": 700, "condition": "always" }
+      ]
+    },
+    {
+      "id": "npc_weila",
+      "name": "薇拉",
+      "role": "流浪的驱雾人",
+      "faction_id": "harbor_watch",
+      "home_poi_id": "tide_market",
+      "public_traits": ["冷静", "话少", "果决"],
+      "goal": "查明黑雾为何改变潮汐规律",
+      "schedule": [
+        { "start_minute": 300, "end_minute": 540, "days": [1, 2, 3, 4, 5, 6, 7], "preferred_action": "inspect", "target_id": "old_lighthouse", "priority": 650, "condition": "energy_gte_250" }
+      ]
+    },
+    {
+      "id": "npc_oun",
+      "name": "缄默者欧恩",
+      "role": "走私帮的账房先生",
+      "faction_id": "smuggler_ring",
+      "home_poi_id": "tide_market",
+      "public_traits": ["优雅", "耐心", "记性好"],
+      "goal": "在天亮前把三份账目对齐并送出海",
+      "schedule": [
+        { "start_minute": 1200, "end_minute": 1440, "days": [1, 2, 3, 4, 5, 6, 7], "preferred_action": "work", "target_id": "tide_market", "priority": 800, "condition": "always" }
+      ]
+    }
+  ],
+  "initial_relationships": [
+    { "from_actor_id": "npc_kadga", "to_actor_id": "npc_weila", "trust": 150, "affection": 50, "fear": 0, "debt": 0 }
+  ]
+}
