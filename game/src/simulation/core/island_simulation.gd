@@ -110,14 +110,22 @@ func _init_actors(actor_configs: Array) -> void:
 			cfg.get("traits", {}),
 			cfg.get("beliefs", {})
 		)
+		# P0: 人生经历 → 派生信念 + 敏感度
+		var life := LifeHistory.new(cfg.get("life_history", []))
+		var derived := life.derived_beliefs()
+		for belief_text in derived:
+			personality.add_belief(belief_text, float(derived[belief_text]))
 		actors[id] = {
 			"id": id,
 			"display_name": str(cfg.get("name", id)),
 			"tile": cfg.get("spawn", Vector2i(10, 10)),
 			"prev_tile": cfg.get("spawn", Vector2i(10, 10)),
 			"personality": personality,
+			"life_history": life,
+			"sensitivities": life.derived_sensitivities(),
 			"beliefs": BeliefStore.new(),
 			"intentions": IntentionManager.new(),
+			"goal_manager": GoalManager.new(),
 			"needs": {"hunger": 200, "thirst": 150, "energy": 800, "social": 100},
 			"physical": {"sick": false, "injured": false, "wet": false},
 			"inventory": cfg.get("inventory", {}),
@@ -125,9 +133,9 @@ func _init_actors(actor_configs: Array) -> void:
 			"current_action": null,
 			"action_ticks_left": 0,
 			"visited_tiles": {},
-			"relationships": {},  # to_id -> {trust: int, affection: int}
-			"last_decision_trace": {}, # DecisionTrace：观察者可回答"他为什么这么做"
-			"memories": [],           # 情景记忆（最近 20 条重要事件）
+			"relationships": {},
+			"last_decision_trace": {},
+			"memories": [],
 		}
 
 # ── 主循环 ──
@@ -164,14 +172,22 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 			a["activity"] = str(a.get("current_action", {}).get("desc", "忙碌"))
 		return
 
-	# 空闲：DecisionEngine v2（Softmax + Intention + Trace）
+	# P0: 每次决策前重新生成目标（需求+人格→目标）
+	var gm: GoalManager = a.get("goal_manager", null)
+	if gm != null:
+		a["goal_manager"] = GoalManager.auto_generate(a)
+
+	# P0: DecisionEngine v2（Goal→Intention→Softmax + Trace）
 	var actor_view := _build_actor_view(id, a)
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["activity"] = str(decision.get("desc", "？"))
-	if a.has("last_decision_trace") and not decision.has("reason"):
-		pass # DecisionEngine 已写入 last_decision_trace
+
+	# P0: 把 trace 写回真实 actor（DecisionEngine 只写了 view 副本）
+	if actor_view.has("last_decision_trace"):
+		a["last_decision_trace"] = actor_view["last_decision_trace"]
+	_enrich_trace(a, decision, gm)
 
 	# 如果目标不是当前位置，先移动（每 tick 1 格）
 	var target = decision.get("target", null)
@@ -392,7 +408,6 @@ func _update_nearby_info() -> void:
 	world["someone_needs_help_nearby"] = anyone_needs_help
 
 func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
-	# 把 actor 的数据整理成 ActionRegistry 需要的格式
 	return {
 		"id": id,
 		"tile": a["tile"],
@@ -401,7 +416,40 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"physical": a["physical"],
 		"inventory": a["inventory"],
 		"visited_tiles": a["visited_tiles"],
+		"beliefs": a.get("beliefs", BeliefStore.new()),
+		"intentions": a.get("intentions", IntentionManager.new()),
+		"goal_manager": a.get("goal_manager", GoalManager.new()),
+		"sensitivities": a.get("sensitivities", {}),
 	}
+
+## P0: 丰富 DecisionTrace——把 belief/goal/intention/memories 写入
+func _enrich_trace(a: Dictionary, decision: Dictionary, gm: GoalManager) -> void:
+	var trace: Dictionary = a.get("last_decision_trace", {})
+	if trace.is_empty():
+		return
+	# 当前最高优先级目标
+	if gm != null:
+		var top := gm.top_goal()
+		if not top.is_empty():
+			trace["active_goal"] = str(top["id"])
+			trace["goal_desc"] = str(top["desc"])
+			trace["goal_priority"] = float(top["priority"])
+	# 意图状态
+	var im: IntentionManager = a.get("intentions", null)
+	if im != null and im.has_intention():
+		trace["intention"] = str(im.current_intention.get("action", ""))
+		trace["commitment"] = float(im.current_intention.get("commitment", 0))
+	# 信念中与当前行动相关的
+	var beliefs: Dictionary = a["personality"].beliefs
+	if not beliefs.is_empty():
+		var relevant := {}
+		for b in beliefs:
+			relevant[b] = float(beliefs[b]["weight"])
+		trace["beliefs"] = relevant
+	# 情绪快照
+	trace["emotions"] = a["personality"].emotions.duplicate()
+	# 记忆量
+	trace["memory_count"] = (a.get("memories", []) as Array).size()
 
 func _move_toward(a: Dictionary, target: Vector2i) -> void:
 	var path: Array = map_query.find_walk_path(

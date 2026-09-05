@@ -399,13 +399,11 @@ func _refresh_hud() -> void:
 			recent.append(all[i])
 		model["recent_events"] = recent
 	elif story_sim != null:
-		active_sim_tick = story_sim.tick
 		var t: int = story_sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d%s" % [t / 1440 + 1, (t % 1440) / 60, t % 60,
 			" · 灯塔已点亮 ✨" if story_sim.lighthouse_lit else " · 灯塔未点亮"]
 		model["world_facts_text"] = "灯塔：%s" % ("已点亮" if story_sim.lighthouse_lit else "未点亮")
 	elif sim != null:
-		active_sim_tick = sim.tick
 		var t2: int = sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d" % [t2 / 1440 + 1, (t2 % 1440) / 60, t2 % 60]
 	else:
