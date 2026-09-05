@@ -378,10 +378,10 @@ func _refresh_hud() -> void:
 			}
 			# 情绪和决策原因附加到活动文本
 			var emotions: Array = []
-			for key in ["joy", "fear", "anger", "sadness"]:
+			for key in ["joy", "fear", "anger", "sadness", "guilt"]:
 				var v: float = p.emotions.get(key, 0.0)
 				if absf(v) > 0.1:
-					var names := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤"}
+					var names := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤", "guilt": "内疚"}
 					emotions.append("%s%.0f%%" % [names[key], v * 100])
 			if not emotions.is_empty():
 				sel["activity_text"] += "\n情绪：" + "、".join(emotions)
@@ -392,6 +392,35 @@ func _refresh_hud() -> void:
 				int(needs.get("hunger", 0)), int(needs.get("thirst", 0)),
 				1000 - int(needs.get("energy", 1000)), int(needs.get("social", 0)),
 			]
+			# P1: 一阶心智——"他以为别人是什么样的人"（可能是错的，这正是看点）
+			var tom: TheoryOfMind = a.get("tom", null)
+			if tom != null:
+				var tom_parts: Array = []
+				for oid in island_sim.actors:
+					if oid == selected_actor_id:
+						continue
+					var m := tom.model_of(oid)
+					if float(m["has_food"]) != 0.0 or float(m["generous"]) != 0.0 or float(m["reliable"]) != 0.0:
+						tom_parts.append("%s(食%+.1f 慷%+.1f 靠%+.1f)" % [
+							island_sim.actors[oid]["display_name"],
+							m["has_food"], m["generous"], m["reliable"]])
+				if not tom_parts.is_empty():
+					sel["activity_text"] += "\n心智：" + " ".join(tom_parts)
+			# P1: 有向信任——"我信谁多少"（对方未必同样信我）
+			var trust_parts: Array = []
+			for oid in island_sim.actors:
+				if oid == selected_actor_id:
+					continue
+				var t_val: int = island_sim.relationships.get_trust(selected_actor_id, oid)
+				if t_val != 0:
+					trust_parts.append("%s%+d" % [island_sim.actors[oid]["display_name"], t_val])
+			if not trust_parts.is_empty():
+				sel["activity_text"] += "\n信任：" + " ".join(trust_parts)
+			# P1: 最近的记忆（受助/被拒/受伤这些塑造关系的时刻）
+			var mems: Array = a.get("memories", [])
+			if not mems.is_empty():
+				var last_mem: Dictionary = mems[mems.size() - 1]
+				sel["activity_text"] += "\n记忆：" + str(last_mem.get("text", "")).substr(0, 40)
 		model["selected_actor"] = sel
 		var recent: Array = []
 		var all: Array = island_sim.events

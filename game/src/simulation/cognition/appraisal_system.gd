@@ -28,6 +28,7 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 		"controllability": 0.5,
 		"agency": str(event.get("actor_id", "")),
 		"norm_violation": 0.0,
+		"self_agency": str(event.get("actor_id", "")) == str(actor.get("id", "")),
 	}
 
 	# 事件类型 → 评价维度
@@ -50,6 +51,31 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 		"ruins_empty":
 			appraisal["goal_congruence"] = -0.3
 			appraisal["expectedness"] = -0.2
+		# ── P1 社会事件：同一事件，不同角色评价不同 ──
+		"food_request_refused":
+			# 被拒者：目标受阻 + 规范被违反（"同伴本该互相帮助"）
+			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
+				appraisal["goal_congruence"] = -0.7
+				appraisal["expectedness"] = -0.3
+				appraisal["norm_violation"] = 0.5
+				appraisal["controllability"] = 0.2
+			# 拒绝者本人：可能内疚（我违反了自己的分享规范）
+			elif appraisal["self_agency"]:
+				appraisal["goal_congruence"] = -0.2
+				appraisal["norm_violation"] = 0.6
+		"food_request_accepted":
+			# 求助成功者：如释重负
+			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
+				appraisal["goal_congruence"] = 0.7
+				appraisal["expectedness"] = -0.4
+			# 分享者：利他满足感
+			elif appraisal["self_agency"]:
+				appraisal["goal_congruence"] = 0.3 + float(p.traits.get("altruism", 0.5)) * 0.3
+		"food_requested":
+			# 有人向我开口：轻微的决策压力
+			if str(event.get("target_id", "")) == str(actor.get("id", "")):
+				appraisal["goal_congruence"] = -0.1
+				appraisal["controllability"] = 0.8
 
 	# 性格修饰评价
 	var empathy := p.effective_trait("empathy", {})
@@ -73,5 +99,8 @@ static func appraisal_to_emotions(appraisal: Dictionary, personality: Personalit
 			changes["anger"] = norm_violation * 0.4 * (0.5 + empathy)  # 违反规范+高共情 → 愤怒
 		if appraisal.get("controllability", 0.5) < 0.3:
 			changes["fear"] = -goal_cong * 0.3  # 不可控的坏事 → 恐惧
+	# 内疚：是我干的（self_agency）且违反了自己的规范 → 越有共情越自责
+	if bool(appraisal.get("self_agency", false)) and norm_violation > 0.4 and goal_cong <= -0.2:
+		changes["guilt"] = norm_violation * 0.3 * empathy
 
 	return changes

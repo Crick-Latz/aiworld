@@ -36,6 +36,10 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a10 != null: actions.append(a10)
 	var a11 = _share(p, needs, inv, pos, world)
 	if a11 != null: actions.append(a11)
+	var a13 = _request(p, needs, actor, world)
+	if a13 != null: actions.append(a13)
+	var a14 = _eat(p, needs, inv)
+	if a14 != null: actions.append(a14)
 	var a12 = _rest(p, needs)
 	if a12 != null: actions.append(a12)
 	actions.append(_wait())
@@ -168,10 +172,47 @@ static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, po
 		score *= 1.5
 	return {"action": "share_food", "target": pos, "utility": score, "desc": "分享食物", "duration": 1}
 
+## P1：开口求助。拉不下脸是真实的人性——不够饿不会求人；
+## 向谁开口由 ToM（"他应该有食物"）+ 信任（"他不会羞辱我"）决定。
+static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary):
+	var hunger_raw := float(needs.get("hunger", 0))
+	if hunger_raw < 500.0:
+		return null  # 不够饿，开不了口
+	var nearby: Array = actor.get("others_nearby", [])
+	if nearby.is_empty():
+		return null
+	var trust_of: Dictionary = actor.get("trust_of", {})
+	var target_id := SocialSystem.pick_request_target(actor, nearby, trust_of)
+	if target_id == "":
+		return null
+	var target_tile := Vector2i(10, 10)
+	for o in nearby:
+		if str(o.get("id", "")) == target_id:
+			target_tile = o.get("tile", target_tile)
+	var hunger := _n(hunger_raw, 500.0, 800.0)
+	var sociability := p.effective_trait("sociability", needs)
+	var trust_f := clampf(float(trust_of.get(target_id, 0)) / 400.0, -1.0, 1.0)
+	var pride_cost := 0.15  # 求助的心理成本：效用要盖过它才会开口
+	var score := UtilityCurves.quadratic(hunger) * (0.5 + sociability * 0.3 + trust_f * 0.2) - pride_cost
+	if score <= 0.0:
+		return null
+	return {"action": "request_share", "target": target_tile, "target_actor": target_id,
+		"utility": score, "desc": "向同伴求助", "duration": 1}
+
 static func _rest(p: PersonalityProfile, needs: Dictionary):
 	var energy_low := 1.0 - _n(needs.get("energy", 1000), 100, 400)
 	var score := UtilityCurves.quadratic(energy_low)
 	return {"action": "rest", "target": null, "utility": score, "desc": "休息", "duration": 3}
+
+## 吃库存食物。饿到极点还揣着存粮却不吃，是不可信的行为——
+## 这条行动保证"饿死"只会发生在真的弹尽粮绝时。
+static func _eat(p: PersonalityProfile, needs: Dictionary, inv: Dictionary):
+	if int(inv.get("food", 0)) < 1:
+		return null
+	var hunger := _n(needs.get("hunger", 0), 350, 800)
+	var prag := p.effective_trait("pragmatism", needs)
+	var score := UtilityCurves.quadratic(hunger) * (0.9 + prag * 0.3)
+	return {"action": "eat_food", "target": null, "utility": score, "desc": "吃点存粮", "duration": 1}
 
 static func _wait():
 	return {"action": "wait", "target": null, "utility": 0.05, "desc": "观察周围", "duration": 1}
