@@ -116,6 +116,8 @@ func _init_actors(actor_configs: Array) -> void:
 			"tile": cfg.get("spawn", Vector2i(10, 10)),
 			"prev_tile": cfg.get("spawn", Vector2i(10, 10)),
 			"personality": personality,
+			"beliefs": BeliefStore.new(),
+			"intentions": IntentionManager.new(),
 			"needs": {"hunger": 200, "thirst": 150, "energy": 800, "social": 100},
 			"physical": {"sick": false, "injured": false, "wet": false},
 			"inventory": cfg.get("inventory", {}),
@@ -124,6 +126,8 @@ func _init_actors(actor_configs: Array) -> void:
 			"action_ticks_left": 0,
 			"visited_tiles": {},
 			"relationships": {},  # to_id -> {trust: int, affection: int}
+			"last_decision_trace": {}, # DecisionTrace：观察者可回答"他为什么这么做"
+			"memories": [],           # 情景记忆（最近 20 条重要事件）
 		}
 
 # ── 主循环 ──
@@ -160,12 +164,14 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 			a["activity"] = str(a.get("current_action", {}).get("desc", "忙碌"))
 		return
 
-	# 空闲：Utility AI 决策
+	# 空闲：DecisionEngine v2（Softmax + Intention + Trace）
 	var actor_view := _build_actor_view(id, a)
-	var decision: Dictionary = DecisionEngine.decide(actor_view, world)
+	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["activity"] = str(decision.get("desc", "？"))
+	if a.has("last_decision_trace") and not decision.has("reason"):
+		pass # DecisionEngine 已写入 last_decision_trace
 
 	# 如果目标不是当前位置，先移动（每 tick 1 格）
 	var target = decision.get("target", null)
@@ -414,7 +420,44 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		e[k] = extra[k]
 	_seq += 1
 	events.append(e)
+	# 阶段 C：事件触发情绪评价（FAtiMA 式），记忆存储
+	for id in actors:
+		var a: Dictionary = actors[id]
+		var is_witness: bool = id == actor_id or _is_nearby(actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO, a["tile"])
+		if is_witness:
+			_appraise_and_react(e, a)
+			_store_memory(a, e)
 	return int(e["seq"])
+
+func _is_nearby(a: Vector2i, b: Vector2i) -> bool:
+	return absi(a.x - b.x) + absi(a.y - b.y) <= 8
+
+func _appraise_and_react(event: Dictionary, actor: Dictionary) -> void:
+	var p: PersonalityProfile = actor.get("personality", null)
+	if p == null:
+		return
+	var appraisal: Dictionary = AppraisalSystem.appraise(event, actor)
+	if appraisal.is_empty():
+		return
+	var changes: Dictionary = AppraisalSystem.appraisal_to_emotions(appraisal, p)
+	for key in changes:
+		p.adjust_emotion(key, float(changes[key]))
+
+func _store_memory(actor: Dictionary, event: Dictionary) -> void:
+	var type := str(event.get("type", ""))
+	# 只记住重要事件
+	var important_types := ["explored_hurt", "explored_found", "ruins_loot", "shared_food", "weather_storm"]
+	if not important_types.has(type):
+		return
+	var mem := {
+		"seq": int(event.get("seq", 0)),
+		"tick": int(event.get("tick", 0)),
+		"type": type,
+		"text": str(event.get("text", "")),
+	}
+	actor["memories"].append(mem)
+	if actor["memories"].size() > 20:
+		actor["memories"].pop_front()
 
 # ── 查询接口 ──
 
