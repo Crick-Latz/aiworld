@@ -24,9 +24,50 @@ static func build() -> MeshLibrary:
 	_add_ground(lib, 2, "ground_road", Color8(72, 72, 80))
 	_add_ground(lib, 3, "ground_sand", Color8(199, 179, 128))
 	_add_water(lib, 4)
-	_add_rock(lib, 5)
-	_add_tree(lib, 6)
+	_add_rock_svg(lib, 5)
+	_add_tree_svg(lib, 6)
 	return lib
+
+# 阶段 A：SVG 贴图的 rock/tree（QuadMesh + SVG 纹理 + billboard 效果）
+static func _add_rock_svg(lib: MeshLibrary, id: int) -> void:
+	lib.create_item(id)
+	lib.set_item_name(id, "rock_small")
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(0.9, 0.9)
+	var tex := load("res://assets/prototype/rock.svg")
+	if tex != null:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mesh.material = mat
+	lib.set_item_mesh(id, mesh)
+	lib.set_item_mesh_transform(id, _offset(ROCK_DY))
+	var shape := CylinderShape3D.new()
+	shape.radius = 0.35
+	shape.height = 0.6
+	lib.set_item_shapes(id, [shape, _offset(ROCK_DY)])
+
+static func _add_tree_svg(lib: MeshLibrary, id: int) -> void:
+	lib.create_item(id)
+	lib.set_item_name(id, "tree_lowpoly")
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(1.4, 1.4)
+	var tex := load("res://assets/prototype/tree.svg")
+	if tex != null:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mesh.material = mat
+	lib.set_item_mesh(id, mesh)
+	lib.set_item_mesh_transform(id, _offset(TREE_DY + 0.2))
+	var shape := CylinderShape3D.new()
+	shape.radius = 0.25
+	shape.height = 1.2
+	lib.set_item_shapes(id, [shape, _offset(TREE_DY)])
 
 static func _mat(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()

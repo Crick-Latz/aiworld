@@ -25,6 +25,8 @@ var _delayed_messages: Array = [] # {deliver_tick, fact_id, to_id, source_seq, s
 var _message_delivered := {} # 去重键 -> true（OBS-03 幂等）
 var _commitment_id := "" # 活跃承诺的幂等键（OBS-03：多次结算命令幂等）
 var _inject_extra_done := false
+var relationships := RelationshipStore.new() # 阶段 A：有向信任/好恶
+var _needs_events := 0 # 需求驱动的事件计数
 
 func _init(map_query, scenario_data: Dictionary, spawn_tiles: Dictionary) -> void:
 	_map_query = map_query
@@ -49,6 +51,7 @@ func _init(map_query, scenario_data: Dictionary, spawn_tiles: Dictionary) -> voi
 			"goal": "",
 			"goal_status": "",
 			"display_name": _display_name_of(id),
+			"needs": {"hunger": 200, "energy": 800, "social": 100}, # 阶段 A：初始需求
 		}
 	# 请求者初始目标：先去灯塔查看（inspect 产生目标，不是开局自带）
 	var req := _requester()
@@ -133,6 +136,10 @@ func step() -> Array:
 			continue
 		var a: Dictionary = actors[id]
 		a["prev_tile"] = a["tile"]
+		# 阶段 A：需求衰减（紧急需求可打断当前活动）
+		var urgent := NeedsSystem.tick_needs(a)
+		if urgent != "" and a["phase"] in ["idle", "waiting", "done"]:
+			_handle_urgent_need(id, a, urgent)
 		_tick_actor(id, a)
 	for e in events:
 		if int(e["tick"]) == tick:
@@ -170,6 +177,43 @@ func schedule_delayed_message(deliver_tick: int, fact_id: String, to_id: String,
 	})
 
 var help_request_active := false
+
+## 阶段 A：紧急需求处理（打断 idle/waiting/done 状态）
+func _handle_urgent_need(id: String, a: Dictionary, need: String) -> void:
+	_needs_events += 1
+	match need:
+		"seek_food":
+			a["phase"] = "idle"
+			a["activity"] = "饿了，寻找食物"
+			NeedsSystem.recover(a, "hunger") # 原型简化：立即恢复（后续接 POI 食物）
+			_emit("need_triggered", id, "%s 饿了，找东西吃" % a["display_name"], -1, {"need": "hunger"})
+		"seek_rest":
+			a["phase"] = "idle"
+			a["activity"] = "累了，休息一下"
+			NeedsSystem.recover(a, "energy")
+			_emit("need_triggered", id, "%s 累了，原地休息" % a["display_name"], -1, {"need": "energy"})
+		"seek_social":
+			a["phase"] = "idle"
+			a["activity"] = "想找人聊聊"
+			NeedsSystem.recover(a, "social")
+			_emit("need_triggered", id, "%s 感到孤独，找人聊天" % a["display_name"], -1, {"need": "social"})
+
+## 阶段 A：基于信任的求助目标选择（替代硬编码 from_id）
+func _pick_helper_by_trust(requester_id: String, item: String, amount: int) -> String:
+	var candidates: Array = []
+	for id in _ordered_ids():
+		if _departed.has(id) or id == requester_id:
+			continue
+		var a: Dictionary = actors[id]
+		var have: int = int(a["inventory"].get(item, 0))
+		var reserve: int = int(a["reserve"].get(item, 0))
+		if have - reserve < amount:
+			continue
+		var dist := absi(a["tile"].x - actors[requester_id]["tile"].x) + absi(a["tile"].y - actors[requester_id]["tile"].y)
+		candidates.append({"id": id, "distance": dist})
+	if candidates.is_empty():
+		return str(_request().get("from_id", "")) # 无候选回退到场景默认
+	return RelationshipStore.pick_best_helper(candidates, relationships, requester_id)
 
 func _cancel_commitment(reason_code: String, cause_seq: int) -> void:
 	var req := _request()
@@ -272,22 +316,30 @@ func _tick_actor(id: String, a: Dictionary) -> void:
 
 func _start_request(requester_id: String, cause_seq: int) -> void:
 	var req := _request()
-	var helper_id := str(req["from_id"])
-	var h: Dictionary = actors[helper_id]
 	var item := str(req["item"])
 	var amount: int = int(req["amount"])
+	# 阶段 A：基于信任选最优求助目标（不再硬编码 from_id）
+	var helper_id := _pick_helper_by_trust(requester_id, item, amount)
+	var h: Dictionary = actors[helper_id]
 	_emit("help_requested", requester_id,
 		"%s 向 %s 请求 %d 份%s（原因：%s）" % [actors[requester_id]["display_name"], h["display_name"], amount, _item_display(), str(req["reason"])],
 		cause_seq, {"from_id": helper_id, "item": item, "amount": amount})
 	knowledge.learn(helper_id, "fact_lighthouse_dark", cause_seq) # 请求本身传递了短缺信息
-	# 唯一决策点：同一规则处理两份夹具
+	# 唯一决策点：同一规则处理两份夹具（阶段 A：信任加权）
 	help_request_active = true
 	var inv: int = int(h["inventory"].get(item, 0))
 	var res: int = int(h["reserve"].get(item, 0))
 	var decision: Dictionary = HelpRules.decide_request(inv, res, amount, h["display_name"], item)
+	# 信任影响：帮助者对求助者的信任极低时，即使库存够也拒绝
+	var trust_toward := relationships.get_trust(helper_id, requester_id)
+	if decision["decision"] == "accept":
+		var trust_ok := RelationshipStore.trust_weighted_accept(true, trust_toward)
+		if not trust_ok:
+			decision = {"decision": "decline", "give": 0, "reason_text": "信任不足（信任值 %d）" % trust_toward}
 	if decision["decision"] == "accept":
 		var acc_seq := _emit("help_accepted", helper_id,
 			"%s 同意帮忙——%s" % [h["display_name"], decision["reason_text"]], _last_seq(), {"to_id": requester_id})
+		relationships.on_help_accepted(helper_id, requester_id)
 		h["phase"] = "go_deliver"
 		h["activity"] = "给薇拉送材料"
 		_set_path(helper_id, "", actors[requester_id]["tile"])
@@ -297,6 +349,7 @@ func _start_request(requester_id: String, cause_seq: int) -> void:
 	else:
 		_emit("help_declined", helper_id,
 			"%s 拒绝了请求——%s" % [h["display_name"], decision["reason_text"]], _last_seq(), {"to_id": requester_id})
+		relationships.on_help_declined(helper_id, requester_id)
 		actors[requester_id]["phase"] = "goal_failed"
 		actors[requester_id]["goal_status"] = "waiting" # 不刷重复请求
 
@@ -315,6 +368,7 @@ func _execute_delivery(helper_id: String, h: Dictionary) -> void:
 		h["phase"] = "idle"
 		return
 	ResourceRules.apply_transfer(actors, helper_id, to_id, item, amount)
+	relationships.on_transfer_complete(helper_id, to_id) # 阶段 A：交付完成增加信任
 	_emit("item_transferred", helper_id,
 		"%s 将 %d 份%s 交给 %s" % [h["display_name"], amount, _item_display(), actors[to_id]["display_name"]],
 		int(h.get("_deliver_acc_seq", -1)), {"to_id": to_id, "item": item, "amount": amount})
