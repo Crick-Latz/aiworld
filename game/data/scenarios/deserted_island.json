@@ -1,0 +1,80 @@
+{
+  "schema_version": "0.5",
+  "scenario_id": "deserted_island",
+  "seed": 20260905,
+  "setting": "三个被海盗抛弃的人在荒岛上醒来",
+  "actors": [
+    {
+      "id": "npc_weila",
+      "name": "薇拉",
+      "spawn_hint": "coast",
+      "traits": {
+        "resilience": 0.85,
+        "curiosity": 0.75,
+        "action_bias": 0.80,
+        "caution": 0.30,
+        "empathy": 0.65,
+        "sociability": 0.60,
+        "altruism": 0.55,
+        "expressiveness": 0.85,
+        "conflict_avoidance": 0.30,
+        "pragmatism": 0.50
+      },
+      "beliefs": {
+        "活着就有希望": 0.9,
+        "知识就是生存的资本": 0.7,
+        "坐等救援是死路一条": 0.6
+      },
+      "inventory": {"food": 1},
+      "character_note": "前商船导航员。28岁。经历过两次海难都活了下来——她相信自己能再活一次。情感表达直接，喜怒形于色，不擅长隐藏。挫折恢复速度极快（韧性0.85），但冲动（行动0.80/谨慎0.30）可能让她冒险受伤。"
+    },
+    {
+      "id": "npc_oun",
+      "name": "缄默者欧恩",
+      "spawn_hint": "forest",
+      "traits": {
+        "resilience": 0.50,
+        "curiosity": 0.15,
+        "action_bias": 0.40,
+        "caution": 0.85,
+        "empathy": 0.40,
+        "sociability": 0.20,
+        "altruism": 0.30,
+        "expressiveness": 0.15,
+        "conflict_avoidance": 0.70,
+        "pragmatism": 0.90
+      },
+      "beliefs": {
+        "只有自己靠得住": 0.8,
+        "食物是命": 0.9,
+        "话多的人死得快": 0.5
+      },
+      "inventory": {"food": 3, "knife": 1},
+      "character_note": "前海盗船厨师。42岁。在海盗船上活了十一年——靠的是不多话、不站队、囤食物。表达能力极差（0.15），内心想法很多但说不出来，容易被误解为冷漠。有隐藏的温情（empathy 0.40 不是零），但在高压下才会显现。经历过饥荒，对食物的执念近乎偏执。"
+    },
+    {
+      "id": "npc_kadga",
+      "name": "卡德加",
+      "spawn_hint": "near_water",
+      "traits": {
+        "resilience": 0.60,
+        "curiosity": 0.40,
+        "action_bias": 0.60,
+        "caution": 0.45,
+        "empathy": 0.80,
+        "sociability": 0.85,
+        "altruism": 0.70,
+        "expressiveness": 0.60,
+        "conflict_avoidance": 0.85,
+        "pragmatism": 0.55
+      },
+      "beliefs": {
+        "三个人一起才能活下去": 0.95,
+        "我有手艺我是有用的": 0.8,
+        "欧恩其实不坏只是不善表达": 0.4
+      },
+      "inventory": {"wood": 2},
+      "character_note": "前渔船木匠。35岁。动手能力强，擅长建造和制作。极度怕孤独（social 0.85），独处时不适感上升是常人的三倍。回避冲突（0.85），当他人争吵时会试图调解而非选边。缺乏主见，意见不同时倾向于让步。他的自我价值感来源是'我有用'——如果建造的东西被摧毁，会严重打击他的信念。"
+    }
+  ]
+}
