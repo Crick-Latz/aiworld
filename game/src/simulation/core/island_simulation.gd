@@ -35,9 +35,9 @@ func _init_world_resources() -> void:
 	var ruins: Array = []
 	var trees: Array = []
 
-	for i in 3:  # 3 个浆果丛
+	for i in 3:  # 3 个浆果丛（1 份/丛，5 天一茬——匮乏驱动社交）
 		var pos := _find_walkable_spot(map_size)
-		berry_bushes.append({"pos": pos, "food": 3, "regrow_day": -1})
+		berry_bushes.append({"pos": pos, "food": 1, "regrow_day": -1})
 	for i in 1:  # 1 个水泉
 		var pos2 := _find_walkable_spot(map_size)
 		water_springs.append(pos2)
@@ -95,7 +95,7 @@ func _generate_ruin_loot() -> Dictionary:
 		{"item": "knife", "count": 1, "prob": 0.6},
 		{"item": "rope", "count": 1, "prob": 0.5},
 		{"item": "flint", "count": 1, "prob": 0.7},
-		{"item": "food", "count": 3, "prob": 0.4},
+		{"item": "food", "count": 2, "prob": 0.25},
 		{"item": "wine", "count": 1, "prob": 0.3},
 	]
 	var loot := {}
@@ -258,7 +258,7 @@ func _do_forage(id: String, a: Dictionary, ev: Array) -> void:
 			var got := mini(2, int(bush["food"]))
 			bush["food"] = int(bush["food"]) - got
 			if int(bush["food"]) <= 0:
-				bush["regrow_day"] = int(world_time["day"]) + 3
+				bush["regrow_day"] = int(world_time["day"]) + 5
 			a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + got
 			a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 300, 0, 1000)
 			a["personality"].adjust_emotion("joy", 0.1)
@@ -276,10 +276,11 @@ func _do_drink(id: String, a: Dictionary, ev: Array) -> void:
 			return
 
 func _do_fish(id: String, a: Dictionary, ev: Array) -> void:
-	if _rng.randf() < 0.7:
-		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 3
+	# 海里的鱼不多：0.5 概率 1 份——鱼叉有用但不是印钞机
+	if _rng.randf() < 0.5:
+		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
 		a["personality"].adjust_emotion("joy", 0.15)
-		_emit("fished", id, "%s 捕到了鱼！" % a["display_name"], {"food": 3})
+		_emit("fished", id, "%s 捕到了一条鱼！" % a["display_name"], {"food": 1})
 	else:
 		a["personality"].adjust_emotion("sadness", 0.05)
 		_emit("fished_empty", id, "%s 空手而归" % a["display_name"], {})
@@ -290,9 +291,9 @@ func _do_shells(id: String, a: Dictionary, ev: Array) -> void:
 
 func _do_explore(id: String, a: Dictionary, ev: Array) -> void:
 	a["visited_tiles"][str(a["tile"])] = true
-	# 随机发现（好奇心驱动探索的奖励）
+	# 随机发现（好奇心驱动探索的奖励）——野果稀少，否则探索成了食物印钞机
 	var roll := _rng.randf()
-	if roll < 0.1:
+	if roll < 0.04:
 		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
 		_emit("explored_found", id, "%s 探索时意外发现了一些野果" % a["display_name"], {"food": 1})
 	elif roll < 0.05:
@@ -423,10 +424,10 @@ func _update_world_time() -> void:
 	world["is_night"] = int(world_time["hour"]) >= 20 or int(world_time["hour"]) < 6
 
 func _daily_update() -> void:
-	# 浆果丛刷新
+	# 浆果丛刷新（稀疏：5 天一茬，岛上养不活三个人——匮乏驱动社交）
 	for bush in world["berry_bushes"]:
 		if int(bush["food"]) <= 0 and int(world_time["day"]) >= int(bush.get("regrow_day", 9999)):
-			bush["food"] = 3
+			bush["food"] = 1
 			bush["regrow_day"] = -1
 	_flatten_resources()
 	# P1: 对他人的旧印象每天淡忘一点（回到中性）
@@ -464,7 +465,7 @@ func _update_nearby_info() -> void:
 				continue
 			var other: Dictionary = actors[other_id]
 			var dist := absi(a["tile"].x - other["tile"].x) + absi(a["tile"].y - other["tile"].y)
-			if dist <= 5:
+			if dist <= 8:  # 喊话/目击范围，与 _is_nearby 一致
 				nearby.append(other_id)
 				if int(other["needs"].get("hunger", 0)) > 600:
 					hungry_nearby = true
@@ -486,10 +487,12 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 	# P1: 决策需要的社交信息——ToM、对每人的信任、附近有谁（不含他们的隐私状态）
 	var trust_of := {}
 	var others_nearby: Array = []
+	var others_all: Array = []
 	for other_id in actors:
 		if other_id == id:
 			continue
 		trust_of[other_id] = relationships.get_trust(id, other_id)
+		others_all.append({"id": other_id, "tile": actors[other_id]["tile"]})
 		if other_id in world.get("nearby_" + id, []):
 			others_nearby.append({"id": other_id, "tile": actors[other_id]["tile"]})
 	return {
@@ -507,6 +510,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"tom": a.get("tom", TheoryOfMind.new()),
 		"trust_of": trust_of,
 		"others_nearby": others_nearby,
+		"others_all": others_all,
 	}
 
 ## P0: 丰富 DecisionTrace——把 belief/goal/intention/memories 写入

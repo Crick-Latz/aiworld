@@ -32,7 +32,7 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a8 != null: actions.append(a8)
 	var a9 = _ruins(p, needs, pos, world)
 	if a9 != null: actions.append(a9)
-	var a10 = _socialize(p, needs, pos, world)
+	var a10 = _socialize(p, needs, actor, world)
 	if a10 != null: actions.append(a10)
 	var a11 = _share(p, needs, inv, pos, world)
 	if a11 != null: actions.append(a11)
@@ -151,14 +151,25 @@ static func _ruins(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, worl
 	var score := (0.3 + curiosity * 0.5 - caution * 0.2) * _dp(pos, nearest)
 	return {"action": "search_ruins", "target": nearest, "utility": score, "desc": "搜索废弃营地", "duration": 2}
 
-static func _socialize(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary):
+## 社交：孤独时主动走向同伴（不是原地干聊）——人的聚集是一切社交剧情的前提。
+static func _socialize(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary):
 	var social := _n(needs.get("social", 0), 400, 800)
 	var sociability := p.effective_trait("sociability", needs)
 	var sadness: float = p.emotions.get("sadness", 0.0)
 	var score := UtilityCurves.quadratic(social) * (0.4 + sociability * 0.6) + sadness * 0.2
-	if not world.get("someone_nearby", false):
-		score *= 0.3
-	return {"action": "socialize", "target": pos, "utility": score, "desc": "找人聊天", "duration": 2}
+	var pos: Vector2i = actor.get("tile", Vector2i.ZERO)
+	var target := pos
+	var nearby: Array = actor.get("others_nearby", [])
+	if nearby.is_empty():
+		# 附近没人：走向最近的同伴（孤独的人会去找人）
+		var all: Array = actor.get("others_all", [])
+		var nearest := _nearest(pos, all.map(func(o): return o.get("tile", pos)))
+		if nearest.x >= 0:
+			target = nearest
+			score *= 0.8  # 要走过去，稍微降低点吸引力
+	else:
+		score *= 0.3 if not world.get("someone_nearby", false) else 1.0
+	return {"action": "socialize", "target": target, "utility": score, "desc": "找人聊天", "duration": 2}
 
 static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
 	if int(inv.get("food", 0)) < 2:
@@ -176,7 +187,7 @@ static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, po
 ## 向谁开口由 ToM（"他应该有食物"）+ 信任（"他不会羞辱我"）决定。
 static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary):
 	var hunger_raw := float(needs.get("hunger", 0))
-	if hunger_raw < 500.0:
+	if hunger_raw < 450.0:
 		return null  # 不够饿，开不了口
 	var nearby: Array = actor.get("others_nearby", [])
 	if nearby.is_empty():
@@ -189,10 +200,10 @@ static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary
 	for o in nearby:
 		if str(o.get("id", "")) == target_id:
 			target_tile = o.get("tile", target_tile)
-	var hunger := _n(hunger_raw, 500.0, 800.0)
+	var hunger := _n(hunger_raw, 400, 700)
 	var sociability := p.effective_trait("sociability", needs)
 	var trust_f := clampf(float(trust_of.get(target_id, 0)) / 400.0, -1.0, 1.0)
-	var pride_cost := 0.15  # 求助的心理成本：效用要盖过它才会开口
+	var pride_cost := 0.1  # 求助的心理成本：效用要盖过它才会开口
 	var score := UtilityCurves.quadratic(hunger) * (0.5 + sociability * 0.3 + trust_f * 0.2) - pride_cost
 	if score <= 0.0:
 		return null
@@ -209,7 +220,7 @@ static func _rest(p: PersonalityProfile, needs: Dictionary):
 static func _eat(p: PersonalityProfile, needs: Dictionary, inv: Dictionary):
 	if int(inv.get("food", 0)) < 1:
 		return null
-	var hunger := _n(needs.get("hunger", 0), 350, 800)
+	var hunger := _n(needs.get("hunger", 0), 250, 600)
 	var prag := p.effective_trait("pragmatism", needs)
 	var score := UtilityCurves.quadratic(hunger) * (0.9 + prag * 0.3)
 	return {"action": "eat_food", "target": null, "utility": score, "desc": "吃点存粮", "duration": 1}
