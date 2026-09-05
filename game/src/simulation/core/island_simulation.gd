@@ -12,6 +12,7 @@ var tick := 0
 var world_time := {"day": 1, "hour": 8}  # 每 tick = 1 小时
 var actors: Dictionary = {}
 var events: Array = []
+var chronicles: Array = []  # P2: 每日编年史（模拟自己写日记，P3 由 LLM 润色）
 var world := {}  # 环境状态（资源/天气/火/庇护所）
 var relationships := RelationshipStore.new()  # P1: 有向信任（A 信 B ≠ B 信 A）
 var map_query
@@ -136,6 +137,7 @@ func _init_actors(actor_configs: Array) -> void:
 			"visited_tiles": {},
 			"relationships": {},
 			"tom": TheoryOfMind.new(),  # P1: 一阶心智模型
+			"norms": _init_norms(cfg.get("norms", {})),  # P2: 内化规范（会随经历漂移）
 			"last_decision_trace": {},
 			"memories": [],
 		}
@@ -145,6 +147,14 @@ func _init_actors(actor_configs: Array) -> void:
 		display_names[id] = str(actors[id]["display_name"])
 	for id in actors:
 		actors[id]["display_names"] = display_names
+
+## P2: 规范默认中性，由剧本数据覆盖。规范不是特质——是"人应该怎样"的期待。
+func _init_norms(overrides: Dictionary) -> Dictionary:
+	var norms := {"sharing": 0.5, "self_reliance": 0.5, "reciprocity": 0.5}
+	for k in overrides:
+		if norms.has(k):
+			norms[k] = clampf(float(overrides[k]), 0.0, 1.0)
+	return norms
 
 # ── 主循环 ──
 
@@ -392,14 +402,25 @@ func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> vo
 		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
 		a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 200, 0, 1000)
 		relationships.on_help_accepted(target_id, id)
+		# P2: 规范漂移——受助让人相信分享是岛上的活法
+		_drift_norm(a, "sharing", 0.02)
+		_drift_norm(a, "self_reliance", -0.01)
 		_emit("food_request_accepted", target_id,
 			"%s 把食物分给了 %s" % [target["display_name"], a["display_name"]],
 			{"proposer_id": id, "reason": str(result.get("reason", ""))})
 	else:
 		relationships.on_help_declined(target_id, id)
+		# P2: 规范漂移——被拒让人对"同伴该分享"幻灭
+		_drift_norm(a, "sharing", -0.03)
+		_drift_norm(a, "self_reliance", 0.02)
 		_emit("food_request_refused", target_id,
 			"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
 			{"proposer_id": id, "reason": str(result.get("reason", ""))})
+
+func _drift_norm(a: Dictionary, key: String, delta: float) -> void:
+	var norms: Dictionary = a.get("norms", {})
+	if norms.has(key):
+		norms[key] = clampf(float(norms[key]) + delta, 0.0, 1.0)
 
 func _do_rest(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 400, 0, 1000)
@@ -433,6 +454,54 @@ func _daily_update() -> void:
 	# P1: 对他人的旧印象每天淡忘一点（回到中性）
 	for id in actors:
 		actors[id]["tom"].decay(tick, 3)
+	# P2: 编年史——前一天的事件合成日记（本地模板；P3 换 LLM 润色）
+	_compose_chronicle(int(world_time["day"]) - 1)
+
+## P2: 按显著性合成一天的日记。冲突/伤害 > 温暖/收获 > 日常琐碎。
+const CHRONICLE_TIER2 := ["food_request_refused", "explored_hurt", "weather_storm", "reflected"]
+const CHRONICLE_TIER1 := ["food_request_accepted", "shared_food", "ruins_loot", "fire_lit", "shelter_built", "crafted"]
+
+func _compose_chronicle(day: int) -> void:
+	if day < 1:
+		return
+	var drama: Array = []
+	var warmth: Array = []
+	var quiet := 0
+	for e in events:
+		if int(e.get("day", -1)) != day:
+			continue
+		var t := str(e["type"])
+		if CHRONICLE_TIER2.has(t):
+			drama.append(str(e["text"]))
+		elif CHRONICLE_TIER1.has(t):
+			warmth.append(str(e["text"]))
+		else:
+			quiet += 1
+	var parts: Array = []
+	parts.append_array(drama)
+	var warm_used := 0
+	for w in warmth:
+		if warm_used >= 2:  # 温暖的事挑两件说，不然日记太长
+			break
+		parts.append(w)
+		warm_used += 1
+	var text := ""
+	if parts.is_empty():
+		text = "第%d天：平静的一天。" % day if quiet > 0 else "第%d天：无事发生。" % day
+	else:
+		text = "第%d天：%s。" % [day, "；".join(parts)]
+	# 关系氛围尾注（有显著恩怨才提）
+	var snap: Dictionary = relationships.snapshot()
+	var edge_min := 0
+	var edge_max := 0
+	for key in snap:
+		edge_min = mini(edge_min, int(snap[key]["trust"]))
+		edge_max = maxi(edge_max, int(snap[key]["trust"]))
+	if edge_min <= -150:
+		text += "岛上的气氛有些紧张。"
+	elif edge_max >= 200:
+		text += "同伴之间的信任在加深。"
+	chronicles.append({"day": day, "tick": tick, "text": text})
 
 func _update_weather() -> void:
 	var roll := _rng.randf()
@@ -511,6 +580,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"trust_of": trust_of,
 		"others_nearby": others_nearby,
 		"others_all": others_all,
+		"norms": a.get("norms", {}),
 	}
 
 ## P0: 丰富 DecisionTrace——把 belief/goal/intention/memories 写入
@@ -554,7 +624,7 @@ func _move_toward(a: Dictionary, target: Vector2i) -> void:
 # ── 事件 ──
 
 func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> int:
-	var e := {"seq": _seq, "tick": tick, "type": type, "actor_id": actor_id, "text": text}
+	var e := {"seq": _seq, "tick": tick, "day": int(world_time["day"]), "type": type, "actor_id": actor_id, "text": text}
 	for k in extra:
 		e[k] = extra[k]
 	_seq += 1

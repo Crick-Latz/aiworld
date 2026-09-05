@@ -53,16 +53,21 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 			appraisal["expectedness"] = -0.2
 		# ── P1 社会事件：同一事件，不同角色评价不同 ──
 		"food_request_refused":
-			# 被拒者：目标受阻 + 规范被违反（"同伴本该互相帮助"）
+			# P2: 规范决定拒绝的道德重量——"同伴就该分享"的人视拒绝为背叛；
+			# "人得自立"的人觉得拒绝理所当然
+			var norms_p: Dictionary = actor.get("norms", {})
+			var sharing_p: float = float(norms_p.get("sharing", 0.5))
+			var self_rel_p: float = float(norms_p.get("self_reliance", 0.5))
+			# 被拒者：目标受阻 + 规范被违反的强度由自己的分享规范决定
 			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
 				appraisal["goal_congruence"] = -0.7
 				appraisal["expectedness"] = -0.3
-				appraisal["norm_violation"] = 0.5
+				appraisal["norm_violation"] = 0.2 + sharing_p * 0.6
 				appraisal["controllability"] = 0.2
-			# 拒绝者本人：可能内疚（我违反了自己的分享规范）
+			# 拒绝者本人：分享规范高 → 内疚；自立规范高 → 理直气壮
 			elif appraisal["self_agency"]:
 				appraisal["goal_congruence"] = -0.2
-				appraisal["norm_violation"] = 0.6
+				appraisal["norm_violation"] = 0.2 + sharing_p * 0.6 - self_rel_p * 0.3
 		"food_request_accepted":
 			# 求助成功者：如释重负
 			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
@@ -72,9 +77,10 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 			elif appraisal["self_agency"]:
 				appraisal["goal_congruence"] = 0.3 + float(p.traits.get("altruism", 0.5)) * 0.3
 		"food_requested":
-			# 有人向我开口：轻微的决策压力
+			# 有人向我开口：轻微的决策压力；自立规范高的人觉得被冒犯
 			if str(event.get("target_id", "")) == str(actor.get("id", "")):
-				appraisal["goal_congruence"] = -0.1
+				var self_rel_t: float = float(actor.get("norms", {}).get("self_reliance", 0.5))
+				appraisal["goal_congruence"] = -0.05 - self_rel_t * 0.15
 				appraisal["controllability"] = 0.8
 
 	# 性格修饰评价

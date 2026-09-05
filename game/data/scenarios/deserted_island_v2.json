@@ -13,6 +13,7 @@
         "conflict_avoidance": 0.30, "pragmatism": 0.50
       },
       "beliefs": { "活着就有希望": 0.9, "知识就是生存的资本": 0.7, "坐等救援是死路一条": 0.6 },
+      "norms": { "sharing": 0.55, "self_reliance": 0.35, "reciprocity": 0.6 },
       "life_history": [
         { "age": 12, "type": "cooperation_success", "desc": "第一次海难时全村合力救了她" },
         { "age": 19, "type": "rescue", "desc": "被商船船长从海里救起并收留" },
@@ -29,6 +30,7 @@
         "conflict_avoidance": 0.70, "pragmatism": 0.90
       },
       "beliefs": { "只有自己靠得住": 0.8, "食物是命": 0.9, "话多的人死得快": 0.5 },
+      "norms": { "sharing": 0.15, "self_reliance": 0.9, "reciprocity": 0.75 },
       "life_history": [
         { "age": 17, "type": "famine", "desc": "经历海上饥荒，弟弟死于饥饿" },
         { "age": 18, "type": "authority_abuse", "desc": "船长公开承诺公平分配却私藏储备" },
@@ -47,6 +49,7 @@
         "conflict_avoidance": 0.85, "pragmatism": 0.55
       },
       "beliefs": { "三个人一起才能活下去": 0.95, "我有手艺我是有用的": 0.8, "欧恩其实不坏只是不善表达": 0.4 },
+      "norms": { "sharing": 0.85, "self_reliance": 0.2, "reciprocity": 0.8 },
       "life_history": [
         { "age": 8, "type": "loss", "desc": "父亲出海未归" },
         { "age": 15, "type": "cooperation_success", "desc": "全村帮他家重建被台风摧毁的房子" },

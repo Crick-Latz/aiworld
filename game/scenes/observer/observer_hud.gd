@@ -63,6 +63,9 @@ func render(model: Dictionary) -> void:
 		tick_label.text += "\n" + world_facts
 	var events: Array = model.get("recent_events", [])
 	var lines: Array = []
+	var chronicle: String = str(model.get("chronicle_text", ""))
+	if chronicle != "":
+		lines.append(chronicle)
 	for e in events.slice(maxi(0, events.size() - 14), events.size()):
 		lines.append("[color=#aabbcc]%d[/color] %s" % [int(e.get("seq", 0)), str(e.get("text", ""))])
 	events_label.clear()

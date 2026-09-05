@@ -37,8 +37,15 @@ static func evaluate_food_request(target: Dictionary, proposer: Dictionary, trus
 	var proposer_hunger := clampf(float(proposer.get("needs", {}).get("hunger", 0)) / 1000.0, 0.0, 1.0)
 	var visible_need := proposer_hunger * empathy  # 看得见的苦处才打动人
 
+	# P2: 内化规范——"同伴该分享"的人拒绝时过不了自己那关；
+	# "人得自立"的人觉得纵容乞食反而是害他
+	var norms: Dictionary = target.get("norms", {})
+	var sharing_norm: float = float(norms.get("sharing", 0.5))
+	var self_reliance_norm: float = float(norms.get("self_reliance", 0.5))
+
 	var weight := 0.25 + altruism * 0.4 + empathy * 0.1 + trust_f * 0.3 + reliable * 0.15 \
-		+ visible_need * 0.3 - own_hunger * 0.6
+		+ visible_need * 0.3 - own_hunger * 0.6 \
+		+ sharing_norm * 0.25 - self_reliance_norm * 0.15
 
 	# 受限理性：不是硬阈值，带噪声的倾向（同一处境不同 roll 可能不同回应）
 	var roll := rng.randf()

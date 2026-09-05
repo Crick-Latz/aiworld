@@ -427,6 +427,12 @@ func _refresh_hud() -> void:
 		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
 			recent.append(all[i])
 		model["recent_events"] = recent
+		# P2: 编年史——最近两天的日记（金色，与原始事件流区分）
+		var chron_lines: Array = []
+		var chronicles: Array = island_sim.chronicles
+		for i in range(maxi(0, chronicles.size() - 2), chronicles.size()):
+			chron_lines.append("[color=#e8c170]%s[/color]" % str(chronicles[i]["text"]))
+		model["chronicle_text"] = "\n".join(chron_lines)
 	elif story_sim != null:
 		var t: int = story_sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d%s" % [t / 1440 + 1, (t % 1440) / 60, t % 60,

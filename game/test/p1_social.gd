@@ -34,6 +34,7 @@ func _run_all_tests() -> void:
 	_test_refusal_no_food()
 	_test_acceptance_by_personality()
 	_test_appraisal_roles()
+	_test_norms()
 	_test_reflection_grudge()
 	_test_relationship_asymmetry()
 
@@ -123,6 +124,47 @@ func _test_sim_social_emergence() -> void:
 			if int(sim3.actors[aid]["needs"]["hunger"]) >= 999 and int(sim3.actors[aid]["inventory"].get("food", 0)) >= 1:
 				hoard_ticks += 1
 	_check("no_starve_while_hoarding", hoard_ticks == 0, "hoard_ticks=%d" % hoard_ticks)
+	# P2: 规范随经历漂移——被拒让"同伴该分享"幻灭（至少一个高社交种子出现漂移）
+	var drifted_seeds := 0
+	for s in [10004, 10019, 10020]:  # 经验证：这些种子在当前经济参数下必产生请求结果
+		var sim4 := IslandSimulation.new(mq, s, configs)
+		for i in 600:
+			sim4.step()
+		var initial := {}
+		for ac in scenario.get("actors", []):
+			initial[str(ac["id"])] = ac.get("norms", {})
+		var drifted := false
+		for aid in sim4.actors:
+			for nk in ["sharing", "self_reliance"]:
+				var now: float = float(sim4.actors[aid]["norms"][nk])
+				var was: float = float(initial.get(aid, {}).get(nk, 0.5))
+				if absf(now - was) > 0.001:
+					drifted = true
+		if drifted:
+			drifted_seeds += 1
+	_check("norms_drift_from_experience", drifted_seeds >= 1, "drifted=%d/3" % drifted_seeds)
+	# P2: 编年史——模拟每天自己写日记
+	_check("chronicle_daily", sim.chronicles.size() >= 2 and str(sim.chronicles[0]["text"]).length() > 4,
+		"chronicles=%d first=%s" % [sim.chronicles.size(), str(sim.chronicles[0]["text"]).substr(0, 20) if sim.chronicles.size() > 0 else "-"])
+	var all_chronicle_ok := true
+	for c in sim.chronicles:
+		if not str(c["text"]).begins_with("第"):
+			all_chronicle_ok = false
+	_check("chronicle_format", all_chronicle_ok)
+	# 有戏剧事件的日子，日记必须提到它（显著性排序生效）
+	var drama_day := -1
+	for e in sim.events:
+		if str(e["type"]) == "food_request_refused":
+			drama_day = int(e["day"])
+			break
+	if drama_day >= 0:
+		var found := false
+		for c in sim.chronicles:
+			if int(c["day"]) == drama_day and str(c["text"]).find("拒绝") != -1:
+				found = true
+		_check("chronicle_mentions_drama", found, "day=%d" % drama_day)
+	else:
+		_check("chronicle_mentions_drama", true, "(本种子无拒绝事件，跳过)")
 	# ToM 在真实模拟中被填充
 	var any_belief := false
 	for id in sim.actors:
@@ -187,7 +229,9 @@ func _test_acceptance_by_personality() -> void:
 func _test_appraisal_roles() -> void:
 	var event := {"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "tick": 50}
 	var weila := _actor("npc_weila", {"empathy": 0.5})
+	weila["norms"] = {"sharing": 0.85, "self_reliance": 0.35, "reciprocity": 0.6}
 	var oun := _actor("npc_oun", {"empathy": 0.9})
+	oun["norms"] = {"sharing": 0.9, "self_reliance": 0.1, "reciprocity": 0.7}
 	var ap_w: Dictionary = AppraisalSystem.appraise(event, weila)
 	var ap_o: Dictionary = AppraisalSystem.appraise(event, oun)
 	var em_w: Dictionary = AppraisalSystem.appraisal_to_emotions(ap_w, weila["personality"])
@@ -199,6 +243,48 @@ func _test_appraisal_roles() -> void:
 	# 同一事件，评价不同
 	_check("appraisal_role_differs", absf(float(ap_w["goal_congruence"]) - float(ap_o["goal_congruence"])) > 0.3,
 		"w=%s o=%s" % [str(ap_w["goal_congruence"]), str(ap_o["goal_congruence"])])
+
+# ── 7b. P2 规范：分享规范决定拒绝的道德重量 ──
+func _test_norms() -> void:
+	# 高分享规范的人被拒时更愤怒（背叛感）；低分享规范的人相对无所谓
+	var event := {"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "tick": 50}
+	var believer := _actor("npc_weila", {"empathy": 0.5})
+	believer["norms"] = {"sharing": 0.95, "self_reliance": 0.1, "reciprocity": 0.6}
+	var cynic := _actor("npc_weila", {"empathy": 0.5})
+	cynic["norms"] = {"sharing": 0.05, "self_reliance": 0.95, "reciprocity": 0.6}
+	var em_b: Dictionary = AppraisalSystem.appraisal_to_emotions(AppraisalSystem.appraise(event, believer), believer["personality"])
+	var em_c: Dictionary = AppraisalSystem.appraisal_to_emotions(AppraisalSystem.appraise(event, cynic), cynic["personality"])
+	_check("norm_believer_angrier", float(em_b.get("anger", 0.0)) > float(em_c.get("anger", 0.0)) + 0.05,
+		"b=%s c=%s" % [str(em_b.get("anger")), str(em_c.get("anger"))])
+	# 拒绝者的内疚随自己的分享规范缩放
+	var guilt_event := {"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "tick": 51}
+	var sharer := _actor("npc_oun", {"empathy": 0.8})
+	sharer["norms"] = {"sharing": 0.9, "self_reliance": 0.1, "reciprocity": 0.5}
+	var self_relier := _actor("npc_oun", {"empathy": 0.8})
+	self_relier["norms"] = {"sharing": 0.1, "self_reliance": 0.95, "reciprocity": 0.5}
+	var em_g1: Dictionary = AppraisalSystem.appraisal_to_emotions(AppraisalSystem.appraise(guilt_event, sharer), sharer["personality"])
+	var em_g2: Dictionary = AppraisalSystem.appraisal_to_emotions(AppraisalSystem.appraise(guilt_event, self_relier), self_relier["personality"])
+	_check("norm_guilt_scales_with_sharing", float(em_g1.get("guilt", 0.0)) > float(em_g2.get("guilt", 0.0)),
+		"g1=%s g2=%s" % [str(em_g1.get("guilt")), str(em_g2.get("guilt"))])
+	# 高分享规范的人更愿意接受请求（同样的性格与处境）
+	var proposer := _actor("npc_weila", {})
+	var communitarian := _actor("npc_oun", {"altruism": 0.5, "empathy": 0.5})
+	communitarian["inventory"]["food"] = 5
+	communitarian["norms"] = {"sharing": 0.9, "self_reliance": 0.1, "reciprocity": 0.5}
+	var individualist := _actor("npc_kadga", {"altruism": 0.5, "empathy": 0.5})
+	individualist["inventory"]["food"] = 5
+	individualist["norms"] = {"sharing": 0.1, "self_reliance": 0.9, "reciprocity": 0.5}
+	var rng1 := RandomNumberGenerator.new(); rng1.seed = 7
+	var rng2 := RandomNumberGenerator.new(); rng2.seed = 7
+	var acc_c := 0
+	var acc_i := 0
+	for i in 40:
+		if bool(SocialSystem.evaluate_food_request(communitarian, proposer, 0, rng1)["accepted"]):
+			acc_c += 1
+		if bool(SocialSystem.evaluate_food_request(individualist, proposer, 0, rng2)["accepted"]):
+			acc_i += 1
+	_check("norm_sharing_accepts_more", acc_c > acc_i + 6, "comm=%d/40 indiv=%d/40" % [acc_c, acc_i])
+	print("P1_NORM_ACCEPT communitarian=%d/40 individualist=%d/40" % [acc_c, acc_i])
 
 # ── 8. 反思：重复拒绝 → 记恨（ToM↓ + 信念写入） ──
 func _test_reflection_grudge() -> void:
@@ -242,6 +328,7 @@ func _actor(id: String, trait_overrides: Dictionary) -> Dictionary:
 		"inventory": {"food": 0, "wood": 0, "shells": 0},
 		"tom": TheoryOfMind.new(),
 		"beliefs": BeliefStore.new(),
+		"norms": {"sharing": 0.5, "self_reliance": 0.5, "reciprocity": 0.5},
 		"memories": [],
 		"visited_tiles": {},
 		"display_name": id,
