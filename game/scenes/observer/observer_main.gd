@@ -42,17 +42,16 @@ var _lighthouse_lit := false
 
 var _hud_refresh_acc := 0.0
 
+const ISLAND_SCENARIO := "res://data/scenarios/deserted_island.json"
+var island_sim: IslandSimulation = null
+
 func _ready() -> void:
 	story_mode = OS.get_environment("AIW_MODE") != "wander"
-	if not story_mode:
-		pass # wander 模式由测试/命令行指定
-	elif FileAccess.file_exists(STORY_SCENARIOS.get("baseline", "")):
-		pass # 故事模式（默认）
 	hud.pause_requested.connect(_toggle_pause)
 	hud.speed_requested.connect(_set_speed)
 	hud.save_requested.connect(_do_save)
 	hud.scenario_requested.connect(switch_scenario)
-	_boot()
+	_boot_island()
 
 func _boot() -> void:
 	_warning = ""
@@ -121,7 +120,79 @@ func _boot_story_mode() -> void:
 		spawn_tiles[id] = Vector2i(int(wp.x - 0.5), int(wp.z - 0.5))
 	story_sim = StorySimulation.new(map_controller, scenario_data, spawn_tiles)
 
+func _boot_island() -> void:
+	_warning = ""
+	var spec_result: Dictionary = WorldSpecLoader.load_from_path(DEMO_SPEC_PATH)
+	if not spec_result.ok:
+		_apply_error("E_DATA_MISSING", str(spec_result.message))
+		return
+	var spec: Dictionary = spec_result.data
+	var app_config := get_node_or_null("/root/AppConfig")
+	var map_config: Dictionary = {}
+	if app_config and typeof(app_config.raw) == TYPE_DICTIONARY and typeof(app_config.raw.get("map")) == TYPE_DICTIONARY:
+		map_config = app_config.raw.get("map")
+	var build: Dictionary = map_controller.build(spec, map_config)
+	if not build.ok:
+		_apply_error(str(build.code), str(build.message))
+		return
+	for c in npc_root.get_children():
+		npc_root.remove_child(c)
+		c.free()
+	_npc_visuals.clear()
+	selected_actor_id = ""
+	sim_paused = false
+	speed_multiplier = 1
+	_acc = 0.0
+	_lighthouse_lit = false
+	var scenario_text := FileAccess.get_file_as_string(ISLAND_SCENARIO)
+	var scenario: Dictionary = JSON.parse_string(scenario_text)
+	var actor_configs: Array = []
+	var spawn_spots := [
+		map_controller.get_poi_tile("post_house"),
+		map_controller.get_poi_tile("tide_market"),
+		map_controller.get_poi_tile("old_lighthouse"),
+	]
+	var idx := 0
+	for ac in scenario.get("actors", []):
+		var spawn: Vector2i = spawn_spots[idx % spawn_spots.size()]
+		idx += 1
+		var cfg = ac.duplicate()
+		cfg["spawn"] = spawn
+		actor_configs.append(cfg)
+		var visual = NPC_SCENE.instantiate()
+		npc_root.add_child(visual)
+		var id := str(cfg["id"])
+		var colors := {"npc_weila": [56, 178, 168], "npc_oun": [143, 107, 196], "npc_kadga": [63, 127, 191]}
+		var rgb: Array = colors.get(id, [128, 128, 128])
+		visual.setup(id, str(cfg.get("name", id)), Color8(rgb[0], rgb[1], rgb[2]))
+		visual.update_position(spawn, spawn, 0.0)
+		_npc_visuals[id] = visual
+	island_sim = IslandSimulation.new(map_controller, int(scenario.get("seed", 20260905)), actor_configs)
+	camera_rig.center_on(Vector3(map_controller.map_size().x * 0.5, 0.0, map_controller.map_size().y * 0.5))
+	_refresh_hud()
+
+func _process_island(delta: float) -> void:
+	if not sim_paused:
+		_acc += delta * speed_multiplier
+		_frame_tick_count = 0
+		while _acc >= 1.0 and _frame_tick_count < MAX_TICKS_PER_FRAME:
+			island_sim.step()
+			_acc -= 1.0
+			_frame_tick_count += 1
+	var alpha := clampf(_acc, 0.0, 1.0)
+	for id in _npc_visuals:
+		if island_sim.actors.has(id):
+			var a: Dictionary = island_sim.actors[id]
+			(_npc_visuals[id] as Node3D).update_position(a["prev_tile"], a["tile"], alpha)
+	_hud_refresh_acc += delta
+	if _hud_refresh_acc >= 0.25:
+		_hud_refresh_acc = 0.0
+		_refresh_hud()
+
 func _process(delta: float) -> void:
+	if island_sim != null:
+		_process_island(delta)
+		return
 	if story_sim != null:
 		_process_story(delta)
 		return
@@ -284,14 +355,50 @@ func _find_spawn_near(poi_id: String) -> Vector2i:
 func _refresh_hud() -> void:
 	var model := {
 		"view_schema_version": "0.1",
-		"state_revision": (story_sim.tick if story_sim != null else sim.tick) if (story_sim != null or sim != null) else 0,
+		"state_revision": island_sim.tick if island_sim != null else 0,
 		"paused": sim_paused,
 		"speed_multiplier": speed_multiplier,
-		"lag_ticks": int(_acc) if (story_sim != null or sim != null) else 0,
+		"lag_ticks": int(_acc) if island_sim != null else 0,
 		"warning_text": _warning,
 	}
-	var active_sim_tick := 0
-	if story_sim != null:
+	if island_sim != null:
+		model["time_label"] = "第 %d 天 %02d:00" % [island_sim.world_time["day"], island_sim.world_time["hour"]]
+		var sel = null
+		if selected_actor_id != "" and island_sim.actors.has(selected_actor_id):
+			var a: Dictionary = island_sim.actors[selected_actor_id]
+			var p: PersonalityProfile = a["personality"]
+			var trace: Dictionary = a.get("last_decision_trace", {})
+			sel = {
+				"id": selected_actor_id,
+				"display_name": a["display_name"],
+				"activity_text": str(a["activity"]),
+				"goal_text": _island_goal_text(a),
+				"location_text": "(%d, %d)" % [a["tile"].x, a["tile"].y],
+				"inventory_text": _inv_text(a["inventory"]),
+			}
+			# 情绪和决策原因附加到活动文本
+			var emotions: Array = []
+			for key in ["joy", "fear", "anger", "sadness"]:
+				var v: float = p.emotions.get(key, 0.0)
+				if absf(v) > 0.1:
+					var names := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤"}
+					emotions.append("%s%.0f%%" % [names[key], v * 100])
+			if not emotions.is_empty():
+				sel["activity_text"] += "\n情绪：" + "、".join(emotions)
+			if trace.has("reason"):
+				sel["activity_text"] += "\n原因：" + str(trace["reason"])
+			var needs: Dictionary = a["needs"]
+			sel["activity_text"] += "\n需求：饿%d/渴%d/累%d/孤独%d" % [
+				int(needs.get("hunger", 0)), int(needs.get("thirst", 0)),
+				1000 - int(needs.get("energy", 1000)), int(needs.get("social", 0)),
+			]
+		model["selected_actor"] = sel
+		var recent: Array = []
+		var all: Array = island_sim.events
+		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
+			recent.append(all[i])
+		model["recent_events"] = recent
+	elif story_sim != null:
 		active_sim_tick = story_sim.tick
 		var t: int = story_sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d%s" % [t / 1440 + 1, (t % 1440) / 60, t % 60,
@@ -342,6 +449,12 @@ func _refresh_hud() -> void:
 		model["selected_actor"] = null
 		model["recent_events"] = []
 	hud.render(model)
+
+func _island_goal_text(a: Dictionary) -> String:
+	var intentions: IntentionManager = a.get("intentions", null)
+	if intentions != null and intentions.has_intention():
+		return str(intentions.current_intention.get("desc", ""))
+	return "思考中..."
 
 func _inv_text(inv: Dictionary) -> String:
 	var parts: Array = []
