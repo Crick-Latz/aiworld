@@ -1,7 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://b3k2main0q1a4"]
+[gd_scene load_steps=6 format=3 uid="uid://b3k2main0q1a4"]
 
 [ext_resource type="Script" path="res://scenes/main/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://src/map/map_controller.gd" id="2_mapctl"]
+[ext_resource type="Script" path="res://src/camera/isometric_camera_controller.gd" id="3_camctl"]
+[ext_resource type="Script" path="res://src/ui/pause_controller.gd" id="4_pause"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -34,17 +36,20 @@ cell_size = Vector3(1, 0.5, 1)
 
 [node name="ActorRoot" type="Node3D" parent="World"]
 
+[node name="BoundaryRoot" type="Node3D" parent="World"]
+
 [node name="TriggerRoot" type="Node3D" parent="World"]
 
 [node name="MapController" type="Node" parent="World"]
 script = ExtResource("2_mapctl")
 
 [node name="CameraRig" type="Node3D" parent="World"]
-position = Vector3(12, 12, 12)
+script = ExtResource("3_camctl")
 
 [node name="YawPivot" type="Node3D" parent="World/CameraRig"]
 
 [node name="MainCamera" type="Camera3D" parent="World/CameraRig/YawPivot"]
+position = Vector3(12, 12, 12)
 projection = 1
 current = true
 size = 20.0
@@ -63,13 +68,88 @@ mouse_filter = 2
 unique_name_in_owner = true
 offset_left = 24.0
 offset_top = 16.0
-offset_right = 860.0
-offset_bottom = 96.0
+offset_right = 880.0
+offset_bottom = 82.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
 theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 22
 text = "AIWorld Prototype"
+
+[node name="ControlHintLabel" type="Label" parent="Ui/Hud"]
+unique_name_in_owner = true
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -52.0
+offset_right = 924.0
+offset_bottom = -24.0
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.85)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 16
+text = "WASD/方向键移动 · Q/R旋转 · 滚轮缩放 · E/空格交互 · Esc暂停"
+
+[node name="InteractionPrompt" type="Label" parent="Ui/Hud"]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = -100.0
+offset_right = 320.0
+offset_bottom = -58.0
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 18
+text = "E / 空格：查看「」"
+
+[node name="ToastLabel" type="Label" parent="Ui/Hud"]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = -168.0
+offset_right = 320.0
+offset_bottom = -126.0
+theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 20
+text = "已到达："
+
+[node name="PauseMenu" type="Control" parent="Ui"]
+process_mode = 3
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+
+[node name="Panel" type="PanelContainer" parent="Ui/PauseMenu"]
+offset_left = 490.0
+offset_top = 280.0
+offset_right = 790.0
+offset_bottom = 440.0
+
+[node name="VBox" type="VBoxContainer" parent="Ui/PauseMenu/Panel"]
+
+[node name="Title" type="Label" parent="Ui/PauseMenu/Panel/VBox"]
+theme_override_font_sizes/font_size = 22
+text = "已暂停"
+
+[node name="ContinueBtn" type="Button" parent="Ui/PauseMenu/Panel/VBox"]
+text = "继续"
+
+[node name="QuitBtn" type="Button" parent="Ui/PauseMenu/Panel/VBox"]
+text = "退出"
+
+[node name="PauseController" type="Node" parent="Ui"]
+process_mode = 3
+script = ExtResource("4_pause")
 
 [node name="ErrorPanel" type="Control" parent="Ui"]
 visible = false
@@ -105,7 +185,7 @@ mouse_filter = 2
 offset_left = 800.0
 offset_top = 16.0
 offset_right = 1268.0
-offset_bottom = 420.0
+offset_bottom = 470.0
 
 [node name="DebugVBox" type="VBoxContainer" parent="Ui/DebugOverlay/DebugPanel"]
 
@@ -152,5 +232,9 @@ text = "cells: -"
 [node name="DebugMapSpawnLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
 unique_name_in_owner = true
 text = "spawn: -"
+
+[node name="DebugPlayerStateLabel" type="Label" parent="Ui/DebugOverlay/DebugPanel/DebugVBox"]
+unique_name_in_owner = true
+text = "player: -"
 
 [node name="Audio" type="Node" parent="."]

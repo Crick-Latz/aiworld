@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3 uid="uid://bobs01npc0001"]
+
+[ext_resource type="Script" path="res://src/presentation/npc_visual.gd" id="1_npc"]
+
+[node name="Npc" type="Node3D"]
+script = ExtResource("1_npc")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.75, 0)
+
+[node name="NameLabel" type="Label3D" parent="."]
+position = Vector3(0, 1.95, 0)
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.02, 0)

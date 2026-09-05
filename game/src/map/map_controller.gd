@@ -1,9 +1,10 @@
 extends Node
-## MapController：Main 场景的一次构建入口（WP-03 / R1）。
+## MapController：Main 场景的一次构建入口（WP-03 / R1 / WP-04）。
 ## 职责：拿 WorldSpec + AppConfig 的 map 配置生成地图并投影到场景节点；
 ## 保存诊断数据供 F3 调试层读取。构建失败返回稳定错误码，不抛异常。
-## R1 状态恢复：每次 build 从零开始——清空旧地图/计数/比率/错误；
-## 失败时清空 GridMap 与 PoiRoot，has_map() 必须 false，不残留上一张地图数据。
+## R1 状态恢复：每次 build 从零开始；失败清空投影，has_map() 必须 false。
+## WP-04 窄接口：get_spawn_tile/get_poi_tiles/is_walkable_tile/get_map_rect/find_walk_path
+## —— UI 与玩家只经这些只读接口访问地图，不直接持有可变 GeneratedMap。
 
 var _map: GeneratedMap = null
 var _mesh_lib: MeshLibrary = null
@@ -15,7 +16,6 @@ var _last_error_code := ""
 var _last_error_message := ""
 
 func build(world_spec: Dictionary, map_config: Dictionary) -> Dictionary:
-	# 状态复位（R1）：一次新 build 不携带上一张地图的任何数据
 	_map = null
 	_ground_cells = 0
 	_obstacle_cells = 0
@@ -61,6 +61,36 @@ func build(world_spec: Dictionary, map_config: Dictionary) -> Dictionary:
 	_poi_count = int(proj.poi_count)
 	_ratios = MapGenerator._ratios(_map)
 	return result
+
+# —— 只读窄接口（WP-04）——
+
+func get_spawn_tile() -> Vector3i:
+	return _map.spawn_tile if _map != null else Vector3i.ZERO
+
+func get_poi_tiles() -> Dictionary:
+	return _map.poi_tiles.duplicate() if _map != null else {}
+
+# 单个 POI 的 XZ 格（OBS-01 供模拟/装配使用）；不存在返回 (-1,-1)
+func get_poi_tile(poi_id: String) -> Vector2i:
+	if _map != null and _map.poi_tiles.has(poi_id):
+		var t: Vector3i = _map.poi_tiles[poi_id]
+		return Vector2i(t.x, t.z)
+	return Vector2i(-1, -1)
+
+func is_walkable_tile(tile: Vector3i) -> bool:
+	if _map == null:
+		return false
+	if not GridCoord.in_bounds(tile.x, tile.z, _map.width, _map.depth):
+		return false
+	if tile.y != 0:
+		return false
+	return _map.walkable[tile.z * _map.width + tile.x] == 1
+
+func get_map_rect() -> Rect2i:
+	return Rect2i(0, 0, _map.width, _map.depth) if _map != null else Rect2i()
+
+func find_walk_path(from_tile: Vector3i, to_tile: Vector3i, max_nodes: int = 256) -> Array:
+	return MapNavigator.find_path(_map, from_tile, to_tile, max_nodes) if _map != null else []
 
 func has_map() -> bool:
 	return _map != null

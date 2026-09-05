@@ -1,0 +1,4 @@
+{"modules":[
+ {"module_id":"a","owner_role":"x","owned_paths":["game/mod_a/a.gd","game/mod_c/c.gd"],"public_entrypoints":[],"allowed_dependencies":["b"],"test_entrypoints":[]},
+ {"module_id":"b","owner_role":"x","owned_paths":["game/mod_b/internal.gd","game/mod_b/public.gd"],"public_entrypoints":[],"allowed_dependencies":[],"test_entrypoints":[]}
+]}

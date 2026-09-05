@@ -1,0 +1,93 @@
+[gd_scene load_steps=2 format=3 uid="uid://bobs01hud00001"]
+
+[ext_resource type="Script" path="res://scenes/observer/observer_hud.gd" id="1_hud"]
+
+[node name="ObserverHud" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -380.0
+offset_right = -8.0
+offset_top = 8.0
+offset_bottom = -8.0
+mouse_filter = 0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox"]
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 20
+text = "灰雾港 · 观察模式"
+
+[node name="TickLabel" type="Label" parent="Panel/VBox"]
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.85)
+theme_override_constants/outline_size = 4
+text = "第 1 天 08:00 · 运行中 · 1×"
+
+[node name="SelPanel" type="PanelContainer" parent="Panel/VBox"]
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/SelPanel"]
+
+[node name="SelName" type="Label" parent="Panel/VBox/SelPanel/VBox"]
+text = "姓名：—"
+
+[node name="SelGoal" type="Label" parent="Panel/VBox/SelPanel/VBox"]
+text = "目标：—"
+
+[node name="SelActivity" type="Label" parent="Panel/VBox/SelPanel/VBox"]
+text = "活动：—"
+
+[node name="SelLocation" type="Label" parent="Panel/VBox/SelPanel/VBox"]
+text = "地点：—"
+
+[node name="EventsPanel" type="PanelContainer" parent="Panel/VBox"]
+size_flags_vertical = 3
+
+[node name="EventsLabel" type="RichTextLabel" parent="Panel/VBox/EventsPanel"]
+bbcode_enabled = true
+scroll_following = true
+
+[node name="LagLabel" type="Label" parent="Panel/VBox"]
+visible = false
+modulate = Color(1, 0.8, 0.4, 1)
+text = "⚠ 模拟滞后"
+
+[node name="BottomBar" type="HBoxContainer" parent="Panel/VBox"]
+
+[node name="PauseBtn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "暂停(Esc)"
+
+[node name="X1Btn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "1×"
+
+[node name="X2Btn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "2×"
+
+[node name="X4Btn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "4×"
+
+[node name="SaveBtn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "保存"
+
+[node name="BaselineBtn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "基准"
+
+[node name="ControlBtn" type="Button" parent="Panel/VBox/BottomBar"]
+text = "对照"
+
+[node name="HintLabel" type="Label" parent="."]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -40.0
+offset_right = 900.0
+offset_bottom = -12.0
+mouse_filter = 2
+theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.85)
+theme_override_constants/outline_size = 6
+text = "右键拖动平移 · 滚轮缩放 · Q/R旋转 · 左键选人物 · Esc暂停模拟"

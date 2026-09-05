@@ -1,0 +1,53 @@
+[gd_scene load_steps=5 format=3 uid="uid://bobs01main0001"]
+
+[ext_resource type="Script" path="res://scenes/observer/observer_main.gd" id="1_obs"]
+[ext_resource type="Script" path="res://src/map/map_controller.gd" id="2_mapctl"]
+[ext_resource type="Script" path="res://src/camera/observer_camera.gd" id="3_cam"]
+[ext_resource type="PackedScene" path="res://scenes/observer/observer_hud.tscn" id="4_hud"]
+
+[sub_resource type="Environment" id="Environment_obs"]
+background_mode = 1
+background_color = Color(0.58, 0.66, 0.78, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.78, 0.85, 1)
+ambient_light_energy = 0.7
+
+[node name="Main" type="Node"]
+script = ExtResource("1_obs")
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="Environment" type="WorldEnvironment" parent="World"]
+environment = SubResource("Environment_obs")
+
+[node name="Sun" type="DirectionalLight3D" parent="World"]
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="GroundGrid" type="GridMap" parent="World"]
+cell_size = Vector3(1, 0.5, 1)
+
+[node name="ObstacleGrid" type="GridMap" parent="World"]
+cell_size = Vector3(1, 0.5, 1)
+
+[node name="PoiRoot" type="Node3D" parent="World"]
+
+[node name="NpcRoot" type="Node3D" parent="World"]
+
+[node name="MapController" type="Node" parent="World"]
+script = ExtResource("2_mapctl")
+
+[node name="CameraRig" type="Node3D" parent="World"]
+script = ExtResource("3_cam")
+
+[node name="YawPivot" type="Node3D" parent="World/CameraRig"]
+
+[node name="MainCamera" type="Camera3D" parent="World/CameraRig/YawPivot"]
+position = Vector3(28, 28, 28)
+projection = 1
+current = true
+size = 40.0
+near = 0.1
+far = 400.0
+
+[node name="ObserverHud" parent="." instance=ExtResource("4_hud")]

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.aiworld/schemas/scenario-spec-0.3.json",
+  "title": "AIWorld ScenarioSpec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scenario_id", "world_id", "facts", "rules", "actors", "story"],
+  "properties": {
+    "schema_version": { "const": "0.3" },
+    "scenario_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,47}$" },
+    "world_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,47}$" },
+    "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+    "facts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "statement", "initially_true"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^fact_[a-z0-9_]{1,47}$" },
+          "statement": { "type": "string", "minLength": 4, "maxLength": 300 },
+          "initially_true": { "type": "boolean" }
+        }
+      }
+    },
+    "rules": {
+      "type": "object", "additionalProperties": false,
+      "required": ["work_target_poi", "fuel_item", "fuel_needed", "work_ticks", "interact_range_tiles"],
+      "properties": {
+        "work_target_poi": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,47}$" },
+        "fuel_item": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,47}$" },
+        "fuel_needed": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "work_ticks": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "interact_range_tiles": { "type": "integer", "minimum": 1, "maximum": 8 }
+      }
+    },
+    "actors": {
+      "type": "array", "minItems": 2,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "role", "inventory", "reserve"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^npc_[a-z0-9_]{1,47}$" },
+          "role": { "enum": ["requester", "helper", "bystander"] },
+          "inventory": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 999 }
+          },
+          "reserve": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 999 }
+          }
+        }
+      }
+    },
+    "story": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request"],
+      "properties": {
+        "request": {
+          "type": "object", "additionalProperties": false,
+          "required": ["item", "amount", "from_id", "to_id", "reason"],
+          "properties": {
+            "item": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,47}$" },
+            "amount": { "type": "integer", "minimum": 1, "maximum": 99 },
+            "from_id": { "type": "string", "pattern": "^npc_[a-z0-9_]{1,47}$" },
+            "to_id": { "type": "string", "pattern": "^npc_[a-z0-9_]{1,47}$" },
+            "reason": { "type": "string", "minLength": 4, "maxLength": 80 }
+          }
+        },
+        "requester_needs_insight": { "type": "boolean" }
+      }
+    }
+  }
+}

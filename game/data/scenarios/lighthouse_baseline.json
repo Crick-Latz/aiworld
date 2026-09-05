@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.3",
+  "scenario_id": "lighthouse_baseline",
+  "world_id": "mist_harbor",
+  "seed": 20260905,
+  "facts": [
+    { "id": "fact_lighthouse_dark", "statement": "旧灯塔缺少风晶粉末，无法点亮", "initially_true": true },
+    { "id": "fact_lighthouse_lit", "statement": "旧灯塔已重新点亮", "initially_true": false }
+  ],
+  "rules": {
+    "work_target_poi": "old_lighthouse",
+    "fuel_item": "windcrystal_powder",
+    "fuel_needed": 2,
+    "work_ticks": 3,
+    "interact_range_tiles": 2
+  },
+  "actors": [
+    { "id": "npc_weila", "role": "requester", "inventory": { "windcrystal_powder": 0 }, "reserve": {} },
+    { "id": "npc_oun", "role": "helper", "inventory": { "windcrystal_powder": 3 }, "reserve": { "windcrystal_powder": 0 } },
+    { "id": "npc_kadga", "role": "bystander", "inventory": {}, "reserve": {} }
+  ],
+  "story": {
+    "request": { "item": "windcrystal_powder", "amount": 2, "from_id": "npc_oun", "to_id": "npc_weila", "reason": "restore_lighthouse" }
+  }
+}

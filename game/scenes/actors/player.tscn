@@ -1,0 +1,56 @@
+[gd_scene load_steps=5 format=3 uid="uid://bwp04plyr0001"]
+
+[ext_resource type="Script" path="res://src/player/player_controller.gd" id="1_pc"]
+[ext_resource type="Script" path="res://src/player/player_interactor.gd" id="2_pi"]
+
+[sub_resource type="CapsuleShape3D" id="cap"]
+radius = 0.32
+height = 1.6
+
+[sub_resource type="SphereShape3D" id="sph"]
+radius = 1.75
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+motion_mode = 0
+floor_snap_length = 0.25
+floor_max_angle = 0.785398
+script = ExtResource("1_pc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.8, 0)
+shape = SubResource("cap")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="AnimatedSprite3D" type="AnimatedSprite3D" parent="VisualRoot"]
+position = Vector3(0, 0.85, 0)
+billboard = 1
+pixel_size = 0.012
+
+[node name="SelectionRing" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, 0.02, 0)
+
+[node name="NameLabel" type="Label3D" parent="VisualRoot"]
+position = Vector3(0, 1.75, 0)
+billboard = 1
+text = "玩家"
+font_size = 20
+outline_size = 4
+outline_modulate = Color(0.08, 0.08, 0.1, 0.85)
+
+[node name="InteractionArea" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 8
+monitoring = true
+script = ExtResource("2_pi")
+
+[node name="InteractionShape" type="CollisionShape3D" parent="InteractionArea"]
+position = Vector3(0, 0.8, 0)
+shape = SubResource("sph")
+
+[node name="GroundProbe" type="RayCast3D" parent="."]
+position = Vector3(0, 0.6, 0)
+target_position = Vector3(0, -0.7, 0)
+collision_mask = 1

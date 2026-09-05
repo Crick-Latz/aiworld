@@ -5,7 +5,8 @@ extends SceneTree
 
 var passed := 0
 var failed := 0
-var _tests_done := false
+var _tests_started := false
+var _tests_finished := false
 
 const AUTOLOAD_SCRIPTS := [
 	"res://src/autoload/app_config.gd",
@@ -24,15 +25,16 @@ const INPUT_ACTIONS := [
 ]
 
 # 在 _initialize 里 add_child 的节点，其 _ready/@onready 会推迟到第一帧才传播；
-# 因此测试推迟到首个 _process 帧执行，随后返回 true 请求退出。
+# 因此测试推迟到首个 _process 帧执行。R1 起测试含 await（布局/Esc 输入），
+# 改为异步：挂起后引擎继续跑帧，直到 quit()。
 func _initialize() -> void:
 	print("WP-02 test harness: tests deferred to first frame")
 
 func _process(_delta: float) -> bool:
-	if not _tests_done:
-		_tests_done = true
+	if not _tests_started:
+		_tests_started = true
 		_run_all_tests()
-	return true
+	return _tests_finished
 
 func _run_all_tests() -> void:
 	_test_valid_spec()
@@ -63,7 +65,15 @@ func _run_all_tests() -> void:
 	_test_r1_scene()
 	_test_rle_decode_type_defense()
 	_test_biome_nine()
+	_test_player_scene()
+	_test_selector()
+	_test_navigator_unit()
+	_test_boundary()
+	_test_wp04_scene()
+	await _test_wp04_r1_pause_and_layout()
+	_test_config_defense()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
+	_tests_finished = true
 	quit(0 if failed == 0 else 1)
 
 func _check(test_name: String, cond: bool, detail: String = "") -> void:
@@ -700,10 +710,11 @@ func _test_r1_scene() -> void:
 		if not names.has(pid):
 			poi_ok = false
 			continue
-		var lbl: Label3D = c.get_child(0)
+		var lbl: Label3D = c.get_node_or_null("Label3D")
 		if lbl == null or lbl.text != names[pid]:
 			poi_ok = false
 		elif not lbl.fixed_size or not lbl.no_depth_test:
+			poi_ok = false
 			poi_ok = false
 		elif lbl.font_size < 18 or lbl.font_size > 24 or lbl.outline_size < 3 or lbl.outline_size > 6:
 			poi_ok = false
@@ -743,3 +754,280 @@ func _test_biome_nine() -> void:
 			print("BIOME_NINE seed=11 biome=%s FAILED %s" % [b, str(r.code)])
 	_check("biome_all_nine_generate", all_ok)
 	_check("biome_all_nine_unique_hashes", hashes.size() == 9, str(hashes.size()))
+
+# —— WP-04 新增：玩家纵切单元测试 ——
+
+func _test_player_scene() -> void:
+	var ps: PackedScene = load("res://scenes/actors/player.tscn")
+	if ps == null:
+		for n in ["player_scene_loadable", "player_collision_layers", "player_capsule_shape",
+				"player_motion_params", "player_interaction_area", "player_ground_probe", "player_visual_billboard"]:
+			_check(n, false, "场景不可加载")
+		return
+	_check("player_scene_loadable", true)
+	var inst = ps.instantiate()
+	var body: CharacterBody3D = inst
+	_check("player_collision_layers", body.collision_layer == 2 and body.collision_mask == 1)
+	var cs: CollisionShape3D = inst.get_node("CollisionShape3D")
+	var cap: CapsuleShape3D = cs.shape
+	_check("player_capsule_shape",
+		absf(cap.radius - 0.32) < 0.001 and absf(cap.height - 1.6) < 0.001 and absf(cs.position.y - 0.8) < 0.001)
+	_check("player_motion_params",
+		body.motion_mode == CharacterBody3D.MOTION_MODE_GROUNDED
+		and absf(body.floor_snap_length - 0.25) < 0.001
+		and absf(body.floor_max_angle - deg_to_rad(45.0)) < 0.001)
+	var area: Area3D = inst.get_node("InteractionArea")
+	var sph: SphereShape3D = inst.get_node("InteractionArea/InteractionShape").shape
+	_check("player_interaction_area",
+		area.collision_layer == 0 and area.collision_mask == 8 and area.monitoring
+		and absf(sph.radius - 1.75) < 0.001)
+	var probe: RayCast3D = inst.get_node("GroundProbe")
+	_check("player_ground_probe",
+		probe.collision_mask == 1 and probe.target_position.y <= -0.5 and probe.target_position.y >= -0.8)
+	var sprite: AnimatedSprite3D = inst.get_node("VisualRoot/AnimatedSprite3D")
+	_check("player_visual_billboard",
+		sprite.billboard == BaseMaterial3D.BILLBOARD_ENABLED and absf(sprite.position.y - 0.85) < 0.001)
+	inst.free()
+
+func _test_selector() -> void:
+	var fwd := Vector3(0, 0, -1)
+	var near := {"target_id": "b_near", "display_name": "近", "position": Vector3(0.5, 0, 0.5)}
+	var far := {"target_id": "a_far", "display_name": "远", "position": Vector3(1.5, 0, 0)}
+	var sel: Dictionary = InteractionTargetSelector.select([far, near], Vector3.ZERO, fwd)
+	_check("selector_distance_priority", str(sel.get("target_id")) == "b_near")
+	var front := {"target_id": "z_front", "display_name": "前", "position": Vector3(0, 0, -1.0)}
+	var back := {"target_id": "a_back", "display_name": "后", "position": Vector3(0, 0, 1.0)}
+	var sel2: Dictionary = InteractionTargetSelector.select([back, front], Vector3.ZERO, fwd)
+	_check("selector_angle_priority", str(sel2.get("target_id")) == "z_front")
+	var c1 := {"target_id": "b", "display_name": "", "position": Vector3(1, 0, 0)}
+	var c2 := {"target_id": "a", "display_name": "", "position": Vector3(1, 0, 0)}
+	var sel3: Dictionary = InteractionTargetSelector.select([c1, c2], Vector3.ZERO, fwd)
+	_check("selector_id_tiebreak", str(sel3.get("target_id")) == "a")
+	var toofar := {"target_id": "out", "display_name": "", "position": Vector3(2.0, 0, 0)}
+	_check("selector_radius_exclusion", InteractionTargetSelector.select([toofar], Vector3.ZERO, fwd).is_empty())
+	var same := {"target_id": "same", "display_name": "", "position": Vector3(0, 0, 0)}
+	var sel5: Dictionary = InteractionTargetSelector.select([same], Vector3.ZERO, fwd)
+	_check("selector_coincident_angle_zero", str(sel5.get("target_id")) == "same")
+
+func _test_navigator_unit() -> void:
+	var config := _map_test_config()
+	var spec := _demo_spec()
+	spec["seed"] = 3
+	var r := MapGenerator.generate(spec, config)
+	if not r.ok:
+		for n in ["navigator_paths_to_pois", "navigator_deterministic", "navigator_unwalkable_empty",
+				"navigator_max_nodes_empty", "navigator_out_of_bounds_empty"]:
+			_check(n, false, "地图生成失败")
+		return
+	var m: GeneratedMap = r.data
+	var pois: Dictionary = m.poi_tiles
+	var spawn: Vector3i = m.spawn_tile
+	var all_paths := true
+	for pid in pois:
+		if MapNavigator.find_path(m, spawn, pois[pid], 256).is_empty():
+			all_paths = false
+	_check("navigator_paths_to_pois", all_paths)
+	var pid0 = pois.keys()[0]
+	var p1: Array = MapNavigator.find_path(m, spawn, pois[pid0], 256)
+	var p2: Array = MapNavigator.find_path(m, spawn, pois[pid0], 256)
+	_check("navigator_deterministic", p1 == p2 and not p1.is_empty())
+	var blocked := Vector3i(-1, 0, -1)
+	for z in m.depth:
+		for x in m.width:
+			if m.obstacle[z * m.width + x] != "none":
+				blocked = Vector3i(x, 0, z)
+				break
+		if blocked.x >= 0:
+			break
+	_check("navigator_unwalkable_empty", MapNavigator.find_path(m, spawn, blocked, 256).is_empty())
+	_check("navigator_max_nodes_empty", MapNavigator.find_path(m, spawn, pois[pid0], 1).is_empty())
+	_check("navigator_out_of_bounds_empty", MapNavigator.find_path(m, spawn, Vector3i(999, 0, 999), 256).is_empty())
+
+func _test_boundary() -> void:
+	var root := Node3D.new()
+	MapBoundaryBuilder.build(root, 32, 32)
+	_check("boundary_count_names",
+		root.get_child_count() == 4 and root.get_node("West") != null and root.get_node("East") != null
+		and root.get_node("North") != null and root.get_node("South") != null)
+	var t := 0.3
+	var h := 3.0
+	var west: StaticBody3D = root.get_node("West")
+	var wshape: BoxShape3D = west.get_node("CollisionShape3D").shape
+	_check("boundary_west_geometry",
+		absf(west.position.x - (-t * 0.5)) < 0.001 and absf(west.position.y - h * 0.5) < 0.001
+		and absf(wshape.size.x - t) < 0.001 and absf(wshape.size.z - (32.0 + 2.0 * t)) < 0.001)
+	var north: StaticBody3D = root.get_node("North")
+	var nshape: BoxShape3D = north.get_node("CollisionShape3D").shape
+	_check("boundary_north_geometry",
+		absf(north.position.z - (-t * 0.5)) < 0.001 and absf(nshape.size.x - (32.0 + 2.0 * t)) < 0.001
+		and absf(nshape.size.z - t) < 0.001)
+	var layers_ok := true
+	for c in root.get_children():
+		if not (c is StaticBody3D) or c.collision_layer != 1:
+			layers_ok = false
+	_check("boundary_layers", layers_ok)
+	MapBoundaryBuilder.clear(root)
+	_check("boundary_clear", root.get_child_count() == 0)
+	root.free()
+
+func _test_wp04_scene() -> void:
+	var ps: PackedScene = load("res://scenes/main/main.tscn")
+	if ps == null:
+		for n in ["interface_poi_tiles_copy", "interface_rect_and_walkable", "interface_find_path",
+				"poi_area3d_structure", "poi_label_params", "hud_control_hint_text", "hud_prompt_hidden",
+				"boundary_built_four", "player_spawned", "pause_state_menu", "resume_state",
+				"error_blocks_pause", "error_cleanup_no_player", "camera_config_defaults", "camera_zoom_clamp"]:
+			_check(n, false, "主场景不可加载")
+		return
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	var ctl = inst.get_node("World/MapController")
+	var pois: Dictionary = ctl.get_poi_tiles()
+	var first_key = pois.keys()[0]
+	var original_tile: Vector3i = pois[first_key]
+	pois[first_key] = Vector3i(999, 0, 999)
+	_check("interface_poi_tiles_copy",
+		ctl.get_poi_tiles()[first_key] == original_tile and ctl.get_poi_tiles().size() == 3)
+	_check("interface_rect_and_walkable",
+		ctl.get_map_rect() == Rect2i(0, 0, 64, 64)
+		and ctl.is_walkable_tile(ctl.get_spawn_tile())
+		and not ctl.is_walkable_tile(Vector3i(-1, 0, 0))
+		and not ctl.is_walkable_tile(Vector3i(5, 1, 5)))
+	_check("interface_find_path", ctl.find_walk_path(ctl.get_spawn_tile(), ctl.get_spawn_tile()).size() >= 1)
+	var poi_ok := true
+	var pr = inst.get_node("World/PoiRoot")
+	for c in pr.get_children():
+		if not (c is Area3D):
+			poi_ok = false
+			continue
+		if not bool(c.get_meta("interactable", false)) or str(c.get_meta("target_type", "")) != "poi":
+			poi_ok = false
+		if c.collision_layer != 8:
+			poi_ok = false
+		if c.get_node_or_null("Label3D") == null or c.get_node_or_null("MarkerMesh") == null:
+			poi_ok = false
+	_check("poi_area3d_structure", poi_ok)
+	var lbl0: Label3D = pr.get_child(0).get_node("Label3D")
+	_check("poi_label_params",
+		lbl0.font_size >= 18 and lbl0.font_size <= 24 and lbl0.outline_size >= 3 and lbl0.outline_size <= 6)
+	_check("hud_control_hint_text",
+		inst.get_node("Ui/Hud/ControlHintLabel").text == "WASD/方向键移动 · Q/R旋转 · 滚轮缩放 · E/空格交互 · Esc暂停")
+	_check("hud_prompt_hidden", not inst.get_node("Ui/Hud/InteractionPrompt").visible)
+	_check("boundary_built_four", inst.get_node("World/BoundaryRoot").get_child_count() == 4)
+	_check("player_spawned", inst.get_node("World/ActorRoot").get_child_count() == 1)
+	var pc = inst.get_node("Ui/PauseController")
+	pc.pause()
+	_check("pause_state_menu", paused and inst.get_node("Ui/PauseMenu").visible)
+	pc.resume()
+	_check("resume_state", not paused and not inst.get_node("Ui/PauseMenu").visible)
+	var cam_ctl = inst.get_node("World/CameraRig")
+	var cam: Camera3D = inst.get_node("World/CameraRig/YawPivot/MainCamera")
+	_check("camera_config_defaults",
+		cam.projection == Camera3D.PROJECTION_ORTHOGONAL
+		and absf(cam.size - 20.0) < 0.001
+		and absf(cam.position.x - 12.0) < 0.001 and absf(cam.position.y - 12.0) < 0.001 and absf(cam.position.z - 12.0) < 0.001)
+	cam_ctl.apply_zoom(-1000.0)
+	var z1: float = cam.size
+	cam_ctl.apply_zoom(1000.0)
+	var z2: float = cam.size
+	_check("camera_zoom_clamp", absf(z1 - 12.0) < 0.001 and absf(z2 - 30.0) < 0.001)
+	inst.apply_error("E_MAP_UNREACHABLE", "测试：错误状态")
+	pc.pause()
+	_check("error_blocks_pause", not paused)
+	pc.resume()
+	_check("error_cleanup_no_player",
+		inst.get_node("World/ActorRoot").get_child_count() == 0
+		and inst.get_node("World/BoundaryRoot").get_child_count() == 0)
+	root.remove_child(inst)
+	inst.free()
+
+# —— WP-04-R1 新增：真实 Esc 暂停、HUD 布局、配置防御 ——
+# SceneTree 脚本中没有 get_tree()：paused/menu 直接用 self/节点属性。
+
+func _test_wp04_r1_pause_and_layout() -> void:
+	var ps: PackedScene = load("res://scenes/main/main.tscn")
+	if ps == null:
+		for n in ["pause_mode_always", "real_esc_pauses", "pause_can_process_when_paused",
+				"real_esc_second_resumes", "hud_layout_disjoint", "hud_layout_in_view"]:
+			_check(n, false, "主场景不可加载")
+		return
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	var pc: Node = inst.get_node("Ui/PauseController")
+	var menu: Control = inst.get_node("Ui/PauseMenu")
+	_check("pause_mode_always",
+		pc.process_mode == Node.PROCESS_MODE_ALWAYS and menu.process_mode == Node.PROCESS_MODE_ALWAYS,
+		"pc=%d menu=%d always=%d" % [pc.process_mode, menu.process_mode, Node.PROCESS_MODE_ALWAYS])
+	var ev := InputEventAction.new()
+	ev.action = "cancel"
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await process_frame
+	await process_frame
+	_check("real_esc_pauses", paused and menu.visible,
+		"paused=%s menu=%s" % [str(paused), str(menu.visible)])
+	_check("pause_can_process_when_paused", pc.can_process() and menu.can_process())
+	Input.parse_input_event(ev)
+	await process_frame
+	await process_frame
+	_check("real_esc_second_resumes", not paused and not menu.visible)
+	paused = false # 测试退出前强制恢复，不污染后续用例
+
+	var title: Control = inst.get_node("Ui/Hud/TitleLabel")
+	var hint: Control = inst.get_node("Ui/Hud/ControlHintLabel")
+	var prompt: Control = inst.get_node("Ui/Hud/InteractionPrompt")
+	var toast: Control = inst.get_node("Ui/Hud/ToastLabel")
+	var prompt_prev: bool = prompt.visible
+	var toast_prev: bool = toast.visible
+	prompt.visible = true
+	toast.visible = true
+	await process_frame # 完成至少一帧布局
+	var rects: Array = [title.get_global_rect(), hint.get_global_rect(), prompt.get_global_rect(), toast.get_global_rect()]
+	var disjoint := true
+	for i in range(rects.size()):
+		for j in range(i + 1, rects.size()):
+			if rects[i].intersects(rects[j]):
+				disjoint = false
+	_check("hud_layout_disjoint", disjoint, str(rects))
+	var vp := Rect2(0, 0, 1280, 720)
+	var in_view := true
+	for r in rects:
+		if not vp.encloses(r):
+			in_view = false
+	_check("hud_layout_in_view", in_view, str(rects))
+	prompt.visible = prompt_prev
+	toast.visible = toast_prev
+	root.remove_child(inst)
+	inst.free()
+
+func _test_config_defense() -> void:
+	var ctl := IsometricCameraController.new()
+	ctl.configure({"near": 0.0, "far": 1.0, "zoom_min": -5.0, "zoom_max": 1.0, "zoom_step": 0.0,
+		"offset": {"x": INF, "y": 12, "z": 12}, "follow_smoothing_seconds": -1.0,
+		"rotation_tween_seconds": -2.0, "rotation_step_degrees": -90.0})
+	_check("camera_config_defense",
+		ctl.near > 0.0 and ctl.far > ctl.near
+		and ctl.zoom_min > 0.0 and ctl.zoom_max >= ctl.zoom_min and ctl.zoom_step > 0.0
+		and ctl.offset.x == 12.0 and is_finite(ctl.offset.x) and is_finite(ctl.offset.y) and is_finite(ctl.offset.z)
+		and ctl.follow_smoothing >= 0.0 and ctl.rotation_tween_seconds >= 0.0 and ctl.rotation_step_deg > 0.0,
+		"near=%f far=%f zmin=%f zmax=%f step=%f off=%s" % [ctl.near, ctl.far, ctl.zoom_min, ctl.zoom_max, ctl.zoom_step, ctl.offset])
+	ctl.free()
+
+	var player_scene: PackedScene = load("res://scenes/actors/player.tscn")
+	if player_scene == null:
+		_check("player_config_defense", false, "玩家场景不可加载")
+		_check("selection_ring_present", false, "玩家场景不可加载")
+		_check("name_label_font_range", false, "玩家场景不可加载")
+		return
+	var pl = player_scene.instantiate()
+	root.add_child(pl)
+	pl.configure(null, Vector3i(1, 0, 1), Vector2i(20, 20),
+		{"player_speed_m_per_second": INF, "gravity_m_per_second_squared": -5.0})
+	_check("player_config_defense", absf(pl.move_speed - 4.5) < 0.001 and absf(pl.gravity - 20.0) < 0.001,
+		"speed=%f gravity=%f" % [pl.move_speed, pl.gravity])
+	var ring: MeshInstance3D = pl.get_node_or_null("VisualRoot/SelectionRing")
+	var lbl: Label3D = pl.get_node("VisualRoot/NameLabel")
+	_check("selection_ring_present", ring != null and ring.mesh != null)
+	_check("name_label_font_range", lbl.font_size >= 18 and lbl.font_size <= 22, str(lbl.font_size))
+	root.remove_child(pl)
+	pl.free()
