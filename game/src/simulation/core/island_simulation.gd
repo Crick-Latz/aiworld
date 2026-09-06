@@ -14,7 +14,8 @@ var actors: Dictionary = {}
 var events: Array = []
 var chronicles: Array = []  # P2: 每日编年史（模拟自己写日记，P3 由 LLM 润色）
 var world := {}  # 环境状态（资源/天气/火/庇护所）
-var relationships := RelationshipStore.new()  # P1: 有向信任（A 信 B ≠ B 信 A）
+var relationships := RelationshipStore.new()
+var obligations: Array = []  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
 var map_query
 
 var _seq := 0
@@ -230,6 +231,8 @@ func step() -> Array:
 	# P1.5: 每 8 tick 解决到期的社会预测（预测误差学习）
 	if tick % 8 == 0:
 		_resolve_predictions()
+	if tick % 24 == 0:
+		_check_overdue_promises()
 
 	# P1.5 行为采样（测试/扫描用）
 	_sample_count += 1
@@ -257,8 +260,9 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	# 如果正在执行行动，倒计时
 	if int(a.get("action_ticks_left", 0)) > 0:
 		a["action_ticks_left"] = int(a["action_ticks_left"]) - 1
-		# 追踪移动：指向具体的人的行动（求助）在执行期间逐 tick 向对方走去；
-		# 对方也会走动——追不上就扑空（request_missed），这是真实的社会摩擦
+		# 追踪移动：指向人的行动逐 tick 走向对方（对方会走动，追不上=扑空）；
+		# 带地点目标的行动（采集/打水/伐木/探废墟）同样边走边执行——
+		# 否则 2-tick 行动总在半路完成（67 次伐木 0 成功的死因）
 		var cur_action: Dictionary = a.get("current_action", {})
 		if cur_action.has("target_actor") and actors.has(str(cur_action["target_actor"])):
 			var pursue_tile: Vector2i = actors[str(cur_action["target_actor"])]["tile"]
@@ -267,6 +271,8 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 				pursue_tile = _away_tile(a["tile"], pursue_tile)
 			if a["tile"] != pursue_tile:
 				_move_toward(a, pursue_tile)
+		elif cur_action.has("target") and typeof(cur_action["target"]) == TYPE_VECTOR2I and cur_action["target"] != a["tile"]:
+			_move_toward(a, cur_action["target"])
 		if int(a["action_ticks_left"]) <= 0:
 			_complete_action(id, a, new_events)
 		else:
@@ -325,8 +331,10 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_socialize(id, a, new_events)
 		"share_food":
 			_do_share(id, a, new_events)
-		"request_share":
+		"request_share", "request_water", "request_tool":
 			_do_request(id, a, action, new_events)
+		"repay_debt":
+			_do_repay(id, a, action, new_events)
 		"keep_distance":
 			_do_keep_distance(id, a, action, new_events)
 		"gather_wood":
@@ -368,7 +376,8 @@ func _do_drink(id: String, a: Dictionary, ev: Array) -> void:
 	for spring in world["water_springs"]:
 		if spring == a["tile"]:
 			a["needs"]["thirst"] = 0
-			_emit("drank", id, "%s 喝了水" % a["display_name"], {})
+			a["inventory"]["water"] = mini(3, int(a["inventory"].get("water", 0)) + 2)  # 顺手灌满水壶——水成为可分享资源
+			_emit("drank", id, "%s 喝了水，还灌满了水壶" % a["display_name"], {})
 			return
 
 func _do_fish(id: String, a: Dictionary, ev: Array) -> void:
@@ -471,36 +480,93 @@ func _do_share(id: String, a: Dictionary, ev: Array) -> void:
 ## 接受/拒绝都产生事件 → 双方经 CognitiveTransition 完成评价/解释/信念/关系更新。
 ## 本函数不再直接修改任何认知状态（无固定 trust/norm 变化）——
 ## 并在目标决策时记录其预测（供预测误差学习）。
+## P1.6 泛化请求执行：event 类型、库存项、缓解量、承诺全部来自 ResourceSpec——
+## 加新资源不需要改这个函数。
 func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var target_id := str(action.get("target_actor", ""))
+	var object_id := str(action.get("object", "food"))
+	var spec: Dictionary = ResourceSpec.spec(object_id)
+	var ev_prefix: String = {"food": "food", "water": "water", "fish_spear": "tool"}.get(object_id, "food")
 	if not actors.has(target_id):
 		return
 	var target: Dictionary = actors[target_id]
-	# 人会走动——决定请求时他在旁边，开口时可能已经走远
 	if not _is_nearby(a["tile"], target["tile"]):
 		_emit("request_missed", id, "%s 想开口，但 %s 已经走远了" % [a["display_name"], target["display_name"]], {})
 		return
-	_emit("food_requested", id, "%s 向 %s 开口要食物" % [a["display_name"], target["display_name"]],
-		{"target_id": target_id})
+	_emit(ev_prefix + "_requested", id, "%s 向 %s 要%s" % [a["display_name"], target["display_name"], str(spec["verb"])],
+			{"target_id": target_id, "object": object_id})
 	var trust_toward_proposer := relationships.composite_trust(target_id, id)
-	var result: Dictionary = SocialSystem.evaluate_food_request(target, a, trust_toward_proposer, _rng)
-	# 目标决策时记录自己的预测（Predict → 之后 Observe → Learn）
+	var result: Dictionary = SocialSystem.evaluate_resource_request(target, a, object_id, trust_toward_proposer, _rng)
 	(target.get("pending_predictions", []) as Array).append({
 		"tick": tick, "about_id": id, "resolve_tick": tick + 24,
 		"my_tile": target["tile"], "about_tile": a["tile"],
 		"predictions": result.get("reactions_forecast", {}),
 	})
 	if bool(result.get("accepted", false)):
-		target["inventory"]["food"] = int(target["inventory"].get("food", 0)) - 1
-		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
-		a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 200, 0, 1000)
-		_emit("food_request_accepted", target_id,
-			"%s 把食物分给了 %s" % [target["display_name"], a["display_name"]],
-			{"proposer_id": id, "reason": str(result.get("reason", ""))})
+		target["inventory"][object_id] = int(target["inventory"].get(object_id, 0)) - 1
+		a["inventory"][object_id] = int(a["inventory"].get(object_id, 0)) + 1
+		if int(spec["relief"]) > 0:
+			a["needs"][spec["need"]] = clampi(int(a["needs"][spec["need"]]) - int(spec["relief"]), 0, 1000)
+		_emit(ev_prefix + "_request_accepted", target_id,
+				"%s 把%s给了 %s" % [target["display_name"], str(spec["verb"]), a["display_name"]],
+				{"proposer_id": id, "object": object_id})
+		# 承诺被接受 → 债务台账（P1.6 #20）
+		if bool(action.get("offers_promise", false)):
+			obligations.append({"debtor": id, "creditor": target_id, "object": object_id,
+					"made_tick": tick, "due_tick": tick + 96, "repaid": false})
+			a["my_obligations"] = _obligations_of(id)
+			target["owed_to_me"] = _owed_to(target_id)
+			_emit("promise_made", id, "%s 说：『这份情我记下，以后报答』" % a["display_name"],
+					{"to_id": target_id, "object": object_id})
 	else:
-		_emit("food_request_refused", target_id,
-			"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
-			{"proposer_id": id, "reason": str(result.get("reason", ""))})
+		_emit(ev_prefix + "_request_refused", target_id,
+				"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
+				{"proposer_id": id, "object": object_id})
+
+## 债务辅助（视图供给）
+func _obligations_of(debtor: String) -> Array:
+	var out: Array = []
+	for ob in obligations:
+		if str(ob["debtor"]) == debtor and not bool(ob["repaid"]):
+			out.append(ob)
+	return out
+
+func _owed_to(creditor: String) -> Array:
+	var out: Array = []
+	for ob in obligations:
+		if str(ob["creditor"]) == creditor and not bool(ob["repaid"]):
+			out.append(ob)
+	return out
+
+## P1.6 还债执行：履约 → 可靠性上升（经 transition 的 PROMISE/FULFILLED 语义）
+func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var creditor := str(action.get("target_actor", ""))
+	var object_id := str(action.get("object", "food"))
+	var spec: Dictionary = ResourceSpec.spec(object_id)
+	if not actors.has(creditor) or int(a["inventory"].get(object_id, 0)) < 2:
+		return
+	if not _is_nearby(a["tile"], actors[creditor]["tile"]):
+		return  # 人不在——下次再说
+	a["inventory"][object_id] = int(a["inventory"][object_id]) - 1
+	actors[creditor]["inventory"][object_id] = int(actors[creditor]["inventory"].get(object_id, 0)) + 1
+	for ob in obligations:
+		if str(ob["debtor"]) == id and str(ob["creditor"]) == creditor and str(ob["object"]) == object_id and not bool(ob["repaid"]):
+			ob["repaid"] = true
+			break
+	a["my_obligations"] = _obligations_of(id)
+	actors[creditor]["owed_to_me"] = _owed_to(creditor)
+	_emit("promise_kept", id, "%s 把%s还给了 %s——他兑现了承诺" % [a["display_name"], str(spec["verb"]), actors[creditor]["display_name"]],
+			{"to_id": creditor, "object": object_id})
+
+## 承诺到期检查：违约 → 可靠性崩（无人在场也生效——不守信迟早传开）
+func _check_overdue_promises() -> void:
+	for ob in obligations:
+		if not bool(ob["repaid"]) and tick > int(ob["due_tick"]):
+			ob["repaid"] = true  # 标记完结防重复
+			if actors.has(str(ob["debtor"])):
+				actors[str(ob["debtor"])]["my_obligations"] = _obligations_of(str(ob["debtor"]))
+			_emit("promise_broken", str(ob["debtor"]), "%s 没能兑现他的承诺" % actors[str(ob["debtor"])]["display_name"],
+					{"to_id": str(ob["creditor"]), "object": str(ob["object"])})
 
 ## 预测误差学习：解决到期的社会预测——预测 vs 实际观察 → 修正响应模型
 func _resolve_predictions() -> void:
@@ -856,6 +922,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"others_visible": others_visible,
 		"others_all": others_all,
 		"norms": a.get("norms", {}),
+		"my_obligations": a.get("my_obligations", []),
 		"social_stance": a.get("social_stance", {}),
 		"grudges": a.get("grudges", {}),
 	}

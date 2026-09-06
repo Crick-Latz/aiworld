@@ -195,7 +195,105 @@ func _test_m_claim_not_truth() -> void:
 		"reliable=%f stranger=%f" % [float(result2["weight"]), float(result["weight"])])
 
 func _run_all_tests() -> void:
+	_test_l_domain_generalization()
+	_test_n_promise_reciprocity()
+	_test_lifehistory_learning()
 	_test_j_hidden_state_isolation()
 	_test_h_epistemic_action_emergence()
 	_test_i_uncertainty_tolerance()
 	_test_m_claim_not_truth()
+
+# ── L. 领域泛化：水/工具经数据接入，认知层零 resource-specific 分支 ──
+func _test_l_domain_generalization() -> void:
+	# L1 静态检查：认知四模块（Transition/Interpretation/Forecaster/Reflection）不得出现水/工具专属字符串
+	var cognitive_files := [
+		"res://src/simulation/cognition/cognitive_transition.gd",
+		"res://src/simulation/cognition/interpretation.gd",
+		"res://src/simulation/decision/action_forecaster.gd",
+		"res://src/simulation/cognition/reflection_system.gd",
+	]
+	var violations := 0
+	for f in cognitive_files:
+		var src := FileAccess.get_file_as_string(f)
+		if src.find("water") != -1 or src.find("fish_spear") != -1 or src.find("thirsty") != -1:
+			violations += 1
+			print("L_VIOLATION " + f)
+	_check("l_no_resource_branches_in_cognition", violations == 0, "violations=%d" % violations)
+	# L2 功能检查：水请求走同一条通用链
+	var thirsty := _actor("npc_weila", {"empathy": 0.65})
+	thirsty["needs"]["thirst"] = 750
+	thirsty["others_visible"] = [{"id": "npc_oun", "tile": Vector2i(2, 0)}]
+	thirsty["tom"].add_evidence("npc_oun", "has_water", 1.0, 0.6, 1, 10)
+	thirsty["trust_of"] = {"npc_oun": 100}
+	var world := {"tick": 60, "resources": {"berry_bushes": [], "water_springs": [Vector2i(40, 40)], "fish_spots": [], "shell_beaches": [], "ruins": []}, "fires": {}}
+	var names: Array = []
+	for act in ActionRegistry.get_available_actions(thirsty, world):
+		names.append(str(act["action"]))
+	_check("l_water_request_via_generic_chain", names.has("request_water"), str(names))
+	# L3 水拒绝也走同一条解释链（谓词 has_water 自动替换）
+	var rs := RelationshipStore.new()
+	var ev := {"type": "water_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "tick": 50, "seq": 2, "text": "x"}
+	var sum: Dictionary = CognitiveTransition.process(thirsty, ev, {"relationships": rs, "tick": 50})
+	var interp: Dictionary = sum.get("interpretation", {})
+	_check("l_water_refusal_interpreted", not interp.is_empty(), str(sum.keys()))
+	var hw: float = thirsty["tom"].raw_belief("npc_oun", "has_water")
+	_check("l_water_predicate_used", hw < 0.6, "has_water after=%f（原0.6，被 INCAPABLE 解释削弱）" % hw)
+
+# ── N. 正向互惠：help→promise→repay→reliability（非固定 +bond）──
+func _test_n_promise_reciprocity() -> void:
+	var rs := RelationshipStore.new()
+	var vera := _actor("npc_weila", {"empathy": 0.65})
+	# 欧恩履约：薇拉（债主）经 transition——可靠+善意双升，由 PROMISE/FULFILLED 语义驱动
+	var kept := {"type": "promise_kept", "actor_id": "npc_oun", "to_id": "npc_weila", "object": "food", "tick": 80, "seq": 3, "text": "x"}
+	CognitiveTransition.process(vera, kept, {"relationships": rs, "tick": 80})
+	var rel_gain: int = rs.get_dim("npc_weila", "npc_oun", "reliability")
+	_check("n_kept_promise_raises_reliability", rel_gain > 30, str(rel_gain))
+	var tom_gain: float = vera["tom"].belief_about("npc_oun", "reliable")
+	_check("n_kept_promise_tom_reliable", tom_gain > 0.05, str(tom_gain))
+	# 欧恩违约：比拒绝更重
+	var vera2 := _actor("npc_weila", {})
+	var rs2 := RelationshipStore.new()
+	var broken := {"type": "promise_broken", "actor_id": "npc_oun", "to_id": "npc_weila", "object": "food", "tick": 90, "seq": 4, "text": "x"}
+	CognitiveTransition.process(vera2, broken, {"relationships": rs2, "tick": 90})
+	_check("n_broken_promise_severer_than_refusal", rs2.get_dim("npc_weila", "npc_oun", "reliability") < -100,
+		str(rs2.get_dim("npc_weila", "npc_oun", "reliability")))
+	# 承诺加成：带 promise 的请求更容易被接受（互惠规范+信任加权）
+	var proposer := _actor("npc_weila", {})
+	proposer["offers_promise"] = true
+	var target := _actor("npc_oun", {"altruism": 0.5, "empathy": 0.5})
+	target["inventory"]["food"] = 4
+	var rng1 := RandomNumberGenerator.new(); rng1.seed = 9
+	var rng2 := RandomNumberGenerator.new(); rng2.seed = 9
+	var with_p := 0
+	var no_p := 0
+	for i in 30:
+		if bool(SocialSystem.evaluate_resource_request(target, proposer, "food", 150, rng1)["accepted"]):
+			with_p += 1
+		if bool(SocialSystem.evaluate_food_request(target, _actor("npc_weila", {}), 150, rng2)["accepted"]):
+			no_p += 1
+	_check("n_promise_boosts_acceptance", with_p >= no_p, "with=%d without=%d" % [with_p, no_p])
+
+# ── #22 LifeHistory：过去经历改变学习过程（同一事件不同敏感度）──
+func _test_lifehistory_learning() -> void:
+	# 三个人经历同一次拒绝：饥荒幸存者/被背叛者/长期合作者
+	var famine_survivor := _actor("npc_a", {"empathy": 0.5}, {"food_loss_sensitivity": 0.9})
+	var betrayed := _actor("npc_b", {"empathy": 0.5}, {"betrayal_sensitivity": 0.9})
+	var cooperator := _actor("npc_c", {"empathy": 0.5}, {})
+	var ev := {"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_x", "tick": 50, "seq": 1, "text": "x"}
+	var ctx := {"relationships": RelationshipStore.new(), "tick": 50}
+	var d_f: Dictionary = CognitiveTransition.process(famine_survivor, _retarget(ev, "npc_a"), ctx)
+	var d_b: Dictionary = CognitiveTransition.process(betrayed, _retarget(ev, "npc_b"), ctx)
+	var d_c: Dictionary = CognitiveTransition.process(cooperator, _retarget(ev, "npc_c"), ctx)
+	# 被背叛者：敌意归因偏置更高 → 敌意解释权重更大（学习过程不同，非仅数值）
+	var hw_b: float = Interpretation.hostility_weight(d_b["interpretation"])
+	var hw_c: float = Interpretation.hostility_weight(d_c["interpretation"])
+	_check("lh_betrayal_biases_hostile_attribution", hw_b > hw_c, "betrayed=%f naive=%f" % [hw_b, hw_c])
+	# 饥荒幸存者：匮乏显著度更高 → INCAPABLE（他也没粮）解释权重更大
+	var inc_f: float = Interpretation.weight_of(d_f["interpretation"], "also_starving")
+	var inc_c: float = Interpretation.weight_of(d_c["interpretation"], "also_starving")
+	_check("lh_famine_biases_incapable_attribution", inc_f > inc_c, "famine=%f naive=%f" % [inc_f, inc_c])
+
+func _retarget(ev: Dictionary, new_proposer: String) -> Dictionary:
+	var e2 := ev.duplicate()
+	e2["proposer_id"] = new_proposer
+	return e2

@@ -21,10 +21,14 @@ static func build(observer: Dictionary, event: Dictionary, relationships) -> Dic
 		counterpart = actor_id
 
 	# 当刻认知快照：我以为他粮多吗？我信他吗？我自己饿吗？我觉得人该分享吗？
+	var sem := ResourceSpec.semantics_of(event)
+	var predicate := "has_food"
+	if sem.has("object"):
+		predicate = ResourceSpec.spec(str(sem["object"]))["predicate"]  # 资源谓词由语义决定：has_food/has_water/has_spear
 	var believed_rich := 0.0
 	var believed_generous := 0.0
 	if tom != null and counterpart != "":
-		believed_rich = tom.raw_belief(counterpart, "has_food")
+		believed_rich = tom.raw_belief(counterpart, predicate)
 		believed_generous = tom.raw_belief(counterpart, "generous")
 	var trust_toward := 0
 	if relationships != null and counterpart != "":
@@ -51,6 +55,7 @@ static func build(observer: Dictionary, event: Dictionary, relationships) -> Dic
 			"reason": str(event.get("reason", "")),
 		},
 		"interpretation": {},  # 由 Interpretation 填充
+		"semantics": sem,
 	}
 	return se
 

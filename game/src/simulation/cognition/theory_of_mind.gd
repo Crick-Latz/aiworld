@@ -22,13 +22,9 @@ var prediction_errors: Array = []
 
 func _entry(other_id: String, key: String) -> Dictionary:
 	if not _models.has(other_id):
-		_models[other_id] = {
-			"has_food": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
-			"generous": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
-			"reliable": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
-			"hungry": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},  # 感知槽：我以为他饿（状态非特质，快衰减）
-			"last_updated": -1,
-		}
+		_models[other_id] = {"last_updated": -1}
+	if not _models[other_id].has(key):
+		_models[other_id][key] = {"value": 0.0, "evidence_pos": [], "evidence_neg": []}  # 任意属性：has_water/has_spear/thirsty…无需预定义槽（P1.6 #15）
 	return _models[other_id][key]
 
 ## 证据式更新：direction ∈ {-1,+1}，weight ∈ 0..1（由解释权重×学习速率决定）。
@@ -120,24 +116,10 @@ func decay(before_tick: int, fade_days: int) -> void:
 	for other_id in _models:
 		var m: Dictionary = _models[other_id]
 		if int(m["last_updated"]) < before_tick - fade_days * 24:
-			for key in ["has_food", "generous", "reliable"]:
-				m[key]["value"] = float(m[key]["value"]) * 0.98
+			for key in m:
+				if key == "last_updated" or not (m[key] is Dictionary) or not m[key].has("value"):
+					continue
+				var fade_rate := 0.6 if key in ["hungry", "thirsty"] else 0.98  # 状态型感知快衰减，特质型慢衰减
+				m[key]["value"] = float(m[key]["value"]) * fade_rate
 				if absf(float(m[key]["value"])) < 0.02:
 					m[key]["value"] = 0.0
-
-func model_of(other_id: String) -> Dictionary:
-	var out := {"has_food": belief_about(other_id, "has_food"), "generous": belief_about(other_id, "generous"),
-		"reliable": belief_about(other_id, "reliable"), "last_updated": -1}
-	if _models.has(other_id):
-		out["last_updated"] = int(_models[other_id]["last_updated"])
-	return out
-
-func snapshot() -> Dictionary:
-	var out := {}
-	for other_id in _models:
-		out[other_id] = {
-			"has_food": model_of(other_id)["has_food"],
-			"generous": model_of(other_id)["generous"],
-			"reliable": model_of(other_id)["reliable"],
-		}
-	return out

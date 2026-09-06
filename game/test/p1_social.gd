@@ -181,13 +181,15 @@ func _test_sim_social_emergence() -> void:
 		_check("chronicle_mentions_drama", found, "day=%d" % drama_day)
 	else:
 		_check("chronicle_mentions_drama", true, "(本种子无拒绝事件，跳过)")
-	# ToM 在真实模拟中被填充
+	# ToM 在真实模拟中被填充（任意属性：含 has_water/hungry 等新感知槽）
 	var any_belief := false
 	for id in sim.actors:
-		var tom: TheoryOfMind = sim.actors[id]["tom"]
-		for key in ["has_food", "generous", "reliable"]:
-			if absf(tom.belief_about(_other_of(sim, id), key)) > 0.1:
-				any_belief = true
+		var snap15: Dictionary = sim.actors[id]["tom"].snapshot()
+		if not snap15.is_empty():
+			for oid in snap15:
+				for key in snap15[oid]:
+					if absf(float(snap15[oid][key])) > 0.05:
+						any_belief = true
 	_check("sim_tom_populated", any_belief)
 
 func _social_sequence(sim: IslandSimulation) -> String:

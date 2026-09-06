@@ -399,7 +399,7 @@ func _refresh_hud() -> void:
 				for oid in island_sim.actors:
 					if oid == selected_actor_id:
 						continue
-					var m := tom.model_of(oid)
+					var m: Dictionary = tom.model_of(oid)
 					if float(m["has_food"]) != 0.0 or float(m["generous"]) != 0.0 or float(m["reliable"]) != 0.0:
 						tom_parts.append("%s(食%+.1f 慷%+.1f 靠%+.1f)" % [
 							island_sim.actors[oid]["display_name"],

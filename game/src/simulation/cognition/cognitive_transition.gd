@@ -42,12 +42,15 @@ static func process(observer: Dictionary, event: Dictionary, ctx: Dictionary) ->
 	var appraisal := {}
 	var interp := {}
 	var role := str(se["role"])
-	if type == "food_request_refused" and role == "proposer":
+	var sem: Dictionary = se.get("semantics", {})
+	var response := str(sem.get("response", ""))
+	var act := str(sem.get("act", ""))
+	if act == "REQUEST" and response == "REFUSE" and role == "proposer":
 		interp = Interpretation.interpret_refusal(se, dyn)
 		appraisal = _appraisal_my_refusal(se, interp)
-	elif type == "food_request_refused" and role == "actor":
+	elif act == "REQUEST" and response == "REFUSE" and role == "actor":
 		appraisal = _appraisal_my_refusing(observer, dyn)  # 我拒绝了别人：规范自检
-	elif (type == "food_request_accepted" and role == "proposer") or (type == "shared_food" and role == "recipient"):
+	elif (act == "REQUEST" and response == "ACCEPT" and role == "proposer") or (act == "GIVE" and role == "recipient"):
 		interp = Interpretation.interpret_acceptance(se, dyn)
 		appraisal = _appraisal_received_help(se, interp)
 	else:
@@ -150,6 +153,9 @@ static func _appraisal_received_help(se: Dictionary, interp: Dictionary) -> Dict
 # ── 信念更新：解释加权证据 ──
 
 static func _update_beliefs(observer: Dictionary, se: Dictionary, interp: Dictionary, dyn: Dictionary, seq: int, tick: int) -> Dictionary:
+	var sem2: Dictionary = se.get("semantics", {})
+	var act2 := str(sem2.get("act", ""))
+	var response2 := str(sem2.get("response", ""))
 	var tom: TheoryOfMind = observer.get("tom", null)
 	if tom == null:
 		return {}
@@ -160,42 +166,67 @@ static func _update_beliefs(observer: Dictionary, se: Dictionary, interp: Dictio
 	var type := str(se["type"])
 	var role := str(se["role"])
 
-	if type == "food_request_refused" and role == "proposer":
+	var sem: Dictionary = se.get("semantics", {})
+	var response := str(sem.get("response", ""))
+	var act := str(sem.get("act", ""))
+	if act == "REQUEST" and response == "REFUSE" and role == "proposer":
 		# 被拒：按解释分布累积证据
 		var neg_rate: float = dyn["betrayal_learning_rate"]
 		tom.add_evidence(other, "generous", -1.0, Interpretation.weight_of(interp, "selfish") * 0.5 * neg_rate, seq, tick)
 		tom.add_evidence(other, "reliable", -1.0, Interpretation.weight_of(interp, "distrusts_me") * 0.3 * neg_rate, seq, tick)
-		tom.add_evidence(other, "has_food", -1.0, Interpretation.weight_of(interp, "also_starving") * 0.5, seq, tick)
+		tom.add_evidence(other, str(ResourceSpec.spec(str(sem.get("object", "food")))["predicate"]), -1.0, Interpretation.weight_of(interp, "also_starving") * 0.5, seq, tick)
 		updates["generous"] = -Interpretation.weight_of(interp, "selfish") * 0.5 * neg_rate
-		updates["has_food"] = -Interpretation.weight_of(interp, "also_starving") * 0.5
-	elif type == "food_request_accepted" and role == "proposer":
+		updates[str(ResourceSpec.spec(str(sem.get("object", "food")))["predicate"])] = -Interpretation.weight_of(interp, "also_starving") * 0.5
+	elif act == "REQUEST" and response == "ACCEPT" and role == "proposer":
 		var pos_rate: float = dyn["positive_learning_rate"]
 		tom.add_evidence(other, "generous", 1.0, (Interpretation.weight_of(interp, "generous") + Interpretation.weight_of(interp, "genuine_bond")) * 0.5 * pos_rate, seq, tick)
 		tom.add_evidence(other, "reliable", 1.0, 0.25 * pos_rate, seq, tick)
 		updates["generous"] = Interpretation.weight_of(interp, "generous") * 0.5 * pos_rate
-	elif type == "shared_food" and role == "recipient":
+	elif act == "GIVE" and role == "recipient":
 		var pos_rate2: float = dyn["positive_learning_rate"]
 		tom.add_evidence(other, "generous", 1.0, 0.4 * pos_rate2, seq, tick)
 		updates["generous"] = 0.4 * pos_rate2
-	elif type == "food_requested":
-		# P1.6 感知门：他开口要食物 = 他饿的最强可观察证据（本人陈述 > 面色推测）
-		tom.add_evidence(other, "hungry", 1.0, 0.5, seq, tick)
+	elif act2 == "REQUEST" and response2 == "PENDING":
+		# 感知门（参数化）：他开口要 X = 他缺 X 的最强可观察证据。槽位由资源规格决定
+		var spec2 := ResourceSpec.spec(str(sem2.get("object", "food")))
+		var percept_slot := str(spec2.get("percept", "hungry"))  # 感知槽名由资源规格提供
+		tom.add_evidence(other, percept_slot, 1.0, 0.5, seq, tick)
+		updates[percept_slot] = 0.5
 		updates["hungry"] = 0.5
-	elif type == "ate_food":
+	elif type == "ate_food" or type == "drank_carried":
 		# 看见他吃东西 = 不那么饿了（反向证据，同样只是感知）
 		tom.add_evidence(other, "hungry", -1.0, 0.3, seq, tick)
 		updates["hungry"] = -0.3
-	elif type == "foraged" or type == "fished" or type == "ruins_loot" or type == "explored_found":
-		# 直接知觉证据：看见他获得食物（非解释，知觉）
-		var sal: float = 0.2 + float(dyn["scarcity_salience"]) * 0.15
-		tom.add_evidence(other, "has_food", 1.0, sal, seq, tick)
-		updates["has_food"] = sal
-	elif type == "foraged_empty" or type == "fished_empty" or type == "ruins_empty":
-		var sal2: float = 0.1 + float(dyn["scarcity_salience"]) * 0.1
-		tom.add_evidence(other, "has_food", -1.0, sal2, seq, tick)
-		# 关键修正通道：看见他空手而归 → 削弱"他自私"旧结论（他可能真没粮）
-		tom.weaken(other, "generous", 0.06)
-		updates["has_food"] = -sal2
+	elif act2 == "PROMISE" and response2 == "FULFILLED":
+		# 承诺兑现 = 可靠性的最强证据（言行一致）
+		tom.add_evidence(other, "reliable", 1.0, 0.5, seq, tick)
+		updates["reliable"] = 0.5
+	elif act2 == "PROMISE" and response2 == "VIOLATED":
+		# 违约 = 可靠性崩塌（比拒绝严重——他主动承诺过）
+		tom.add_evidence(other, "reliable", -1.0, 0.6, seq, tick)
+		tom.add_evidence(other, "generous", -1.0, 0.2, seq, tick)
+		updates["reliable"] = -0.6
+	elif act2 == "ACQUIRE" and response2 == "DONE":
+		# 直接知觉证据（通用）：看见他获得 X → 他有 X。谓词由资源规格决定
+		var acquire_pred := str(ResourceSpec.spec(str(sem2.get("object", "food")))["predicate"])
+		var acquire_sal := 0.3 if str(sem2.get("object", "food")) != "food" else 0.2 + float(dyn["scarcity_salience"]) * 0.15
+		if str(sem2.get("object", "food")) == "food":
+			# P1.6 #31 校准：我本对他的存粮有把握——现在真相揭晓（Brier）
+			var prior_conf2: float = tom.confidence_of(other, acquire_pred)
+			if prior_conf2 >= 0.5:
+				var predicted2: float = clampf(0.5 + tom.raw_belief(other, acquire_pred) * 0.5, 0.0, 1.0)
+				var calib2: Array = observer.get("calibration", [])
+				calib2.append({"tick": tick, "brier": (predicted2 - 1.0) * (predicted2 - 1.0)})
+				if calib2.size() > 30:
+					calib2.pop_front()
+				observer["calibration"] = calib2
+			tom.add_evidence(other, acquire_pred, 1.0, acquire_sal, seq, tick)
+		updates[acquire_pred] = acquire_sal
+	elif act2 == "ACQUIRE" and response2 == "FAILED":
+		var fail_pred := str(ResourceSpec.spec(str(sem2.get("object", "food")))["predicate"])
+		tom.add_evidence(other, fail_pred, -1.0, 0.15, seq, tick)
+		tom.weaken(other, "generous", 0.06)  # 他空手而归 → 削弱"自私"旧结论（修正通道）
+		updates[fail_pred] = -0.15
 	return updates
 
 # ── 关系更新：解释权重 → 四维增量 ──
@@ -203,6 +234,9 @@ static func _update_beliefs(observer: Dictionary, se: Dictionary, interp: Dictio
 static func _update_relationships(observer: Dictionary, se: Dictionary, interp: Dictionary, dyn: Dictionary, relationships) -> Dictionary:
 	if relationships == null:
 		return {}
+	var sem3: Dictionary = se.get("semantics", {})
+	var act3 := str(sem3.get("act", ""))
+	var response3 := str(sem3.get("response", ""))
 	var me := str(observer.get("id", ""))
 	var other := str(se["counterpart_id"])
 	if other == "" or other == me:
@@ -211,11 +245,24 @@ static func _update_relationships(observer: Dictionary, se: Dictionary, interp: 
 	var role := str(se["role"])
 	var delta := {}
 	# 陪伴效应：共同度过的时间积累善意（相处的熟悉感，非事件性增减）
+	if type == "promise_kept" and role == "recipient":
+		# 履约（我是债主）：可靠与善意双升——这是互惠弧的终点
+		relationships.adjust(me, other, "reliability", 120.0 * float(dyn["positive_learning_rate"]))
+		relationships.adjust(me, other, "benevolence", 60.0 * float(dyn["positive_learning_rate"]))
+		delta["reliability"] = 120.0 * float(dyn["positive_learning_rate"])
+	elif type == "promise_broken" and role == "recipient":
+		# 违约（我是债主）：比拒绝更重——他主动承诺过
+		relationships.adjust(me, other, "reliability", -250.0 * float(dyn["betrayal_learning_rate"]))
+		relationships.adjust(me, other, "benevolence", -150.0 * float(dyn["betrayal_learning_rate"]))
+		delta["reliability"] = -250.0 * float(dyn["betrayal_learning_rate"])
 	if type == "socialized":
 		relationships.adjust(me, other, "benevolence", 15.0 * float(dyn["positive_learning_rate"]))
 		delta["benevolence"] = 15.0 * float(dyn["positive_learning_rate"])
 
-	if type == "food_request_refused" and role == "proposer":
+	var sem: Dictionary = se.get("semantics", {})
+	var response := str(sem.get("response", ""))
+	var act := str(sem.get("act", ""))
+	if act == "REQUEST" and response == "REFUSE" and role == "proposer":
 		# 被拒者视角：敌意解释权重 → 善意下降；"不信任我" → 我也不信他（可靠↓）
 		var host := Interpretation.hostility_weight(interp)
 		var shortage := Interpretation.weight_of(interp, "also_starving")
@@ -277,7 +324,10 @@ static func _update_social_stance(observer: Dictionary, se: Dictionary, interp: 
 	var warm := Interpretation.weight_of(interp, "generous") + Interpretation.weight_of(interp, "genuine_bond")
 	var type := str(se["type"])
 	var role := str(se["role"])
-	if type == "food_request_refused" and role == "proposer":
+	var sem: Dictionary = se.get("semantics", {})
+	var response := str(sem.get("response", ""))
+	var act := str(sem.get("act", ""))
+	if act == "REQUEST" and response == "REFUSE" and role == "proposer":
 		# 敌意权重超过 0.5 且超过温暖 → 产生回避倾向（强度=敌意×恐惧敏感）
 		if host > 0.5:
 			var strength := host * (0.5 + float(observer["personality"].emotions.get("fear", 0.0)) * 0.5)
@@ -289,7 +339,7 @@ static func _update_social_stance(observer: Dictionary, se: Dictionary, interp: 
 
 # ── 记忆：主观化 + 解释归档 ──
 
-const IMPORTANT_TYPES := ["explored_hurt", "explored_found", "ruins_loot", "shared_food",
+const IMPORTANT_TYPES := ["explored_hurt", "explored_found", "ruins_loot", "shared_food", "promise_kept", "promise_broken", "reason_claimed",
 	"weather_storm", "food_requested", "food_request_accepted", "food_request_refused"]
 
 static func _write_memory(observer: Dictionary, event: Dictionary, se: Dictionary, interp: Dictionary, appraisal: Dictionary) -> void:

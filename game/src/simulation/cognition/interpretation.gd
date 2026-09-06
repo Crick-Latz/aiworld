@@ -24,11 +24,11 @@ static func interpret_refusal(se: Dictionary, dyn: Dictionary) -> Dictionary:
 	var w_dislikes := 0.20 * (1.0 + hostility * 1.2 + maxf(0.0, -trust_f) * 0.6)
 
 	var cands := [
-		{"id": "selfish", "label": "他就是自私", "weight": w_selfish},
-		{"id": "also_starving", "label": "他自己也没粮", "weight": w_starving},
-		{"id": "distrusts_me", "label": "他不信任我", "weight": w_distrusts},
-		{"id": "saving_reserve", "label": "他在为将来存粮", "weight": w_reserve},
-		{"id": "dislikes_me", "label": "他讨厌我", "weight": w_dislikes},
+		{"id": "selfish", "motive": "SELF_INTEREST", "label": "他就是自私", "weight": w_selfish},
+		{"id": "also_starving", "motive": "INCAPABLE", "label": "他自己也没粮", "weight": w_starving},
+		{"id": "distrusts_me", "motive": "DISTRUST", "label": "他不信任我", "weight": w_distrusts},
+		{"id": "saving_reserve", "motive": "SELF_PRESERVATION", "label": "他在为将来存粮", "weight": w_reserve},
+		{"id": "dislikes_me", "motive": "DISLIKE", "label": "他讨厌我", "weight": w_dislikes},
 	]
 	return _normalize(cands, dyn)
 
@@ -45,10 +45,10 @@ static func interpret_acceptance(se: Dictionary, dyn: Dictionary) -> Dictionary:
 	var w_genuine_bond := 0.20 * (1.0 + trust_f * 1.2) * (1.2 - hostility * 0.8)
 
 	var cands := [
-		{"id": "generous", "label": "他心地慷慨", "weight": w_generous},
-		{"id": "pities_me", "label": "他可怜我", "weight": w_pity},
-		{"id": "expects_return", "label": "他想要回报", "weight": w_expects_return},
-		{"id": "genuine_bond", "label": "他真把我当同伴", "weight": w_genuine_bond},
+		{"id": "generous", "motive": "ALTRUISTIC", "label": "他心地慷慨", "weight": w_generous},
+		{"id": "pities_me", "motive": "AFFECTION", "label": "他可怜我", "weight": w_pity},
+		{"id": "expects_return", "motive": "STRATEGIC", "label": "他想要回报", "weight": w_expects_return},
+		{"id": "genuine_bond", "motive": "AFFECTION", "label": "他真把我当同伴", "weight": w_genuine_bond},
 	]
 	return _normalize(cands, dyn)
 

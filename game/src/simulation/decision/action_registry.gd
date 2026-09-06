@@ -36,8 +36,10 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a10 != null: actions.append(a10)
 	var a11 = _share(p, needs, inv, pos, world)
 	if a11 != null: actions.append(a11)
-	var a13 = _request(p, needs, actor, world)
-	if a13 != null: actions.append(a13)
+	for a13 in _request(p, needs, actor, world):
+		actions.append(a13)
+	var a19 = _repay_debt(p, actor, world)
+	if a19 != null: actions.append(a19)
 	var a18 = _epistemic_actions(p, actor, world)
 	for ea in a18: actions.append(ea)
 	var a16 = _gather_wood(p, needs, inv, pos, world)
@@ -99,7 +101,7 @@ static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, wor
 		return null
 	var curiosity := p.effective_trait("curiosity", needs)
 	var hunger := _n(needs.get("hunger", 0), 400, 800)
-	var score := (0.3 + curiosity * 0.4 + hunger * 0.3) * _dp(pos, nearest)
+	var score := (0.3 + curiosity * 0.4 + hunger * 0.12) * _dp(pos, nearest)
 	return {"action": "gather_shells", "target": nearest, "utility": score, "desc": "去捡贝壳", "duration": 1}
 
 static func _shelter(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
@@ -197,26 +199,66 @@ static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, po
 
 ## P1.5：开口求助的效用 = 预测后果的期望效用（ActionForecaster），
 ## 不是"我现在多想求助"。预测错了（以为他会给，结果被拒）是故事。
-static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary):
-	var hunger_raw := float(needs.get("hunger", 0))
-	if hunger_raw < 450.0:
-		return null  # 不够饿，开不了口
-	# 可视范围（12 格）选目标——人可以穿过营地走过去问；对方走开会扑空（真实行为）
+## P1.6 泛化求助：所有资源（food/water/fish_spear）经 ResourceSpec 数据接入——
+## 没有 resource-specific 分支，只有"挑最痛的需求×最可能给的人"。
+static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary) -> Array:
+	var out: Array = []
 	var visible: Array = actor.get("others_visible", actor.get("others_nearby", []))
+	if visible.is_empty():
+		return out
 	var trust_of: Dictionary = actor.get("trust_of", {})
-	var target_id := SocialSystem.pick_request_target(actor, visible, trust_of)
-	if target_id == "":
+	var recip: float = float(actor.get("norms", {}).get("personal", {}).get("reciprocity", 0.5))
+	var inv: Dictionary = actor.get("inventory", {})
+	for object_id in ResourceSpec.SPECS:
+		var spec: Dictionary = ResourceSpec.SPECS[object_id]
+		var need_raw := float(needs.get(str(spec["need"]), 0))
+		var gate := float(spec["request_gate"])
+		if bool(spec.get("is_tool", false)):
+			if int(inv.get("fish_spear", 0)) >= 1:
+				continue  # 有鱼叉的人不求鱼叉
+			gate = 400.0  # 饿着又没工具时想借
+		if need_raw < gate:
+			continue
+
+		# 自己能解决就不求人（公共资源距离门：水泉 8 格内自己走过去）
+		if spec.has("self_source"):
+			var sources: Array = world.get("resources", {}).get(str(spec["self_source"]), world.get(str(spec["self_source"]), []))
+			if not sources.is_empty():
+				var nearest_src := _nearest(actor.get("tile", Vector2i.ZERO), sources)
+				if nearest_src.x >= 0 and absi(nearest_src.x - actor.get("tile", Vector2i.ZERO).x) + absi(nearest_src.y - actor.get("tile", Vector2i.ZERO).y) <= int(spec.get("self_serve_dist", 8)):
+					continue
+		var target_id := SocialSystem.pick_request_target(actor, visible, trust_of, str(spec["predicate"]))
+		if target_id == "":
+			continue
+		var target_tile := Vector2i(10, 10)
+		for o in visible:
+			if str(o.get("id", "")) == target_id:
+				target_tile = o.get("tile", target_tile)
+		var need_norm := _n(need_raw, gate - 150.0, gate + 250.0)
+		var score := ActionForecaster.request_expected_utility(actor, p, need_norm, target_id, str(spec["predicate"]))
+		if score <= 0.0:
+			continue
+		var action_name: String = {"food": "request_share", "water": "request_water", "fish_spear": "request_tool"}.get(object_id, "request_share")
+		out.append({"action": action_name, "target": target_tile, "target_actor": target_id, "object": object_id,
+			"offers_promise": recip >= 0.55 and need_raw > gate + 100,
+			"utility": score, "desc": "求" + str(spec["verb"]), "duration": 4})
+	return out
+
+## P1.6 还债：兑现承诺——这是互惠弧的闭环（help→promise→repay→reliability）
+static func _repay_debt(p: PersonalityProfile, actor: Dictionary, world: Dictionary):
+	var obligations: Array = actor.get("my_obligations", [])
+	if obligations.is_empty():
 		return null
-	var target_tile := Vector2i(10, 10)
-	for o in visible:
-		if str(o.get("id", "")) == target_id:
-			target_tile = o.get("tile", target_tile)
-	var hunger := _n(hunger_raw, 400.0, 700.0)
-	var score := ActionForecaster.request_expected_utility(actor, p, hunger, target_id)
-	if score <= 0.0:
-		return null
-	return {"action": "request_share", "target": target_tile, "target_actor": target_id,
-		"utility": score, "desc": "向同伴求助", "duration": 1}
+	var inv: Dictionary = actor.get("inventory", {})
+	for ob in obligations:
+		var obj := str(ob.get("object", "food"))
+		var spec: Dictionary = ResourceSpec.spec(obj)
+		if int(inv.get(obj, 0)) >= int(spec["give_min"]) + 1:
+			return {"action": "repay_debt", "target": null, "target_actor": str(ob.get("creditor", "")),
+				"object": obj, "obligation": ob,
+				"utility": 0.3 + float(actor.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)) * 0.25,
+				"desc": "兑现承诺", "duration": 1}
+	return null
 
 ## P1.6 认识行动：行动目的不是改变世界，而是获取信息。
 ## ActionValue = λ_epi × InfoGain × stakes − SocialRisk×人格 − 时机成本。

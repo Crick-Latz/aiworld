@@ -6,20 +6,20 @@ extends RefCounted
 
 ## 求助者预测：我向他开口，被接受的概率多大？
 ## 基于 ToM：我以为他慷慨吗？我以为他有粮吗？（都不是真的——是我以为）
-static func forecast_request(actor: Dictionary, target_id: String) -> Dictionary:
+static func forecast_request(actor: Dictionary, target_id: String, predicate := "has_food") -> Dictionary:
 	var tom: TheoryOfMind = actor.get("tom", null)
 	var believed_generous := 0.0
 	var believed_rich := 0.0
 	if tom != null:
 		believed_generous = tom.belief_about(target_id, "generous")
-		believed_rich = tom.belief_about(target_id, "has_food")
+		believed_rich = tom.belief_about(target_id, predicate)
 	var trust_f: float = clampf(float((actor.get("trust_of", {}) as Dictionary).get(target_id, 0)) / 400.0, -1.0, 1.0)
 	var accept_p := clampf(0.25 + maxf(0.0, believed_generous) * 0.45 + maxf(0.0, believed_rich) * 0.25 + trust_f * 0.15, 0.05, 0.9)
 	return {"accept_prob": accept_p, "refuse_prob": 1.0 - accept_p}
 
 ## 求助的期望效用：接受→缓解饥饿；被拒→白开口（窘迫+预期中的敌意解读）
-static func request_expected_utility(actor: Dictionary, p: PersonalityProfile, hunger_norm: float, target_id: String) -> float:
-	var f := forecast_request(actor, target_id)
+static func request_expected_utility(actor: Dictionary, p: PersonalityProfile, hunger_norm: float, target_id: String, predicate := "has_food") -> float:
+	var f := forecast_request(actor, target_id, predicate)
 	var gain := UtilityCurves.quadratic(hunger_norm) * float(f["accept_prob"]) * 2.2
 	# 预期被拒的成本：窘迫 + 若我已倾向往坏处解释他，被拒更痛
 	var dyn := PersonalityDynamics.dynamics(p, actor.get("sensitivities", {}), actor.get("norms", {}))

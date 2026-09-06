@@ -79,6 +79,16 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	# 社会行动的预测（"他预期会发生什么"）
 	if str(chosen.get("action", "")) == "request_share" and chosen.has("target_actor"):
 		trace["predicted_outcomes"] = ActionForecaster.forecast_request(actor, str(chosen["target_actor"]))
+	# DecisionTrace v4（P1.6 #33）：不确定/认识价值/声明/证据全程留痕
+	trace["uncertainties"] = (actor.get("open_questions", []) as Array).duplicate(true)
+	trace["epistemic_goals"] = []
+	for a2 in considered:
+		if ["ask_reason", "observe_person", "ask_third_party"].has(str(a2.get("action", ""))):
+			trace["epistemic_goals"].append({"action": str(a2.get("action", "")), "expected_information_gain": float(a2.get("utility", 0.0))})
+	trace["claims_received_count"] = (actor.get("claims_received", []) as Array).size()
+	var lt4: Dictionary = actor.get("last_transition", {})
+	trace["evidence_for"] = lt4.get("belief_updates", {})
+	trace["belief_change"] = lt4.get("relationship_delta", {})
 	actor["last_decision_trace"] = trace
 
 	if intentions != null:
