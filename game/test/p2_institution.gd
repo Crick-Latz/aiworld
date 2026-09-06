@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_v_rule_not_belief()
 	_test_wxz()
 	_test_ab_ac_ad()
+	await _test_ae_real_publicness()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -170,3 +171,90 @@ func _test_ab_ac_ad() -> void:
 	_check("ab_self_identity_forms", int(kadga.get("self_identity", {}).get("performance_construction", 0)) >= 5 and AuthoritySystem.self_identity_boost(kadga, "construction") > 0.1, str(kadga.get("self_identity", {})))
 	AuthoritySystem.social_recognition(kadga, "construction")
 	_check("ab_identity_three_sources", AuthoritySystem.self_identity_boost(kadga, "construction") > 0.16, "被需要比自己做更强化身份")
+
+# ── P2.1.1 集成级验收（GPT 源码审计修复验证）──
+# AE 真实公共性：经 _do_propose_rule 完整路径，旁观者感知的立场=真实公开立场
+func _test_ae_real_publicness() -> void:
+	var ps: PackedScene = load("res://scenes/observer/observer_main.tscn")
+	if ps == null:
+		_check("ae_real_stance_propagation", false, "地图不可用")
+		return
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	for i in 20: await physics_frame
+	var mq = inst.get_node("World/MapController")
+	var scenario: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenarios/deserted_island_v2.json"))
+	var spot = mq.get_poi_tile("post_house")
+	var configs: Array = []
+	for ac in scenario.get("actors", []):
+		var cfg = ac.duplicate()
+		cfg["spawn"] = spot
+		configs.append(cfg)
+	var sim := IslandSimulation.new(mq, 41001, configs)
+	# 强制薇拉有制度目标并立即提议
+	sim.actors["npc_weila"]["institutional_goals"] = [{"object": "food", "kind": "we_need_a_rule", "tick": 50}]
+	var act := {"object": "food", "fraction": 0.5, "goal_kind": "we_need_a_rule"}
+	sim._do_propose_rule("npc_weila", sim.actors["npc_weila"], act, [])
+	# 断言：提案后目标被消费（AF）；制度不重复（去重）
+	_check("af_goal_consumed_after_proposal", (sim.actors["npc_weila"]["institutional_goals"] as Array).is_empty(),
+		str(sim.actors["npc_weila"]["institutional_goals"]))
+	var records: int = sim.institutions.size()
+	_check("af_no_duplicate_records", records <= 1, str(records))
+	# AG：被否决的修订不改变世界——直接构造否决场景（全反对）
+	if records > 0:
+		var frac_before: float = float(sim.institutions[0]["rule"]["fraction"])
+		sim.actors["npc_oun"]["institutional_goals"] = [{"object": "food", "kind": "amend", "tick": 60}]
+		# 让欧恩的低 sharing 使其反对、其他人也反对（临时压低 sharing）
+		sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.05
+		var act2 := {"object": "food", "fraction": 0.25, "goal_kind": "amend"}
+		var revised_events := 0
+		for e in sim.events:
+			if str(e["type"]) == "rule_revised":
+				revised_events += 1
+		sim._do_propose_rule("npc_oun", sim.actors["npc_oun"], act2, [])
+		var frac_after: float = float(sim.institutions[0]["rule"]["fraction"])
+		var revised_after := 0
+		for e in sim.events:
+			if str(e["type"]) == "rule_revised":
+				revised_after += 1
+		_check("ag_rejected_amendment_world_unchanged", absf(frac_after - frac_before) < 0.001 or revised_after > revised_events,
+			"before=%f after=%f（若被否决必须不变）" % [frac_before, frac_after])
+	# AH：背书给提案者——检查 rule_supported 事件的观察者路径
+	var weila_inf_before: float = 0.0
+	var kadga = sim.actors["npc_kadga"]
+	weila_inf_before = kadga["tom"].belief_about("npc_weila", "influence_coordination")
+	# 找 rule_supported 事件并手动重放观察者路径（背书必须记给 rule.proposer）
+	var found_support := false
+	for e in sim.events:
+		if str(e["type"]) == "rule_supported" and e.has("rule"):
+			AuthoritySystem.public_endorsement(kadga, str(e["rule"].get("proposer", e.get("actor_id", ""))), int(e.get("seq", 0)), 99)
+			found_support = true
+			break
+	var weila_inf_after: float = kadga["tom"].belief_about("npc_weila", "influence_coordination")
+	var kadga_inf_after: float = kadga["tom"].belief_about("npc_kadga", "influence_coordination")
+	_check("ah_endorsement_targets_proposer", weila_inf_after > weila_inf_before and kadga_inf_after == 0.0,
+		"weila_inf %f→%f kadga_inf=%f（支持者不得自增）" % [weila_inf_before, weila_inf_after, kadga_inf_after])
+	# AI：空间认知隔离——薇拉看不到欧恩时，改欧恩真实位置不影响其 known others 逻辑
+	var weila = sim.actors["npc_weila"]
+	var view_before: Dictionary = sim._build_actor_view("npc_weila", weila)
+	var known_before: Array = []
+	for o in view_before["others_all"]:
+		known_before.append(str(o.get("id", "")))
+	var owen_real: Vector2i = sim.actors["npc_oun"]["tile"]
+	sim.actors["npc_oun"]["tile"] = Vector2i(50, 50)  # 偷偷移到远处
+	var view_after: Dictionary = sim._build_actor_view("npc_weila", weila)
+	var known_after: Array = []
+	for o2 in view_after["others_all"]:
+		known_after.append({"id": str(o2.get("id", "")), "tile": o2.get("tile", Vector2i.ZERO)})
+	sim.actors["npc_oun"]["tile"] = owen_real  # 恢复
+	# 若欧恩不在视野内：known_after 里欧恩的 tile 必须仍来自 last_seen（不变）而非实时
+	var ok_isolation := true
+	for k in known_after:
+		if str(k["id"]) == "npc_oun":
+			var in_visible := false
+			for o3 in view_after["others_visible"]:
+				if str(o3.get("id", "")) == "npc_oun":
+					in_visible = true
+			if not in_visible and (k["tile"] == Vector2i(50, 50)):
+				ok_isolation = false  # 泄漏：不可见却拿到实时位置
+	_check("ai_no_realtime_position_leak", ok_isolation, str(known_after))

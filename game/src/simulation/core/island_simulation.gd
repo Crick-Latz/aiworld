@@ -585,12 +585,13 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 	# 提议者自我表态（公开）
 	RuleDiscourse.self_stance(a, rule, 1, audience.size() + 1, tick)
 	var public_supports := 0
-	# 每个在场者独立评估并公开表态（含反提案）——绝不同步修改信念
+	var stance_records := {}  # P2.1.1：同一场讨论的显式立场记录——传播绝不重猜（P2.1.1 修复：原 last_rule_stance 幽灵字段已删）
 	for other_id in audience:
 		var w: Dictionary = actors[other_id]
 		var stance_eval: Dictionary = RuleDiscourse.evaluate_proposal(w, rule, relationships)
-		RuleDiscourse.self_stance(w, rule, int(stance_eval["stance"]), audience.size() + 1, tick)
 		var st := int(stance_eval["stance"])
+		stance_records[other_id] = st
+		RuleDiscourse.self_stance(w, rule, st, audience.size() + 1, tick)
 		if st > 0:
 			public_supports += 1
 			_emit("rule_supported", other_id, "%s 公开表示同意" % w["display_name"], {"rule": rule, "object": object_id})
@@ -598,27 +599,46 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 			_emit("rule_opposed", other_id, "%s 说：『%s，这个比例太高了』" % [w["display_name"], str(stance_eval["reason"])], {"rule": rule, "object": object_id})
 		else:
 			_emit("rule_abstained", other_id, "%s 沉默不语" % w["display_name"], {"rule": rule, "object": object_id})
-	# 所有目击者（含旁观）更新对群体立场的感知
+	# 所有目击者更新感知——立场一律来自 stance_records（= 真实公开立场，集成级正确）
 	for wid in actors:
-		if wid == id:
+		if wid == id or not _is_nearby(a["tile"], actors[wid]["tile"]):
 			continue
-		if _is_nearby(a["tile"], actors[wid]["tile"]):
-			RuleDiscourse.witness_stance(actors[wid], rule, id, 1, audience.size() + 1, tick)
-			for other_id2 in audience:
-				var st2 := 1 if str(actors[other_id2].get("last_rule_stance", "1")) == "1" else -1
-				RuleDiscourse.witness_stance(actors[wid], rule, other_id2, st2, audience.size() + 1, tick)
-	# amend 目标 → 规则修订事件（AA：新比例可能获得更高遵守）
-	if goal_kind == "amend":
+		RuleDiscourse.witness_stance(actors[wid], rule, id, 1, audience.size() + 1, tick)
+		for other_id2 in audience:
+			RuleDiscourse.witness_stance(actors[wid], rule, other_id2, int(stance_records[other_id2]), audience.size() + 1, tick)
+	# P2.1.1 事务式：先表决后改世界——被否决的提案绝不触碰 InstitutionRecord（修"先改后查"倒序）
+	var adopted := public_supports >= 2
+	if goal_kind == "amend" and adopted:
 		for inst in institutions:
 			if str(inst["rule"].get("object", "")) == object_id:
 				inst["rule"]["fraction"] = fraction
 				inst["revised_tick"] = tick
 				break
-		_emit("rule_revised", id, "%s 提议把比例改到 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction})
-	# InstitutionRecord：客观事实——规则被公开提议且获得足够公开支持
-	if public_supports >= 2:
-		institutions.append({"rule": rule, "created_tick": tick, "supports": public_supports, "status": "active"})
-		_emit("institution_established", id, "『%s』成了营地的正式约定" % rule_text, {"rule": rule, "object": object_id})
+		_emit("rule_revised", id, "%s 的修订提议通过：比例改为 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction})
+	# InstitutionRecord（P2.1.1 去重：同 object 已有活制度不重复建立——修 729/629 膨胀）
+	if adopted and goal_kind != "amend":
+		var already := false
+		for inst in institutions:
+			if str(inst["rule"].get("object", "")) == object_id:
+				already = true
+				break
+		if not already:
+				institutions.append({"rule": rule, "created_tick": tick, "supports": public_supports, "status": "active"})
+				_emit("institution_established", id, "『%s』成了营地的正式约定" % rule_text, {"rule": rule, "object": object_id})
+		# P2.1.1 目标生命周期：制度建立 → 目标终结，不再重复开会（修 goal 不消费）
+		var goals_left: Array = []
+		for g9 in a.get("institutional_goals", []):
+			if str(g9.get("object", "")) != object_id:
+				goals_left.append(g9)
+		a["institutional_goals"] = goals_left
+## P1.7b 迁居执行：设新基地（熟悉度从零累积——搬家有真实成本）
+## P2b 规则提议执行：公共讨论（PublicEvent）→ 各人独立表态 → InstitutionRecord
+## 规则建立只记录客观事实"被正式建立过"；每个 NPC 的认知仍走 PerceivedGroupBelief
+	for wid in actors:
+		if wid == id:
+			continue
+		if _is_nearby(a["tile"], actors[wid]["tile"]):
+			RuleDiscourse.witness_stance(actors[wid], rule, id, 1, audience.size() + 1, tick)
 
 ## 债务辅助（视图供给）
 func _obligations_of(debtor: String) -> Array:
@@ -743,21 +763,28 @@ func _compliance_check(id: String, a: Dictionary, object_id: String, amount: int
 	if mode == "NONE":
 		return
 	var contribute := int(dec.get("contribute", 0))
+	var trace_id := "it_%d_%s" % [tick, id]  # P2.1.1：trace 先于分支声明
+	var req_amt := amount  # 默认全额；分支内按规则比例修正
 	if contribute > 0:
 		contribute = mini(contribute, int(a["inventory"].get(object_id, 0)))
 		a["inventory"][object_id] = int(a["inventory"].get(object_id, 0)) - contribute
 		world["common_storage"] = world.get("common_storage", {})
 		world["common_storage"][object_id] = int(world["common_storage"].get(object_id, 0)) + contribute
 		_emit("storage_contributed", id, "%s 按约定把 %d 份%s放进了公共储备" % [a["display_name"], contribute, ResourceSpec.spec(object_id)["verb"]],
-				{"object": object_id, "amount": contribute, "mode": mode})
+				{"object": object_id, "amount": contribute, "required": req_amt, "mode": mode, "rule_id": str(dec.get("rule_id", "")), "trace_id": trace_id})
 	else:
 		_emit("storage_withheld", id, "%s 找到了%s，但没有按约定交公" % [a["display_name"], ResourceSpec.spec(object_id)["verb"]],
-				{"object": object_id, "mode": mode, "rule_id": str(dec.get("rule_id", ""))})
+				{"object": object_id, "mode": mode, "rule_id": str(dec.get("rule_id", "")), "trace_id": trace_id})
 		# 违规者自己也知道刚才有谁在场（检测估计的事后校验）
 		AuthoritySystem.self_identity(a, "acquire_" + object_id)
-		# DecisionTrace v5：制度决策全程留痕（P3a 的唯一信息源）
-		a["last_institution_trace"] = {"tick": tick, "rule_id": str(dec.get("rule_id", "")), "mode": mode,
-			"contribute": contribute, "detected_estimate": ComplianceSystem.estimate_detection(a)}
+			# P2.1.1 DecisionTrace v5（全模式）：COMPLY/PARTIAL/VIOLATE 都留痕，事件可回指
+		var rid_t := str(dec.get("rule_id", ""))
+		var pt: Dictionary = ComplianceSystem.perceived_institution(a, rid_t) if rid_t != "" else {}
+		a["last_institution_trace"] = {"trace_id": trace_id, "tick": tick, "rule_id": rid_t, "mode": mode,
+			"required": int(round(float(amount) * float(a["perceived_group_beliefs"].get(rid_t, {}).get("rule", {}).get("fraction", 0.5)))) if rid_t != "" else 0,
+			"actual": contribute, "recognition": float(pt.get("recognition", 0.0)),
+			"shared_expectation": float(pt.get("shared_expectation", 0.0)), "legitimacy": float(pt.get("legitimacy", 0.0)) if not pt.is_empty() else 0.0,
+			"detection": ComplianceSystem.estimate_detection(a)}
 
 func _do_eat(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("food", 0)) < 1:
@@ -1031,16 +1058,20 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 	var trust_of := {}
 	var others_nearby: Array = []
 	var others_visible: Array = []
-	var others_all: Array = []
+	var others_all: Array = []  # P2.1.1: known_others = 可见者 + last_seen 记忆（陈旧性由 tick 体现）
 	for other_id in actors:
 		if other_id == id:
 			continue
 		trust_of[other_id] = relationships.get_trust(id, other_id)
 		var otile: Vector2i = actors[other_id]["tile"]
-		others_all.append({"id": other_id, "tile": otile})
+		pass  # P2.1.1：不再提供实时全图坐标（上帝视角泄漏）
 		var d := absi(a["tile"].x - otile.x) + absi(a["tile"].y - otile.y)
+		var ls2: Dictionary = a["tom"].last_seen_of(other_id)  # P2.1.1: 记忆位置（无实时真值）
 		if d <= 12:
 			others_visible.append({"id": other_id, "tile": otile})  # 喊话/可视范围：求助可以走过去问
+			others_all.append({"id": other_id, "tile": otile})
+		if not ls2.is_empty():
+			others_all.append({"id": other_id, "tile": ls2["tile"], "stale_tick": int(ls2["tick"])})  # 记忆位置（可能过时——扑空是真实的）
 		if other_id in world.get("nearby_" + id, []):
 			others_nearby.append({"id": other_id, "tile": otile})
 	return {
@@ -1141,6 +1172,10 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		if id != actor_id and actors.has(actor_id):
 			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
+		# P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → descriptive_compliance
+		var evt_rule := str(e.get("rule_id", ""))
+		if evt_rule != "" and id != actor_id:
+			ComplianceSystem.observe_compliance(a, evt_rule, str(e.get("type", "")) == "storage_contributed", tick)
 		# P2d: 目击违规 → 执行反应（公共品困境：管或不管）+ 执行期望学习
 		if str(e.get("type", "")) == "storage_withheld" and id != actor_id:
 			var violator_rid := str(e.get("rule_id", ""))
@@ -1172,7 +1207,8 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		AuthoritySystem.observe_competence(a, str(e.get("type", "")), str(actor_id), int(e.get("seq", 0)), tick)
 		# P2e-4: 公开支持 → 提案者协调权威
 		if str(e.get("type", "")) == "rule_supported":
-			AuthoritySystem.public_endorsement(a, str(e.get("actor_id", "")), int(e.get("seq", 0)), tick)
+			if e.has("rule"):
+				AuthoritySystem.public_endorsement(a, str(e["rule"].get("proposer", e.get("actor_id", ""))), int(e.get("seq", 0)), tick)  # P2.1.1：背书记给提案者
 			# P2a: 目击行为 → 我的局部规律观察（约定涌现，非全局统计）
 		var sem11: Dictionary = ResourceSpec.semantics_of(e)
 		if sem11.has("act") and id != actor_id:

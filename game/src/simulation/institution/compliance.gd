@@ -74,12 +74,14 @@ static func legitimacy_of(actor: Dictionary, rid: String, object_id: String) -> 
 	if b.is_empty():
 		return 0.0
 	var rule: Dictionary = b["rule"]
-	var values: Array = RULE_VALUE_MAPPING.get(str(rule.get("prescribed", "CONTRIBUTE")), ["sharing"])
+	var values: Dictionary = RULE_VALUE_MAPPING.get(str(rule.get("prescribed", "CONTRIBUTE")), {"sharing": 1.0})
 	var personal: Dictionary = actor.get("norms", {}).get("personal", {})
-	var sum := 0.0
+	var alignment := 0.0
+	var wsum := 0.0
 	for v in values:
-		sum += float(personal.get(v, 0.5))
-	var base := clampf(sum / maxf(float(values.size()), 1.0) * 0.8 + 0.1, 0.0, 1.0)
+		alignment += float(personal.get(v, 0.5)) * float(values[v])
+		wsum += absf(float(values[v]))
+	var base := clampf(alignment / maxf(wsum, 0.1) * 0.5 + 0.5, 0.0, 1.0)  # 带符号：自立高→共享规则合法性降
 	var proposer_trust: float = 0.0
 	if actor.has("_relationships_hint") and actor["_relationships_hint"] != null:
 		proposer_trust = clampf(float(actor["_relationships_hint"].composite_trust(str(actor.get("id", "")), str(rule.get("proposer", "")))) / 600.0, -0.5, 0.5)
@@ -114,9 +116,16 @@ static func learn_enforcement(actor: Dictionary, rid: String, sanctioned: bool, 
 	var rate := clampf(0.3 + absf(error) * 0.3, 0.1, 0.7)  # 误差越大学得越快
 	b["perceived_enforcement"] = clampf(predicted + rate * error, 0.05, 1.0)
 	b["last_enforcement_tick"] = tick
-	# 描述性遵守期望也学习（大家实际守不守，独立于应不应该）
-	var pred_c: float = float(b.get("descriptive_compliance", 0.5))
-	b["descriptive_compliance"] = clampf(pred_c + 0.2 * error * 0.5, 0.05, 1.0)
+	# P2.1.1：处罚与否≠大家守不守——descriptive_compliance 只从目击遵守/违规学习（observe_compliance），此处解耦
+
+## P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → 描述性遵守期望
+static func observe_compliance(actor: Dictionary, rid: String, complied: bool, tick: int) -> void:
+	var pgb: Dictionary = actor.get("perceived_group_beliefs", {})
+	if not pgb.has(rid):
+		return
+	var b := perceived_institution(actor, rid)
+	var cur: float = float(b.get("descriptive_compliance", 0.5))
+	b["descriptive_compliance"] = clampf(cur + (0.15 if complied else -0.15), 0.05, 1.0)
 
 static func should_amend(actor: Dictionary, rid: String) -> bool:
 	var b := perceived_institution(actor, rid)
