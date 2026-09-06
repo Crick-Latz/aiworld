@@ -228,7 +228,22 @@ static func build_ir(sim, perspective: String, focus_actor: String, limit: int) 
 		visible_events = events.duplicate(true)
 		for e in visible_events:
 			known_facts.append({"tick": int(e.get("tick", 0)), "text": str(e.get("text", "")), "seq": int(e.get("seq", 0))})
-		known_facts = known_facts.slice(maxi(0, known_facts.size() - maxi(0, limit) * 3), known_facts.size())
+		# P3a-1：截断窗口不得丢 beat 引用——先提取 beats，再把其 source seq 并回 known_facts
+		var tail_start := maxi(0, known_facts.size() - maxi(0, limit) * 3)
+		var kept_facts: Array = known_facts.slice(tail_start, known_facts.size())
+		var kept_seqs := {}
+		for f in kept_facts:
+			kept_seqs[int(f.get("seq", -1))] = true
+		var pre_beats := extract_beats(visible_events, actors)
+		for b in pre_beats:
+			for sid in b.get("source_event_ids", []):
+				if not kept_seqs.has(int(sid)):
+					kept_seqs[int(sid)] = true
+					for f in known_facts:
+						if int(f.get("seq", -1)) == int(sid):
+							kept_facts.append(f)
+							break
+		known_facts = kept_facts
 	else:
 		var actor: Dictionary = actors[focus_actor]
 		var known_ids := {}
