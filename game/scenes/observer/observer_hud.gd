@@ -63,6 +63,20 @@ func render(model: Dictionary) -> void:
 		tick_label.text += "\n" + world_facts
 	var events: Array = model.get("recent_events", [])
 	var lines: Array = []
+	# P4-3: 故事线面板（活跃/休眠/已解决 + 时间线）
+	var threads: Array = model.get("story_threads", [])
+	if not threads.is_empty():
+		var t_lines: Array = ["[color=#e8c170]── 故事线 ──[/color]"]
+		for tir in threads.slice(0, mini(6, threads.size())):
+			var t_title := str(tir.get("_title", ""))
+			var t_sum := str(tir.get("_summary", ""))
+			t_lines.append("[color=#c0d8e8]%s[/color]" % t_title)
+			t_lines.append("  [color=#8899aa]%s[/color]" % t_sum.substr(0, 60))
+		t_lines.append("")
+		events_label.clear()
+		events_label.append_text("
+".join(t_lines))
+		return  # 故事线模式：替代逐日事件流（可切换）
 	# P3b-5: 对话转录（台词 + 言语行为类型）
 	var d_lines: Array = model.get("dialogue_transcript", [])
 	if not d_lines.is_empty():

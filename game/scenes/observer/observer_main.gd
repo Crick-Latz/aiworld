@@ -432,6 +432,20 @@ func _refresh_hud() -> void:
 		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
 			recent.append(all[i])
 		model["recent_events"] = recent
+		# P4-3: 故事线——ThreadEngine 识别跨天线程
+		if island_sim != null and island_sim.tick % 30 == 0:
+			if not has_meta("_thread_engine"):
+				set_meta("_thread_engine", ThreadEngine.new())
+			var _te = get_meta("_thread_engine")
+			_te.process(island_sim)
+			var thread_irs: Array = []
+			var ev_lookup := ThreadSummaryRenderer.build_event_lookup(island_sim)
+			for th in _te.engine.threads:
+				var tir = _te.build_thread_ir(island_sim, th)
+				tir["_summary"] = ThreadSummaryRenderer.render_summary(tir, ev_lookup)
+				tir["_title"] = ThreadSummaryRenderer.render_title(tir)
+				thread_irs.append(tir)
+			model["story_threads"] = thread_irs
 		# P3b-5: 对话转录——从最近社会事件提取 SpeechAct → 模板台词
 		if island_sim != null:
 			var dialogue_lines: Array = []
