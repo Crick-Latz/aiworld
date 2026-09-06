@@ -1,70 +1,63 @@
-# P4-1 Long-Horizon Story Threads 完工报告（供 GPT 评审）
+# P4.1 Thread Validation & Calibration 完工报告（供 GPT 评审）
 
-日期：2026-09-06 ｜ 回归：**559/559 全绿**（18 套件）
-状态：P4-1 完成（StoryThread + ThreadEngine + TA-TI 测试）。未进入 P4-2+。
+日期：2026-09-06 ｜ 回归：**565/565 全绿**（18 套件）
+状态：P4.1 完成（episode identity + provenance + claim-first summary）。
 
 ---
 
-## 一、P4 核心问题的架构回答
+## 一、你抓到的 P0 已修
 
-> "为什么十天前那次拒绝和今天这次搬家属于同一段历史？"
+**问题**：PROMISE_THREAD 的 Tier-1 是 dyad（`Owen+Khadgar`），不是 episode ID。同 dyad 的两个独立承诺会被误认为同一个故事。
 
-**StoryThread**——不是 Story Director。READ-ONLY 观察层，从结构化 ID（promise_id / institution_id / question_id / dyad）识别跨天事件链，绝不制造剧情。
+**修复**：
+- `open_thread()` 新增第 6 参数 `episode_key`——每个承诺/疑问/冲突/互助有唯一标识
+- Tier-1 匹配改为 `_episode_match(episode_key, event)`——精确到 episode 级别
+- 无 episode_key 的旧线程走 `TIER_1_DYAD_FALLBACK`（兼容层）
+- **TM 测试**：同 dyad 两个承诺 → 两个不同线程 ✅
 
-## 二、七类线程（GPT 第 7 条）
-
-| 类型 | ThreadSeed | 结构 ID | 解决证据 |
-|---|---|---|---|
-| PROMISE_THREAD | promise_made | promisor+promisee dyad | promise_kept / promise_broken |
-| EPISTEMIC_THREAD | refused + open_question | asker+subject dyad | reflected(错怪) |
-| RELATIONSHIP_CONFLICT | confronted_violation | confronter+confronted | （不要求和解） |
-| RECIPROCITY_THREAD | accepted / shared | helper+receiver dyad | promise_kept |
-| INSTITUTION_CONFLICT | storage_withheld | rule_id + violator | rule_revised / institution collapse |
-| AUTHORITY_THREAD | rule_supported | supporter | authority violation |
-| RELOCATION_THREAD | relocated | mover | （一次性） |
-
-## 三、三级关联优先级（GPT 第 24-26 条）
-
-| Tier | 匹配方式 | 强度 |
-|---|---|---|
-| **1** | 显式 ID（promise dyad / institution_id / question dyad） | 最强 |
-| **2** | CausalGraph 结构边 | 强 |
-| **3** | 同参与者 + 兼容语义 + 关系链接 | 严格 fallback |
-
-**禁止纯时间邻近**（TB 测试：weather_storm at tick+1 不入 promise 线程）。
-
-## 四、关键架构保证（各有测试锁死）
-
-| 保证 | 测试 | 含义 |
-|---|---|---|
-| **TA** 长间隔桥接 | promise Day 1 → 400 ticks 无关事件 → Day 18 兑现 = 同一线程 RESOLVED | 跨 17 天仍识别 |
-| **TB** 时间≠线程 | tick+1 的无关事件不入线程 | 邻近不自动关联 |
-| **TC** 休眠不删除 | 120 tick 无事件 → DORMANT，线程保留 | 问题未解决不消失 |
-| **TE** 无证据不解 | 10000 tick 无证据 → 仍 DORMANT 非 RESOLVED | **时间过去 ≠ 问题解决** |
-| **TD** 重激活 | DORMANT + promise_kept → RESOLVED 同 thread_id | "世界记得" |
-| **TH** 模拟不受影响 | ThreadEngine ON/OFF → 世界 hash 完全一致 | **READ-ONLY 架构级保证** |
-| **TI** 确定性 | 同历史 → 同线程 ids/status/nodes | 可重放 |
-
-## 五、ThreadEngine 接口
-
-```gdscript
-ThreadEngine.process(sim)          # 读事件流 + 更新线程（每 50 tick 或按需）
-ThreadEngine.build_thread_ir(sim, thread)  # 结构化摘要（title/status/claims/sources）
-StoryThread.engine.stats()         # {opened, active, dormant, resolved}
-StoryThread.engine.threads_for_actor(id)   # 某 actor 的所有线程
+**Episode Key 格式**：
+```
+promise|{promisor}|{promisee}|{seed_seq}    ← 每次承诺唯一
+question|{asker}|{subject}|{seed_seq}       ← 每个疑问唯一
+institution|{rule_id}                        ← 每条规则唯一
+reciprocity|{helper}|{receiver}|{seed_seq}  ← 每次互助唯一
+conflict|{a}|{b}|{seed_seq}                 ← 每次冲突唯一
 ```
 
-## 六、代码位置
+## 二、其余修复
 
-| 文件 | 行数 | 内容 |
+### TO：Resolved 不复活
+已解决的冲突，后续新冲突 → 新线程（不覆盖历史）。旧线程保持 RESOLVED，新线程独立 OPEN。
+
+### ThreadAttachment Provenance
+每个节点加入线程时记录 `{node, tier, tick}`——未来可回答"为什么系统把这件事接进来"。
+- `attachment_stats()` 输出 `{tier1, tier2, tier3, total}` 供扫描计算 weak_link_ratio / strong_link_coverage。
+
+### Summary 文案过度断言修正（第 9-12 条）
+
+| 原文 | 修正后 | 原因 |
 |---|---|---|
-| `narrative/story_thread.gd`（新建 ~200 行） | 线程 schema + 3-tier 关联 + 状态机 + resolution 检测 |
-| `narrative/thread_engine.gd`（新建 ~120 行） | ThreadSeed 检测 + process + build_thread_ir |
-| `test/p4_threads.gd`（新建 ~150 行） | TA-TI 七项测试 |
+| "形成了互助的默契" | OPEN:"出现了一次可能延续的互助" / DORMANT:"暂时没有新的进展" | 默契≠一次互助 |
+| "终于有了答案" | "对此形成了新的判断" | Belief revised ≠ Truth discovered |
+| "公平与遵守的较量" | "围绕营地规则的争议" | 公平性解读需 Claim 支持 |
+| "欠一份人情" | "承诺暂时没有新的进展" | promise ≠ debt |
 
-## 七、下一步（P4-2+）
+## 三、测试 TM/TN/TO/TQ/TP（6/6，套件 16/16）
 
-- P4-2：ThreadIR + Template Thread Summary（"十五天来，薇拉对欧恩的看法…"）
-- P4-3：Observer 故事线面板（活跃/休眠/已解决 + 时间线 + 点击下钻）
-- P4-4：LLM Thread Renderer（复用 claim package / Validator / fallback）
-- 更多测试：TF 视角隔离 / TG 无关同 actor / TJ 多结局 / TK 不强制闭合
+| 测试 | 验证 |
+|---|---|
+| **TM** | 同 dyad 两承诺 → 不同线程 |
+| TM-2 | kept 事件只入一个线程（正确处理歧义） |
+| **TN** | 同 dyad 两疑问 → 不同认识线程 |
+| **TO** | RESOLVED 不复活；新冲突新线程 |
+| **TQ** | Thread purity = 0 污染 |
+| **TP** | 每个非 seed 节点有 attachment provenance |
+
+## 四、代码位置
+
+| 文件 | 变更 |
+|---|---|
+| `story_thread.gd` | episode_key 参数 + `_episode_match()` + `_record_attachment()` + `check_purity()` + `attachment_stats()` |
+| `thread_engine.gd` | 所有 open_thread 调用传 episode_key |
+| `thread_summary_renderer.gd` | 四处文案降级为状态化 |
+| `test/p4_threads.gd` | +6 断言（16 总） |
