@@ -17,6 +17,7 @@ func _run() -> void:
 	await _perspectives()
 	_determinism()
 	await _test_p3a2_claims()
+	await _test_p3a3_llm_offline()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -279,3 +280,60 @@ func _test_p3a2_claims() -> void:
 	# 确定性：claims 集确定性
 	var ir_again: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 10)
 	_check("p3a2_claims_deterministic", str(ir_o2.get("claims", [])) == str(ir_again.get("claims", [])))
+
+# ── P3a-3: LLM Renderer 离线安全 + 契约解析 ──
+func _test_p3a3_llm_offline() -> void:
+	var sim = await _make_sim(600)
+	if sim == null:
+		for i in 6: _check("p3a3_%d" % i, false, "地图不可用")
+		return
+	var ir_o: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 8)
+	# 1. 无配置 → render 返回 null → NarrativeRenderer fallback template（零网络）
+	var no_cfg_provider: Dictionary = LlmNarrativeRenderer.make_provider({})
+	var out_nc: Dictionary = NarrativeRenderer.render(no_cfg_provider, ir_o)
+	_check("p3a3_no_config_falls_back", bool(out_nc.get("ok", false)) and str(out_nc.get("renderer", "")) == "template",
+		"renderer=%s" % str(out_nc.get("renderer", "")))
+	# 2. load_config 无文件无环境变量 → 空 dict
+	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
+	_check("p3a3_load_config_empty_when_unset", cfg.is_empty(), str(cfg.keys()))
+	# 3. 响应解析：合成 LLM JSON（合法 claims）→ 标准 sentence 输出 + ids 系统派生
+	var claims: Array = ir_o.get("claims", [])
+	var beat_claims: Array = []
+	for b in ir_o.get("selected_beats", []):
+		if (b.get("claim_ids", []) as Array).size() > 0:
+			beat_claims = b.get("claim_ids", [])
+			break
+	if beat_claims.is_empty() and claims.size() > 0:
+		beat_claims = [str(claims[0].get("claim_id", ""))]
+	var fake_llm_json := '{"sentences": [{"text": "营地发生了一些事。", "claim_ids": %s}]}' % JSON.stringify(beat_claims)
+	var parsed: Dictionary = LlmNarrativeRenderer._parse_response(fake_llm_json, ir_o)
+	_check("p3a3_parse_valid_response", bool(parsed.get("ok", false)) and (parsed.get("sentences", []) as Array).size() == 1,
+		str(parsed.get("sentences", []).size()))
+	if bool(parsed.get("ok", false)):
+		var sn: Dictionary = parsed["sentences"][0]
+		var deriv: Dictionary = NarrativeClaim.derive_sources(claims, sn.get("claim_ids", []))
+		_check("p3a3_ids_system_derived", (sn.get("source_event_ids", []) as Array).size() == (deriv["event_ids"] as Array).size(),
+			"%d vs %d" % [(sn.get("source_event_ids", []) as Array).size(), (deriv["event_ids"] as Array).size()])
+	# 4. 幻觉 claim_id → 解析拒绝（unknown claims filtered → empty → {}）
+	var fake_halluc := '{"sentences": [{"text": "编造。", "claim_ids": ["C99999"]}]}'
+	var parsed_h: Dictionary = LlmNarrativeRenderer._parse_response(fake_halluc, ir_o)
+	_check("p3a3_hallucinated_claim_rejected", parsed_h.is_empty() or not bool(parsed_h.get("ok", true)))
+	# 5. 残缺响应（非 JSON）
+	var parsed_bad: Dictionary = LlmNarrativeRenderer._parse_response("这不是JSON", ir_o)
+	_check("p3a3_malformed_rejected", parsed_bad.is_empty())
+	# 6. markdown 包裹的合法 JSON 也能解析
+	var fake_md := '```json\n' + fake_llm_json + '\n```'
+	var parsed_md: Dictionary = LlmNarrativeRenderer._parse_response(fake_md, ir_o)
+	_check("p3a3_markdown_wrapped_parsed", bool(parsed_md.get("ok", false)) or beat_claims.is_empty())
+	# 7. claim package：只含 beat 选中的主张（不含全量事件文本）
+	var pkg: Array = LlmNarrativeRenderer._build_claim_package(ir_o, 3)
+	if not pkg.is_empty():
+		var pkg_claims: Array = pkg[0].get("claims", [])
+		var no_event_text := true
+		for pc in pkg_claims:
+			if pc.has("text") and str(pc.get("text", "")).length() > 40:
+				no_event_text = false
+		_check("p3a3_package_minimal", pkg_claims.size() > 0 and no_event_text and pkg[0].has("max_sentences"),
+			"claims=%d" % pkg_claims.size())
+	else:
+		_check("p3a3_package_minimal", true, "（无 beat claims，空包合法）")

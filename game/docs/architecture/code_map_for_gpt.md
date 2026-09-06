@@ -100,3 +100,7 @@
 
 冻结含义：P3 阶段除 bug/泄漏/因果不一致/回放失败外，不修改核心认知公式。
 新增文件：`src/simulation/narrative/narrative_ir.gd`（CausalGraph/StoryBeat/Selector/IR，LLM 在最后）。
+
+## P3a-3 新增（2026-09-06）
+
+- `narrative/llm_narrative_renderer.gd`：最小权限真实 LLM Renderer。输入=claim package（beat 选中的主张 + epistemic_status，无 EventLog/WorldState/事件原文）；输出契约=`{sentences:[{text, claim_ids}]}`——解析层校验 claim_ids ⊆ IR（幻觉 id 剔除整句），底层 ids 由 derive_sources 系统派生。Prompt 硬约束（不是 Story Generator/禁新事实动机情绪对话因果/认识层级保持/BELIEVED 只能写"某人认为"）。配置门控：`config/ai.local.json` 或 `AIWORD_LLM_BASE_URL/AIWORD_LLM_API_KEY` 环境变量——未配置返回 null 走 Template fallback（零网络默认）。Observer 已接线（配置存在才启用 LLM）。

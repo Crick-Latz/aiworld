@@ -435,7 +435,14 @@ func _refresh_hud() -> void:
 		# P3a-2: 句子级编年史（claim-first）+ 证据面板数据
 		if island_sim != null:
 			var n_ir: Dictionary = NarrativeIR.build_ir(island_sim, "OBJECTIVE", "", 6)
-			var n_out: Dictionary = NarrativeRenderer.render({"render": func(ir, st, la, ln): return TemplateNarrativeRenderer.render(ir, st, la, ln)}, n_ir)
+			# P3a-3: LLM 渲染器优先（ai.local.json 或环境变量配置存在时）；否则 template（零网络）
+			var llm_cfg: Dictionary = LlmNarrativeRenderer.load_config()
+			var provider: Dictionary
+			if llm_cfg.is_empty():
+				provider = {"render": func(ir, st, la, ln): return TemplateNarrativeRenderer.render(ir, st, la, ln)}
+			else:
+				provider = LlmNarrativeRenderer.make_provider(llm_cfg)
+			var n_out: Dictionary = NarrativeRenderer.render(provider, n_ir)
 			model["narrative_sentences"] = n_out.get("sentences", [])
 			model["narrative_ir_claims"] = n_ir.get("claims", [])
 		# P2: 编年史——最近两天的日记（金色，与原始事件流区分）
