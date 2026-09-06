@@ -20,6 +20,9 @@ var _response_models := {}
 # 预测误差历史（观察者维度）：[{tick, about, error}]，供长期验证误差是否下降
 var prediction_errors: Array = []
 
+# P1.7: 我最后一次知道某人在哪里（SEEK_PERSON 的目的地来源）
+var last_seen := {}   # other_id -> {tile: Vector2i, tick: int}
+
 func _entry(other_id: String, key: String) -> Dictionary:
 	if not _models.has(other_id):
 		_models[other_id] = {"last_updated": -1}
@@ -34,12 +37,16 @@ func add_evidence(other_id: String, key: String, direction: float, weight: float
 	var w := clampf(weight, 0.0, 1.0)
 	var d := 1.0 if direction >= 0.0 else -1.0
 	e["value"] = clampf(float(e["value"]) + d * w * (1.0 - absf(float(e["value"])) * 0.5), -1.0, 1.0)
+	# P1.7d Evidence 一等对象：{event_id, tick, kind(知觉/声明/社会/承诺)}——以后制度层靠它追溯"谁告诉我规则"
+	var evidence := {"event_id": seq, "tick": tick, "kind": "percept"}
+	if seq < 0:
+		evidence["kind"] = "claim"  # 来自声明（-1 序号）
 	if d > 0.0:
-		e["evidence_pos"].append(seq)
+		e["evidence_pos"].append(evidence)
 		if e["evidence_pos"].size() > EVIDENCE_CAP:
 			e["evidence_pos"].pop_front()
 	else:
-		e["evidence_neg"].append(seq)
+		e["evidence_neg"].append(evidence)
 		if e["evidence_neg"].size() > EVIDENCE_CAP:
 			e["evidence_neg"].pop_front()
 	_models[other_id]["last_updated"] = tick
@@ -124,6 +131,12 @@ func decay(before_tick: int, fade_days: int) -> void:
 				if absf(float(m[key]["value"])) < 0.02:
 					m[key]["value"] = 0.0
 ## 指定他人的信念摘要（常用键）
+func see_at(other_id: String, tile: Vector2i, tick: int) -> void:
+	last_seen[other_id] = {"tile": tile, "tick": tick}
+
+func last_seen_of(other_id: String) -> Dictionary:
+	return last_seen.get(other_id, {})
+
 func model_of(other_id: String) -> Dictionary:
 	var out := {"has_food": belief_about(other_id, "has_food"), "generous": belief_about(other_id, "generous"),
 		"reliable": belief_about(other_id, "reliable"), "last_updated": -1}

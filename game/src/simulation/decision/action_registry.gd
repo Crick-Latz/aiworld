@@ -38,6 +38,10 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a11 != null: actions.append(a11)
 	for a13 in _request(p, needs, actor, world):
 		actions.append(a13)
+	var a20 = _seek_person(p, actor)
+	if a20 != null: actions.append(a20)
+	var a21 = _settle(p, actor, world)
+	if a21 != null: actions.append(a21)
 	var a19 = _repay_debt(p, actor, world)
 	if a19 != null: actions.append(a19)
 	var a18 = _epistemic_actions(p, actor, world)
@@ -313,6 +317,83 @@ static func _epistemic_actions(p: PersonalityProfile, actor: Dictionary, world: 
 		if u_third > 0.08:
 			out.append({"action": "ask_third_party", "target": null, "target_actor": other_visible,
 				"about_actor": about, "question_kind": str(q0.get("kind", "")), "utility": u_third, "desc": "找人间接打听", "duration": 1})
+	return out
+
+## P1.7b 主动寻人：认识问题悬而未决而人不在视野 → 走向他最后已知的位置（跨空间认识行动）；
+## 亏欠未还/亲近之人久未见 → 也去找。目的地是我【记忆里的】位置——人可能已经走了（扑空是真实的）。
+static func _seek_person(p: PersonalityProfile, actor: Dictionary):
+	var tom: TheoryOfMind = actor.get("tom", null)
+	if tom == null:
+		return null
+	var dyn := PersonalityDynamics.dynamics(p, actor.get("sensitivities", {}), actor.get("norms", {}))
+	var best_id := ""
+	var best_u := 0.12
+	var reason := ""
+	# 1) 认识目标：我想弄清楚的那个人不在视野（视野内的由 ask_reason 等直接处理）
+	var visible_ids := {}
+	for o in actor.get("others_visible", []):
+		visible_ids[str(o.get("id", ""))] = true
+	for q in actor.get("open_questions", []):
+		var about := str(q.get("about", ""))
+		if about != "" and not visible_ids.has(about) and not tom.last_seen_of(about).is_empty():
+			var u: float = (float(dyn["epistemic_drive"]) - float(dyn["uncertainty_tolerance"]) * 0.2) * float(q.get("stakes", 0.5)) * 0.5
+			if u > best_u:
+				best_u = u
+				best_id = about
+				reason = "找他问个清楚"
+	# 2) 亲近/亏欠之人：高社交需求时想见喜欢的人；亏欠债主时想找机会还
+	var social := _n(actor.get("needs", {}).get("social", 0), 350, 700)
+	if best_id == "":
+		for other_id in actor.get("trust_of", {}):
+			if visible_ids.has(other_id):
+				continue
+			var ls := tom.last_seen_of(other_id)
+			if ls.is_empty():
+				continue
+			var oblig: float = float(actor.get("_owed_hint", 0.0))  # 由视图供给的亏欠提示
+			var u2: float = UtilityCurves.quadratic(social) * 0.35 + oblig * 0.2
+			if u2 > best_u:
+				best_u = u2
+				best_id = other_id
+				reason = "去找他"
+	if best_id == "":
+		return null
+	var seen := tom.last_seen_of(best_id)
+	return {"action": "seek_person", "target": seen["tile"], "target_actor": best_id,
+			"utility": best_u, "desc": reason, "duration": 4}
+
+## P1.7b 定居：用 PlaceEvaluation 评价已知地点，不满意现居地则迁移（迁移有成本——熟悉度清零）
+static func _settle(p: PersonalityProfile, actor: Dictionary, world: Dictionary):
+	var beliefs: PlaceBelief = actor.get("place_beliefs", null)
+	if beliefs == null:
+		return null
+	var places: Array = beliefs.known_places()
+	if places.size() < 2:
+		return null  # 没得选
+	var my_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
+	# 我当前所在地和已知最佳地的评价差（人物各不同：同营地薇拉觉得温馨、欧恩觉得挤）
+	var best: Dictionary = {}
+	var best_v := -99.0
+	for pl in places:
+		var v := PlaceBelief.evaluate_place(actor, pl, _who_is_at(actor, pl, world), actor.get("_relationships_hint", null))
+		if v > best_v:
+			best_v = v
+			best = pl
+	if best == null or best["tile"] == my_tile or best["tile"] == actor.get("base", Vector2i(-9, -9)):
+		return null  # 现居地已是最佳
+	var cur_v := PlaceBelief.evaluate_place(actor, beliefs.get_place(actor.get("base", my_tile)) if not beliefs.get_place(actor.get("base", my_tile)).is_empty() else {"tile": my_tile, "resources": [], "safety": 0.5, "familiarity": 0.3}, _who_is_at(actor, {"tile": my_tile}, world), actor.get("_relationships_hint", null))
+	if best_v - cur_v < 0.25:  # 迁移成本门槛：不明显更好就凑合
+		return null
+	return {"action": "relocate", "target": best["tile"], "utility": best_v - cur_v, "desc": "换个地方住", "duration": 6}
+
+## 谁在给定地点附近（8 格）——供 PlaceEvaluation 心算
+static func _who_is_at(actor: Dictionary, place: Dictionary, world: Dictionary) -> Array:
+	var out: Array = []
+	var pt: Vector2i = place.get("tile", Vector2i.ZERO)
+	for o in actor.get("others_all", []):
+		var t2: Vector2i = o.get("tile", Vector2i(-99, -99))
+		if absi(pt.x - t2.x) + absi(pt.y - t2.y) <= 8:
+			out.append(str(o.get("id", "")))
 	return out
 
 ## P1.5：保持距离。不是 fallback——回避是合法的人类行为。

@@ -15,7 +15,8 @@ var events: Array = []
 var chronicles: Array = []  # P2: 每日编年史（模拟自己写日记，P3 由 LLM 润色）
 var world := {}  # 环境状态（资源/天气/火/庇护所）
 var relationships := RelationshipStore.new()
-var obligations: Array = []  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
+var obligations: Array = []
+var _encounters := {}   # P1.7c: dyad -> {co_presence, interactions, voluntary}  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
 var map_query
 
 var _seq := 0
@@ -153,7 +154,9 @@ func _init_actors(actor_configs: Array) -> void:
 			"tom": TheoryOfMind.new(),  # 一阶心智模型（证据累积+响应预测）
 			"norms": _init_norms(cfg.get("norms", {})),  # P1.5: personal/descriptive/injunctive 三层
 			"social_stance": {},    # P1.5: 对每人的接近/回避倾向（解释系统写入）
-			"pending_predictions": [],  # P1.5: 我对他人反应的预测（待观察验证）
+			"pending_predictions": [],
+			"place_beliefs": PlaceBelief.new(),  # P1.7: 地点信念（每人不同）
+			"base": cfg.get("spawn", Vector2i(10, 10)),  # P1.7: 现居基地  # P1.5: 我对他人反应的预测（待观察验证）
 			"grudges": {},          # P1.5: 已形成的记恨（可被新证据推翻）
 			"last_transition": {},  # P1.5: 最近一次认知转移摘要（DecisionTrace 用）
 			"last_decision_trace": {},
@@ -165,6 +168,9 @@ func _init_actors(actor_configs: Array) -> void:
 		display_names[id] = str(actors[id]["display_name"])
 	for id in actors:
 		actors[id]["display_names"] = display_names
+
+func encounter_graph() -> Dictionary:
+	return _encounters.duplicate(true)
 
 func get_actor_hunger_samples() -> Dictionary:
 	var out := {}
@@ -335,6 +341,10 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_request(id, a, action, new_events)
 		"repay_debt":
 			_do_repay(id, a, action, new_events)
+		"seek_person":
+			_do_seek_person(id, a, action, new_events)
+		"relocate":
+			_do_relocate(id, a, action, new_events)
 		"keep_distance":
 			_do_keep_distance(id, a, action, new_events)
 		"gather_wood":
@@ -377,6 +387,7 @@ func _do_drink(id: String, a: Dictionary, ev: Array) -> void:
 		if spring == a["tile"]:
 			a["needs"]["thirst"] = 0
 			a["inventory"]["water"] = mini(3, int(a["inventory"].get("water", 0)) + 2)  # 顺手灌满水壶——水成为可分享资源
+			(a.get("place_beliefs") as PlaceBelief).observe_place(spring, ["water"], tick)
 			_emit("drank", id, "%s 喝了水，还灌满了水壶" % a["display_name"], {})
 			return
 
@@ -522,6 +533,22 @@ func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> vo
 		_emit(ev_prefix + "_request_refused", target_id,
 				"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
 				{"proposer_id": id, "object": object_id})
+
+## P1.7b 寻人执行：走到记忆位置；人在则当场产生一次相遇（后续 ask_reason 由决策层接手）
+func _do_seek_person(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var target_id := str(action.get("target_actor", ""))
+	if not actors.has(target_id):
+		return
+	if _is_nearby(a["tile"], actors[target_id]["tile"]):
+		_emit("found_person", id, "%s 找到了 %s" % [a["display_name"], actors[target_id]["display_name"]], {"to_id": target_id})
+	else:
+		_emit("person_not_found", id, "%s 扑了个空——人已经不在了" % a["display_name"], {})
+
+## P1.7b 迁居执行：设新基地（熟悉度从零累积——搬家有真实成本）
+func _do_relocate(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var target: Vector2i = action.get("target", a["tile"])
+	a["base"] = target
+	_emit("relocated", id, "%s 搬到了新住处" % a["display_name"], {"pos": str(target)})
 
 ## 债务辅助（视图供给）
 func _obligations_of(debtor: String) -> Array:
@@ -870,6 +897,22 @@ func _update_nearby_info() -> void:
 				a6["tom"].add_evidence(other_id, "hungry", 1.0, 0.12 * vis, -1, tick)
 			elif true_h < 0.25:
 				a6["tom"].add_evidence(other_id, "hungry", -1.0, 0.10 * vis, -1, tick)
+	# P1.7c 遭遇图：共同在场时长（≤8 格）与互动计数——社会网络拓扑的实测数据
+	for id in actors:
+		for other_id in actors:
+			if other_id <= id or other_id == id:
+				continue  # 每对只记一次
+			var d7 := absi(actors[id]["tile"].x - actors[other_id]["tile"].x) + absi(actors[id]["tile"].y - actors[other_id]["tile"].y)
+			var dyad := "%s|%s" % [id, other_id]
+			if d7 <= 8:
+				if not _encounters.has(dyad):
+					_encounters[dyad] = {"co_presence": 0, "interactions": 0, "voluntary": 0}
+				_encounters[dyad]["co_presence"] = int(_encounters[dyad]["co_presence"]) + 1
+				# 主动接触：任一方的当前行动以对方为目标（求助/找人/认识行动）
+				var ca1 = actors[id].get("current_action", {})
+				var ca2 = actors[other_id].get("current_action", {})
+				if (ca1 != null and str(ca1.get("target_actor", "")) == other_id) or (ca2 != null and str(ca2.get("target_actor", "")) == id):
+					_encounters[dyad]["voluntary"] = int(_encounters[dyad]["voluntary"]) + 1
 	# P1.6 感知门：「谁看起来饿了」由各观察者的 ToM 感知决定，不读真实 hunger；
 	# 病伤是高可见状态（可观察性分级），保留直读
 	var anyone_appears_hungry := false
@@ -923,7 +966,11 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"others_all": others_all,
 		"norms": a.get("norms", {}),
 		"my_obligations": a.get("my_obligations", []),
-			"open_questions": a.get("open_questions", []),  # P1.6: 未解之惑进决策视野——不然永远没人去问
+			"open_questions": a.get("open_questions", []),
+			"place_beliefs": a.get("place_beliefs", PlaceBelief.new()),
+			"base": a.get("base", a["tile"]),
+			"_relationships_hint": relationships,
+			"_owed_hint": clampf(float((a.get("my_obligations", []) as Array).size()) / 2.0, 0.0, 1.0),  # P1.6: 未解之惑进决策视野——不然永远没人去问
 		"social_stance": a.get("social_stance", {}),
 		"grudges": a.get("grudges", {}),
 	}
@@ -977,11 +1024,26 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 	# P1.5：目击者一律经 CognitiveTransition 处理——
 	# 主观事件 → 记忆检索 → 评价 → 解释竞争 → 信念/情绪/关系/倾向更新 → 主观记忆。
 	# 禁止任何旁路直接改情绪/信任/规范。
+	# P1.7e 最小注意力预算：同一时刻最多 3 个目击者进入深层认知（按相关性排序）
+	# 危险/涉及自己/新颖事件优先——保证 P2 多事件并发时 NPC 不会全知
+	var witnesses: Array = []
 	for id in actors:
 		var a: Dictionary = actors[id]
 		var is_witness: bool = id == actor_id or _is_nearby(actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO, a["tile"])
 		if is_witness:
-			CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
+			var salience := 0.5
+			if id == actor_id or str(e.get("proposer_id", "")) == id or str(e.get("to_id", "")) == id or str(e.get("target_id", "")) == id:
+				salience = 1.0  # 事件涉及我
+			elif ["explored_hurt", "weather_storm"].has(str(e.get("type", ""))):
+				salience = 0.9  # 危险
+			witnesses.append({"id": id, "a": a, "salience": salience})
+	witnesses.sort_custom(func(x, y): return float(x["salience"]) > float(y["salience"]))
+	for w in witnesses.slice(0, 3):
+		var id = w["id"]
+		var a: Dictionary = w["a"]
+		if id != actor_id and actors.has(actor_id):
+			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
+		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
 	return int(e["seq"])
 
 ## 远离目标方向的可行走格（回避用）
