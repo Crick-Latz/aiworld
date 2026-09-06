@@ -457,7 +457,7 @@ func _refresh_hud() -> void:
 				provider = {"render": func(ir, st, la, ln): return TemplateNarrativeRenderer.render(ir, st, la, ln)}
 			else:
 				provider = LlmNarrativeRenderer.make_provider(llm_cfg)
-			var n_out: Dictionary = NarrativeRenderer.render(provider, n_ir)
+			var n_out: Dictionary = await NarrativeRenderer.render(provider, n_ir)
 			model["narrative_sentences"] = n_out.get("sentences", [])
 			model["narrative_ir_claims"] = n_ir.get("claims", [])
 		# P2: 编年史——最近两天的日记（金色，与原始事件流区分）

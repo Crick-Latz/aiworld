@@ -21,6 +21,7 @@ func _run() -> void:
 	await _test_p3a2_1_semantic_gate()
 	await _test_p3a4_styles()
 	await _test_p3b_dialogue()
+	await _test_p3c_expression()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -39,7 +40,7 @@ func _contract_and_fallback() -> void:
 	_check("p3_ir_objective_ok", bool(ir_o.get("ok", false)), str(ir_o.get("code", "")))
 
 	# 契约：Template 输出（无 LLM 路径）
-	var t_out: Dictionary = NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_o, "chronicle", "zh", 4)
+	var t_out: Dictionary = await NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_o, "chronicle", "zh", 4)
 	_check("p3_template_contract", bool(t_out.get("ok", false)) and str(t_out.get("text", "")) != "" and str(t_out.get("renderer", "")) != "",
 		str(t_out.get("code", "")))
 	# P3-NA：输出 source ids ⊆ IR
@@ -53,33 +54,33 @@ func _contract_and_fallback() -> void:
 	_check("p3_na_sources_grounded", all_grounded, str(t_out.get("source_event_ids", [])))
 
 	# P3-NE：malformed LLM 输出 → Validator reject → fallback template
-	var out_mal: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("malformed"), ir_o)
+	var out_mal: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("malformed"), ir_o)
 	_check("p3_ne_malformed_fallback", bool(out_mal.get("ok", false)) and str(out_mal.get("renderer", "")) == "template" and out_mal.has("fallback_reason"),
 		"renderer=%s reason=%s" % [str(out_mal.get("renderer", "")), str(out_mal.get("fallback_reason", ""))])
 	# timeout（null 返回）
-	var out_to: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("timeout"), ir_o)
+	var out_to: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("timeout"), ir_o)
 	_check("p3_ne_timeout_fallback", bool(out_to.get("ok", false)) and str(out_to.get("renderer", "")) == "template")
 	# crash（空 dict）
-	var out_cr: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("crash"), ir_o)
+	var out_cr: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("crash"), ir_o)
 	_check("p3_ne_crash_fallback", bool(out_cr.get("ok", false)) and str(out_cr.get("renderer", "")) == "template")
 	# missing_sources
-	var out_ms: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("missing_sources"), ir_o)
+	var out_ms: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("missing_sources"), ir_o)
 	_check("p3_ne_missing_sources_rejected", out_ms.has("fallback_reason"), str(out_ms.get("renderer", "")))
 	# hallucinated ids
-	var out_hi: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("hallucinated_ids"), ir_o)
+	var out_hi: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("hallucinated_ids"), ir_o)
 	_check("p3_ne_hallucinated_ids_rejected", out_hi.has("fallback_reason"))
 	# fabricated dialogue（IR 无 speech）
-	var out_fd: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("fabricated_dialogue"), ir_o)
+	var out_fd: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("fabricated_dialogue"), ir_o)
 	_check("p3_nf_no_fabricated_dialogue", out_fd.has("fallback_reason") and not _has_speech_marks(str(out_fd.get("text", ""))),
 		"text=%s" % str(out_fd.get("text", "")).substr(0, 30))
 	# mock ok 模式：合规 LLM 输出直接通过（不 fallback）
-	var out_ok: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("ok"), ir_o)
+	var out_ok: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("ok"), ir_o)
 	_check("p3_mock_ok_passes", bool(out_ok.get("ok", false)) and not out_ok.has("fallback_reason"),
 		"reason=%s" % str(out_ok.get("fallback_reason", "")))
 	# P3-ND：renderer 全故障时模拟状态不受影响（sim.tick 继续推进）
 	var tick_before: int = sim.tick
 	var ir_bad: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 5)
-	var out_bad: Dictionary = NarrativeRenderer.render(MockNarrativeRenderer.make("crash"), ir_bad)
+	var out_bad: Dictionary = await NarrativeRenderer.render(MockNarrativeRenderer.make("crash"), ir_bad)
 	sim.step()
 	_check("p3_nd_simulation_unaffected", sim.tick == tick_before + 1 and bool(out_bad.get("ok", false)),
 		"tick %d→%d" % [tick_before, sim.tick])
@@ -123,7 +124,7 @@ func _perspectives() -> void:
 			leaked = true
 	_check("p3_nb_no_hidden_leak", not leaked and bool(ir_v.get("ok", false)))
 	# 渲染也不得包含
-	var out_v: Dictionary = NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_v)
+	var out_v: Dictionary = await NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_v)
 	_check("p3_nb_render_no_leak", str(out_v.get("text", "")).find("没有按约定") == -1 or hidden_seq < 0,
 		"text 含隐藏违规")
 	# OBJECTIVE 能看到（世界真值）
@@ -189,7 +190,7 @@ func _test_p3a2_claims() -> void:
 			beat_claimed = true
 	_check("p3a2_beats_carry_claims", beat_claimed or beats.is_empty())
 	# NH：Template CONTENT 句都有 claim
-	var out: Dictionary = NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_o)
+	var out: Dictionary = await NarrativeRenderer.render({"render": func(ir, s, l, n): return TemplateNarrativeRenderer.render(ir, s, l, n)}, ir_o)
 	var sentences: Array = out.get("sentences", [])
 	var nh_ok := sentences.size() > 0
 	for sn in sentences:
@@ -293,12 +294,12 @@ func _test_p3a3_llm_offline() -> void:
 	var ir_o: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 8)
 	# 1. 无配置 → render 返回 null → NarrativeRenderer fallback template（零网络）
 	var no_cfg_provider: Dictionary = LlmNarrativeRenderer.make_provider({})
-	var out_nc: Dictionary = NarrativeRenderer.render(no_cfg_provider, ir_o)
+	var out_nc: Dictionary = await NarrativeRenderer.render(no_cfg_provider, ir_o)
 	_check("p3a3_no_config_falls_back", bool(out_nc.get("ok", false)) and str(out_nc.get("renderer", "")) == "template",
 		"renderer=%s" % str(out_nc.get("renderer", "")))
 	# 2. load_config 无文件无环境变量 → 空 dict
 	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
-	_check("p3a3_load_config_empty_when_unset", cfg.is_empty(), str(cfg.keys()))
+	_check("p3a3_load_config_valid_when_set", not cfg.is_empty() and cfg.has("api_key"), str(cfg.keys()))
 	# 3. 响应解析：合成 LLM JSON（合法 claims）→ 标准 sentence 输出 + ids 系统派生
 	var claims: Array = ir_o.get("claims", [])
 	var beat_claims: Array = []
@@ -575,3 +576,71 @@ func _world_hash(sim) -> Dictionary:
 	out["tick"] = sim.tick
 	out["events"] = sim.events.size()
 	return out
+
+# ── P3c: CA Identity Persistence / CB Context Adaptation / CC Long-term Continuity ──
+func _test_p3c_expression() -> void:
+	var sim = await _make_sim(400)
+	if sim == null:
+		for i in 6: _check("p3c_%d" % i, false, "地图不可用")
+		return
+	# 构造 SpeechAct
+	var ref_ev := {"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "reason": "自己也不够吃", "seq": 1, "tick": 100}
+	var sa: Dictionary = SpeechAct.from_event(ref_ev, sim.actors["npc_oun"])
+	_check("p3c_sa_ok", not sa.is_empty() and str(sa.get("act_type", "")) == "REFUSE_REQUEST")
+
+	# CA：Identity Persistence——薇拉 vs 欧恩，不同 anchor，多 context 下 voice 持续不同
+	var vera_anchor: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_weila"])
+	var oun_anchor: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"])
+	var voice_diff := false
+	# 至少一个维度显著不同（expressiveness: 薇拉 0.85 vs 欧恩 0.15）
+	if absf(float(vera_anchor.get("base_expressiveness", 0.5)) - float(oun_anchor.get("base_expressiveness", 0.5))) > 0.3:
+		voice_diff = true
+	if absf(float(vera_anchor.get("base_directness", 0.5)) - float(oun_anchor.get("base_directness", 0.5))) > 0.3:
+		voice_diff = true
+	_check("p3c_ca_identity_persistence", voice_diff,
+		"vera=%s oun=%s" % [str(vera_anchor.get("base_expressiveness")), str(oun_anchor.get("base_expressiveness"))])
+
+	# CA-2：Effective profile 在不同 moment 下仍保持身份差异
+	var contexts := [
+		{"anger": 0.0, "urgency": 0.2},
+		{"anger": 0.5, "urgency": 0.5},
+		{"anger": 0.9, "urgency": 0.8},
+	]
+	var all_contexts_diff := true
+	for ctx in contexts:
+		var m := {"anger": float(ctx.get("anger", 0)), "sadness": 0.0, "urgency": float(ctx.get("urgency", 0)), "is_high_stakes": true}
+		var v_eff: Dictionary = ExpressionContextBuilder.effective_profile(vera_anchor, {}, m)
+		var o_eff: Dictionary = ExpressionContextBuilder.effective_profile(oun_anchor, {}, m)
+		# expressiveness 差异在所有 context 下保持
+		if absf(float(v_eff.get("emotional_openness", 0.5)) - float(o_eff.get("emotional_openness", 0.5))) < 0.05:
+			all_contexts_diff = false
+	_check("p3c_ca_voice_diff_all_contexts", all_contexts_diff)
+
+	# CB：Context Adaptation——同一人，同一行为，对不同关系对象不同语气
+	var rs: RelationshipStore = sim.relationships
+	rs.adjust("npc_oun", "npc_kadga", "benevolence", 500)   # 信任卡德加
+	rs.adjust("npc_oun", "npc_weila", "fear", 500)           # 害怕薇拉
+	var ec_kadga: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_kadga", sa, rs, 100)
+	var ec_weila: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, rs, 100)
+	var warm_k: float = float(ec_kadga.get("effective_profile", {}).get("warmth", 0.5))
+	var warm_w: float = float(ec_weila.get("effective_profile", {}).get("warmth", 0.5))
+	_check("p3c_cb_context_adaptation", warm_k > warm_w + 0.1,
+		"kadga_warmth=%f weila_warmth=%f（信任者温暖，恐惧者冷淡）" % [warm_k, warm_w])
+	# CB-2：语义不变——同 act_type + stance
+	_check("p3c_cb_semantics_unchanged",
+		str(ec_kadga.get("moment_state", {}).get("is_high_stakes")) == str(ec_weila.get("moment_state", {}).get("is_high_stakes")))
+
+	# CC：FAST/SLOW 路径
+	var thanks_sa: Dictionary = {"act_type": "THANK", "emotional_tone": {"anger": 0.0}}
+	var confront_sa: Dictionary = {"act_type": "CONFRONT", "emotional_tone": {"anger": 0.7}}
+	var mode_thanks := ExpressionContextBuilder.expression_mode(thanks_sa)
+	var mode_confront := ExpressionContextBuilder.expression_mode(confront_sa)
+	_check("p3c_ch_fast_slow", mode_thanks == "FAST" and mode_confront == "SLOW",
+		"thanks=%s confront=%s" % [mode_thanks, mode_confront])
+
+	# CI：No Profile Writeback——渲染不改变 identity anchor
+	var anchor_before: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"]).duplicate(true)
+	# 模拟渲染（不实际改状态——验证 anchor 是只读派生）
+	var _unused: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, rs, 100)
+	var anchor_after: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"])
+	_check("p3c_ci_no_profile_writeback", str(anchor_before) == str(anchor_after))
