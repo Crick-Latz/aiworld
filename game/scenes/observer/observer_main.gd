@@ -432,6 +432,21 @@ func _refresh_hud() -> void:
 		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
 			recent.append(all[i])
 		model["recent_events"] = recent
+		# P3b-5: 对话转录——从最近社会事件提取 SpeechAct → 模板台词
+		if island_sim != null:
+			var dialogue_lines: Array = []
+			var recent_dlg: Array = island_sim.events.slice(maxi(0, island_sim.events.size() - 20), island_sim.events.size())
+			for e in recent_dlg:
+				var speaker_id := str(e.get("actor_id", ""))
+				if speaker_id == "" or not island_sim.actors.has(speaker_id):
+					continue
+				var sa := SpeechAct.from_event(e, island_sim.actors[speaker_id])
+				if sa.is_empty():
+					continue
+				var utter: Dictionary = TemplateDialogueRenderer.render(sa, str(island_sim.actors[speaker_id]["display_name"]))
+				if bool(utter.get("ok", false)):
+					dialogue_lines.append({"day": int(e.get("day", 1)), "speaker": str(island_sim.actors[speaker_id]["display_name"]), "text": str(utter.get("text", "")), "act": str(sa.get("act_type", "")), "seq": int(e.get("seq", 0))})
+			model["dialogue_transcript"] = dialogue_lines
 		# P3a-2: 句子级编年史（claim-first）+ 证据面板数据
 		if island_sim != null:
 			var n_ir: Dictionary = NarrativeIR.build_ir(island_sim, "OBJECTIVE", "", 6)

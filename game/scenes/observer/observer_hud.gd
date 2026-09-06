@@ -63,6 +63,17 @@ func render(model: Dictionary) -> void:
 		tick_label.text += "\n" + world_facts
 	var events: Array = model.get("recent_events", [])
 	var lines: Array = []
+	# P3b-5: 对话转录（台词 + 言语行为类型）
+	var d_lines: Array = model.get("dialogue_transcript", [])
+	if not d_lines.is_empty():
+		var d_out: Array = ["[color=#e8c170]── 对话 ──[/color]"]
+		for dl in d_lines.slice(maxi(0, d_lines.size() - 6), d_lines.size()):
+			d_out.append("[color=#c0d8e8]%s：[/color]%s [color=#667788](%s)[/color]" % [str(dl.get("speaker", "")), str(dl.get("text", "")), str(dl.get("act", ""))])
+		d_out.append("")
+		events_label.clear()
+		events_label.append_text("
+".join(d_out))
+		return
 	# P3a-2: 句子级编年史（可下钻——每句下方直接展开 claims 与事件来源）
 	var n_sentences: Array = model.get("narrative_sentences", [])
 	if not n_sentences.is_empty():
