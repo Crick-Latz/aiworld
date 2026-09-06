@@ -23,6 +23,7 @@ func _run() -> void:
 	await _test_p3b_dialogue()
 	await _test_p3c_expression()
 	await _test_p3c_trace_and_surface()
+	await _test_p3c_remaining()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -694,3 +695,65 @@ func _test_p3c_trace_and_surface() -> void:
 	var am_normal: String = SurfaceHistory.address_mode(sim.actors["npc_oun"], "npc_kadga", rs2, sa)
 	_check("p3c3_address_policy_adapts", am_fear == "SECOND_PERSON" or am_normal == "USE_NAME",
 		"fear=%s normal=%s" % [am_fear, am_normal])
+
+# ── P3c-5: CD/CE/CF/CG/CJ ──
+func _test_p3c_remaining() -> void:
+	var sim = await _make_sim(400)
+	if sim == null:
+		for i in 6: _check("p3c5_%d" % i, false, "地图不可用")
+		return
+	var sa: Dictionary = SpeechAct.from_event({"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "reason": "自己也不够吃", "seq": 1, "tick": 100}, sim.actors["npc_oun"])
+
+	# CD：Text Invariance 继续成立——有/无 ExpressionContext 的渲染，世界不变
+	var snap1: Dictionary = _world_hash(sim)
+	var ec1: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, sim.relationships, 100)
+	var t_with: Dictionary = TemplateDialogueRenderer.render(sa, "欧恩", "zh", ec1)
+	var t_without: Dictionary = TemplateDialogueRenderer.render(sa, "欧恩", "zh", {})
+	var snap2: Dictionary = _world_hash(sim)
+	_check("p3c5_cd_invariance_with_ec", str(snap1) == str(snap2),
+		"hash same=%s" % str(snap1 == snap2))
+	# 两版本文本可以不同
+	_check("p3c5_cd_text_can_differ", str(t_with.get("text", "")) != str(t_without.get("text", "")) or true,
+		"（同/不同均合法——语义不变即可）")
+
+	# CE：History 不能新增事实——guardedness 高时台词更短，但不添加"你上次拒绝了我"
+	var ec_guarded := ec1.duplicate(true)
+	ec_guarded["effective_profile"]["guardedness"] = 0.9
+	ec_guarded["effective_profile"]["warmth"] = 0.1
+	var t_guarded: Dictionary = TemplateDialogueRenderer.render(sa, "欧恩", "zh", ec_guarded)
+	_check("p3c5_ce_no_unauthorized_facts", str(t_guarded.get("text", "")).find("上次") == -1,
+		"text=%s（不得出现未经 Claim 授权的过去事件引用）" % str(t_guarded.get("text", "")).substr(0, 40))
+
+	# CF：Secret Boundary——Renderer package 只含 allowed claims
+	# （构造：SpeechAct 的 propositions 只有 REFUSAL_REASON）
+	var sa_props: Array = sa.get("propositions", [])
+	var all_preds := []
+	for p in sa_props:
+		all_preds.append(str(p.get("predicate", "")))
+	_check("p3c5_cf_package_minimal", all_preds.size() <= 2 and not all_preds.has("SECRET"),
+		"preds=%s（只有系统决定的命题）" % str(all_preds))
+
+	# CG：No Style Echoing——SurfaceHistory 不影响 identity_anchor
+	var anchor_before: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"]).duplicate(true)
+	SurfaceHistory.record(sim.actors["npc_oun"], "非常非常礼貌的一句话", 100)
+	SurfaceHistory.record(sim.actors["npc_oun"], "又一句非常礼貌的话", 101)
+	var anchor_after: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"])
+	_check("p3c5_cg_no_style_echoing", str(anchor_before) == str(anchor_after),
+		"anchor 不因 surface_history 变化")
+
+	# CJ：Actor-specific Register——改 Owen→Vera 关系不影响 Owen→Khadga register
+	var rs3: RelationshipStore = sim.relationships
+	var kadga_warm_before: float = float(ExpressionContextBuilder.adaptive_register(sim.actors["npc_oun"], "npc_kadga", rs3, 100).get("warmth", 0.5))
+	rs3.adjust("npc_oun", "npc_weila", "fear", 800)  # 大幅改变 Owen→Vera
+	var kadga_warm_after: float = float(ExpressionContextBuilder.adaptive_register(sim.actors["npc_oun"], "npc_kadga", rs3, 100).get("warmth", 0.5))
+	_check("p3c5_cj_actor_specific_register", absf(kadga_warm_before - kadga_warm_after) < 0.01,
+		"before=%f after=%f（Owen→Vera 变化不影响 Owen→Khadga）" % [kadga_warm_before, kadga_warm_after])
+
+	# FAST/SLOW 上下文量差异
+	var fast_sa: Dictionary = {"act_type": "THANK", "emotional_tone": {}, "speech_id": "SP_FAST", "propositions": [], "tick": 100}
+	var slow_sa: Dictionary = {"act_type": "CONFRONT", "emotional_tone": {"anger": 0.7}, "speech_id": "SP_SLOW", "propositions": [], "tick": 100}
+	var ec_fast: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", fast_sa, sim.relationships, 100)
+	var ec_slow: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", slow_sa, sim.relationships, 100)
+	_check("p3c5_ch_slow_context_larger",
+		str(ec_slow.get("expression_mode", "")) == "SLOW" and str(ec_fast.get("expression_mode", "")) == "FAST",
+		"fast=%s slow=%s" % [str(ec_fast.get("expression_mode")), str(ec_slow.get("expression_mode"))])

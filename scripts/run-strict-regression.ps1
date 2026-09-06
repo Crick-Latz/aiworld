@@ -34,7 +34,7 @@ $suites = @(
     @{ Name = "p0_cognition"; Script = "res://test/p0_cognition.gd"; Expected = 9 },
     @{ Name = "p1_social"; Script = "res://test/p1_social.gd"; Expected = 33 },
     @{ Name = "p1_5_cognition"; Script = "res://test/p1_5_cognition.gd"; Expected = 24 },
-    @{ Name = "p1_6_cognition"; Script = "res://test/p1_6_cognition.gd"; Expected = 71 },
+    @{ Name = "p1_6_cognition"; Script = "res://test/p1_6_cognition.gd"; Expected = 78 },
     @{ Name = "p1_7_ecology"; Script = "res://test/p1_7_ecology.gd"; Expected = 10 },
     @{ Name = "p2_institution"; Script = "res://test/p2_institution.gd"; Expected = 44 },
     @{ Name = "narrative_ir"; Script = "res://test/narrative_ir.gd"; Expected = 24 },
