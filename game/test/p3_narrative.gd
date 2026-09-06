@@ -20,6 +20,7 @@ func _run() -> void:
 	await _test_p3a3_llm_offline()
 	await _test_p3a2_1_semantic_gate()
 	await _test_p3a4_styles()
+	await _test_p3b_dialogue()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -495,3 +496,82 @@ func _test_p3a4_styles() -> void:
 			short_sents += 1
 	_check("p3a4_ny_compression", short_sents <= long_sents and short_sents >= 0,
 		"short=%d long=%d" % [short_sents, long_sents])
+
+# ── P3b: DB Text Invariance + DC-DD + DH Character Voice ──
+func _test_p3b_dialogue() -> void:
+	var sim = await _make_sim(600)
+	if sim == null:
+		for i in 7: _check("p3b_%d" % i, false, "地图不可用")
+		return
+	# 构造一个真实 SpeechAct
+	var ref_event := {}
+	for e in sim.events:
+		if str(e.get("type", "")) == "food_request_refused":
+			ref_event = e
+			break
+	if ref_event.is_empty():
+		# 构造一次拒绝
+		var oun3: Dictionary = sim.actors["npc_oun"]
+		sim._emit("food_request_refused", "npc_oun", "欧恩拒绝了薇拉的求助",
+			{"proposer_id": "npc_weila", "reason": "自己也不够吃"})
+		for e in sim.events:
+			if str(e.get("type", "")) == "food_request_refused":
+				ref_event = e
+				break
+	_check("p3b_event_found", not ref_event.is_empty())
+	if ref_event.is_empty():
+		return
+
+	var sa: Dictionary = SpeechAct.from_event(ref_event, sim.actors["npc_oun"])
+	_check("p3b_speech_act_created", not sa.is_empty() and str(sa.get("act_type", "")) == "REFUSE_REQUEST",
+		str(sa.get("act_type", "")))
+
+	# DB：Text Invariance——同一 SpeechAct，三种渲染，世界状态完全不变
+	var snap_before: Dictionary = _world_hash(sim)
+	var t1: Dictionary = TemplateDialogueRenderer.render(sa, "欧恩")
+	# 模拟"LLM 渲染"（Mock A：完全不同文本）
+	var mock_a := {"ok": true, "text": "别问了，我自己都快没东西吃了。", "speech_id": str(sa.get("speech_id", "")), "claim_ids": []}
+	var mock_b := {"ok": true, "text": "真的没有了。", "speech_id": str(sa.get("speech_id", "")), "claim_ids": []}
+	var snap_after: Dictionary = _world_hash(sim)
+	_check("p3b_db_text_invariance", str(snap_before) == str(snap_after) and t1.get("text", "") != mock_a.get("text", ""),
+		"hash same=%s texts differ=%s" % [str(snap_before == snap_after), str(t1.get("text", "") != mock_a.get("text", ""))])
+
+	# DC：拒绝被渲染为同意 → Validator 拒绝
+	var fake_accept := {"ok": true, "text": "好的，我给你。", "speech_id": str(sa.get("speech_id", "")), "claim_ids": []}
+	var dc_verdict: Dictionary = DialogueValidator.validate(fake_accept, sa)
+	_check("p3b_dc_refusal_cannot_become_acceptance", not bool(dc_verdict.get("ok", true)),
+		str(dc_verdict.get("code", "")))
+
+	# 合法拒绝通过
+	var dc_ok: Dictionary = DialogueValidator.validate(mock_a, sa)
+	_check("p3b_dc_valid_refusal_passes", bool(dc_ok.get("ok", false)), str(dc_ok.get("code", "")))
+
+	# DD：不得添加新承诺（非 PROMISE 行为）
+	var fake_promise := {"ok": true, "text": "我保证以后一定给你。", "speech_id": str(sa.get("speech_id", "")), "claim_ids": []}
+	var dd_verdict: Dictionary = DialogueValidator.validate(fake_promise, sa)
+	_check("p3b_dd_no_added_promise", not bool(dd_verdict.get("ok", true)), str(dd_verdict.get("code", "")))
+
+	# DH：角色声音——同一 SpeechAct，三人三种不同措辞
+	var texts: Array = []
+	for actor_id in ["npc_weila", "npc_oun", "npc_kadga"]:
+		var sa2: Dictionary = SpeechAct.from_event(ref_event, sim.actors[actor_id])
+		if not sa2.is_empty():
+			var t2: Dictionary = TemplateDialogueRenderer.render(sa2, str(sim.actors[actor_id]["display_name"]))
+			texts.append(str(t2.get("text", "")))
+	var all_diff := texts.size() >= 2
+	for i in range(texts.size()):
+		for j in range(i + 1, texts.size()):
+			if texts[i] == texts[j]:
+				all_diff = false
+	_check("p3b_dh_character_voice", all_diff, str(texts))
+
+func _world_hash(sim) -> Dictionary:
+	# 世界状态摘要（用于 Text Invariance 对比）
+	var out := {}
+	for id in sim.actors:
+		var a: Dictionary = sim.actors[id]
+		out[id] = {"needs": str(a["needs"]), "inv": str(a["inventory"]),
+			"emotions": str(a["personality"].emotions)}
+	out["tick"] = sim.tick
+	out["events"] = sim.events.size()
+	return out

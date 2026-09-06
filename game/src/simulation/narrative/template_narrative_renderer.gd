@@ -150,4 +150,4 @@ static func confidence_hedge(confidence: float) -> String:
 		return "似乎"
 	elif confidence <= 0.8:
 		return ""
-	return "显然"
+	return "很确信"
