@@ -331,8 +331,11 @@ static func _propose_rule(actor: Dictionary, world: Dictionary):
 	# 提议比例来自我的个人规范（我认同多少就提议多少——人性如此）
 	var my_pref: float = float(actor.get("norms", {}).get("personal", {}).get("sharing", 0.5))
 	var fraction: float = clampf(0.25 + my_pref * 0.5, 0.2, 0.6)
+	var goal_kind := str(g0.get("kind", "we_need_a_rule"))
+	if goal_kind == "amend":
+		fraction = 0.25
 	var u: float = 0.3 + my_pref * 0.3  # 制度目标的效用：解决协调摩擦
-	return {"action": "propose_rule", "target": null, "object": object_id, "fraction": fraction,
+	return {"action": "propose_rule", "target": null, "object": object_id, "fraction": fraction, "goal_kind": goal_kind,
 			"utility": u, "desc": "提议立个规矩", "duration": 2}
 
 ## P1.7b 主动寻人：认识问题悬而未决而人不在视野 → 走向他最后已知的位置（跨空间认识行动）；

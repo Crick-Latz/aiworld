@@ -218,9 +218,16 @@ func step() -> Array:
 		a["personality"].decay_emotions()
 		_tick_actor(id, a, new_events)
 
-	# P1: 反思——每两天把情景记忆蒸馏成语义信念（延迟领悟）
+
 	if tick % ReflectionSystem.REFLECT_INTERVAL == 0:
 		for id in _ordered_ids():
+			# P2d-5: 修订检查（AA）——违规多+合法性低 → amend 目标
+			var pgb5: Dictionary = actors[id].get("perceived_group_beliefs", {})
+			for rid5 in pgb5:
+				if ComplianceSystem.should_amend(actors[id], str(rid5)):
+					var goals5: Array = actors[id].get("institutional_goals", [])
+					goals5.append({"object": str(pgb5[rid5]["rule"].get("object", "food")), "kind": "amend", "fraction": 0.25, "tick": tick})
+					actors[id]["institutional_goals"] = goals5
 			var result: Dictionary = ReflectionSystem.reflect(actors[id], tick)
 			for insight in result.get("insights", []):
 				_emit("reflected", id, "%s" % str(insight), {})
@@ -381,6 +388,7 @@ func _do_forage(id: String, a: Dictionary, ev: Array) -> void:
 			a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + got
 			a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 300, 0, 1000)
 			_emit("foraged", id, "%s 采到了 %d 份浆果" % [a["display_name"], got], {"food": got})
+			_compliance_check(id, a, "food", got)
 			_flatten_resources()
 			return
 	_emit("foraged_empty", id, "%s 找了一圈，浆果已经被采光了" % a["display_name"], {})
@@ -400,6 +408,7 @@ func _do_fish(id: String, a: Dictionary, ev: Array) -> void:
 		var got := int(_economy["fish_amount"])
 		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + got
 		_emit("fished", id, "%s 捕到了一条鱼！" % a["display_name"], {"food": got})
+		_compliance_check(id, a, "food", got)
 	else:
 		_emit("fished_empty", id, "%s 空手而归" % a["display_name"], {})
 
@@ -434,6 +443,8 @@ func _do_ruins(id: String, a: Dictionary, ev: Array) -> void:
 				for item in loot:
 					loot_names.append("%s×%d" % [item, loot[item]])
 				_emit("ruins_loot", id, "%s 在废弃营地找到了 %s" % [a["display_name"], "、".join(loot_names)], loot)
+			if loot.has("food"):
+				_compliance_check(id, a, "food", int(loot["food"]))
 			return
 
 func _do_shelter(id: String, a: Dictionary, ev: Array) -> void:
@@ -441,6 +452,7 @@ func _do_shelter(id: String, a: Dictionary, ev: Array) -> void:
 		a["inventory"]["wood"] = int(a["inventory"]["wood"]) - 2
 		world["shelters"][str(a["tile"])] = true
 		_emit("shelter_built", id, "%s 搭建了一个简易庇护所" % a["display_name"], {"pos": str(a["tile"])})
+		AuthoritySystem.self_identity(a, "shelter_built")
 
 func _do_craft(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("shells", 0)) >= 1 and int(a["inventory"].get("wood", 0)) >= 1:
@@ -448,6 +460,7 @@ func _do_craft(id: String, a: Dictionary, ev: Array) -> void:
 		a["inventory"]["wood"] = int(a["inventory"]["wood"]) - 1
 		a["inventory"]["fish_spear"] = 1
 		_emit("crafted", id, "%s 制作了一把鱼叉" % a["display_name"], {"tool": "fish_spear"})
+		AuthoritySystem.self_identity(a, "crafted")
 
 func _do_fire(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("wood", 0)) >= 1:
@@ -558,6 +571,7 @@ func _do_relocate(id: String, a: Dictionary, action: Dictionary, ev: Array) -> v
 func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var object_id := str(action.get("object", "food"))
 	var fraction: float = float(action.get("fraction", 0.5))
+	var goal_kind := str(action.get("goal_kind", ""))
 	var rule := RuleDiscourse.build_rule(id, object_id, fraction)
 	var audience: Array = []
 	for other_id in actors:
@@ -593,6 +607,14 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 			for other_id2 in audience:
 				var st2 := 1 if str(actors[other_id2].get("last_rule_stance", "1")) == "1" else -1
 				RuleDiscourse.witness_stance(actors[wid], rule, other_id2, st2, audience.size() + 1, tick)
+	# amend 目标 → 规则修订事件（AA：新比例可能获得更高遵守）
+	if goal_kind == "amend":
+		for inst in institutions:
+			if str(inst["rule"].get("object", "")) == object_id:
+				inst["rule"]["fraction"] = fraction
+				inst["revised_tick"] = tick
+				break
+		_emit("rule_revised", id, "%s 提议把比例改到 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction})
 	# InstitutionRecord：客观事实——规则被公开提议且获得足够公开支持
 	if public_supports >= 2:
 		institutions.append({"rule": rule, "created_tick": tick, "supports": public_supports, "status": "active"})
@@ -710,6 +732,29 @@ func _do_rest(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 400, 0, 1000)
 	a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) + 100, 0, 1000)
 	_emit("rested", id, "%s 休息了一会儿" % a["display_name"], {})
+
+## P2c 合规决策：获取资源后，若【我认知里】存在有效规则 → 交/少交/不交
+## 违规事件只被附近者目击（感知门）——独处时的违规 = 隐藏违规，世界知道而人不知
+func _compliance_check(id: String, a: Dictionary, object_id: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	var dec: Dictionary = ComplianceSystem.decide_on_acquisition(a, object_id, amount)
+	var mode := str(dec.get("mode", "NONE"))
+	if mode == "NONE":
+		return
+	var contribute := int(dec.get("contribute", 0))
+	if contribute > 0:
+		contribute = mini(contribute, int(a["inventory"].get(object_id, 0)))
+		a["inventory"][object_id] = int(a["inventory"].get(object_id, 0)) - contribute
+		world["common_storage"] = world.get("common_storage", {})
+		world["common_storage"][object_id] = int(world["common_storage"].get(object_id, 0)) + contribute
+		_emit("storage_contributed", id, "%s 按约定把 %d 份%s放进了公共储备" % [a["display_name"], contribute, ResourceSpec.spec(object_id)["verb"]],
+				{"object": object_id, "amount": contribute, "mode": mode})
+	else:
+		_emit("storage_withheld", id, "%s 找到了%s，但没有按约定交公" % [a["display_name"], ResourceSpec.spec(object_id)["verb"]],
+				{"object": object_id, "mode": mode, "rule_id": str(dec.get("rule_id", ""))})
+		# 违规者自己也知道刚才有谁在场（检测估计的事后校验）
+	AuthoritySystem.self_identity(a, "acquire_" + object_id)
 
 func _do_eat(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("food", 0)) < 1:
@@ -1093,7 +1138,31 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		if id != actor_id and actors.has(actor_id):
 			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
-		# P2a: 目击行为 → 我的局部规律观察（约定涌现，非全局统计）
+		# P2d: 目击违规 → 执行反应（公共品困境：管或不管）+ 执行期望学习
+		if str(e.get("type", "")) == "storage_withheld" and id != actor_id:
+			var violator_rid := str(e.get("rule_id", ""))
+			var reaction: Dictionary = ComplianceSystem.react_to_violation(a, str(actor_id), violator_rid)
+			if str(reaction["reaction"]) == "CONFRONT":
+				_emit("confronted_violation", id, "%s 当面质问 %s：约定呢？" % [a["display_name"], actors[actor_id]["display_name"]], {"to_id": str(actor_id), "rule_id": violator_rid})
+				ComplianceSystem.learn_enforcement(a, violator_rid, true, tick)
+				if actors.has(actor_id):
+					ComplianceSystem.learn_enforcement(actors[actor_id], violator_rid, true, tick)
+				# 被罚 → 可靠度证据（经既有管线，非直改）
+				a["tom"].add_evidence(str(actor_id), "reliable", -1.0, ComplianceSystem.violation_evidence_weight(PersonalityDynamics.dynamics(a["personality"], a.get("sensitivities", {}), a.get("norms", {}))), int(e.get("seq", 0)), tick)
+			else:
+				ComplianceSystem.learn_enforcement(a, violator_rid, false, tick)  # 沉默 → 执行力下降（大家都知道但没人管）
+			# AD: 违规者若是规则提案者 → 权威崩塌
+			var rid_prop := str(e.get("rule_id", ""))
+			if a.get("perceived_group_beliefs", {}).has(rid_prop):
+				var rule_d: Dictionary = a["perceived_group_beliefs"][rid_prop].get("rule", {})
+				if str(rule_d.get("proposer", "")) == str(actor_id):
+					AuthoritySystem.authority_violation(a, str(actor_id), int(e.get("seq", 0)), tick)
+		# P2e: 目击能力行为 → 领域权威证据（涌现角色）
+		AuthoritySystem.observe_competence(a, str(e.get("type", "")), str(actor_id), int(e.get("seq", 0)), tick)
+		# P2e-4: 公开支持 → 提案者协调权威
+		if str(e.get("type", "")) == "rule_supported":
+			AuthoritySystem.public_endorsement(a, str(e.get("actor_id", "")), "coordination", int(e.get("seq", 0)), tick)
+			# P2a: 目击行为 → 我的局部规律观察（约定涌现，非全局统计）
 		var sem11: Dictionary = ResourceSpec.semantics_of(e)
 		if sem11.has("act") and id != actor_id:
 			if (str(sem11["act"]) == "GIVE" and str(sem11.get("response", "")) == "DONE") or (str(sem11["act"]) == "REQUEST" and str(sem11.get("response", "")) == "ACCEPT"):

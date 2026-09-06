@@ -12,6 +12,8 @@ func _run() -> void:
 	_test_t_convention_without_rule()
 	_test_u_publicness()
 	_test_v_rule_not_belief()
+	_test_wxz()
+	_test_ab_ac_ad()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -100,3 +102,70 @@ func _test_v_rule_not_belief() -> void:
 	var se_owen: float = float(owen["perceived_group_beliefs"][rule["rule_id"]]["shared_expectation"])
 	_check("v_divergent_perceptions", absf(se_vera - se_owen) > 0.1,
 		"vera=%f owen=%f（同一规则，两人感知必须不同）" % [se_vera, se_owen])
+
+# ── W/X/Y/Z/AA-AD: P2c/d/e 验收 ──
+func _test_wxz() -> void:
+	var rule := RuleDiscourse.build_rule("npc_weila", "food", 0.5)
+	# W 规则≠遵守：低合法性+高饥饿 → 违规（rule_exists 不直通）
+	var hungry_skeptic := _actor("npc_oun")
+	hungry_skeptic["norms"]["personal"]["sharing"] = 0.1
+	hungry_skeptic["needs"]["hunger"] = 900
+	hungry_skeptic["perceived_group_beliefs"][rule["rule_id"]] = {"rule": rule, "member_stance": {}, "publicity": 0.8, "shared_expectation": 0.7, "perceived_enforcement": 0.2, "last_tick": 1}
+	var dec_w: Dictionary = ComplianceSystem.decide_on_acquisition(hungry_skeptic, "food", 4)
+	_check("w_rule_not_compliance", str(dec_w["mode"]) == "VIOLATE" or str(dec_w["mode"]) == "PARTIAL", str(dec_w))
+	# 对照：高合法性+高执行+温饱 → 遵守
+	var fed_believer := _actor("npc_kadga")
+	fed_believer["norms"]["personal"]["sharing"] = 0.9
+	fed_believer["needs"]["hunger"] = 100
+	fed_believer["perceived_group_beliefs"][rule["rule_id"]] = {"rule": rule, "member_stance": {}, "publicity": 0.9, "shared_expectation": 0.8, "perceived_enforcement": 0.8, "last_tick": 1}
+	var dec_w2: Dictionary = ComplianceSystem.decide_on_acquisition(fed_believer, "food", 4)
+	_check("w_compliant_when_aligned", str(dec_w2["mode"]) == "COMPLY" and int(dec_w2["contribute"]) >= 2, str(dec_w2))
+	# X 隐藏违规：独处 → 检测估计低
+	hungry_skeptic["others_nearby"] = []
+	var det_alone: float = ComplianceSystem.estimate_detection(hungry_skeptic)
+	hungry_skeptic["others_nearby"] = [{"id": "npc_weila"}, {"id": "npc_kadga"}]
+	var det_crowd: float = ComplianceSystem.estimate_detection(hungry_skeptic)
+	_check("x_hiding_feasible_alone", det_alone < 0.3 and det_crowd > det_alone + 0.4, "alone=%f crowd=%f" % [det_alone, det_crowd])
+	# Y 制度学习：违规未罚 → 执行力感知下降 → 违规意愿上升
+	ComplianceSystem.learn_enforcement(hungry_skeptic, rule["rule_id"], false, 100)
+	ComplianceSystem.learn_enforcement(hungry_skeptic, rule["rule_id"], false, 110)
+	var enf_after: float = float(hungry_skeptic["perceived_group_beliefs"][rule["rule_id"]]["perceived_enforcement"])
+	_check("y_enforcement_decays_when_ignored", enf_after < 0.2, str(enf_after))
+	# Z 合法性/恐惧分离：低合法+高执行 → 仍遵守（怕）但支持度低
+	var fearful := _actor("npc_x")
+	fearful["norms"]["personal"]["sharing"] = 0.1
+	fearful["needs"]["hunger"] = 300
+	fearful["perceived_group_beliefs"][rule["rule_id"]] = {"rule": rule, "member_stance": {}, "publicity": 0.8, "shared_expectation": 0.7, "perceived_enforcement": 0.95, "last_tick": 1}
+	var dec_z: Dictionary = ComplianceSystem.decide_on_acquisition(fearful, "food", 4)
+	var leg_z: float = ComplianceSystem.legitimacy_of(fearful, rule["rule_id"], "food")
+	_check("z_fear_compliance_low_legitimacy", leg_z < 0.35 and str(dec_z["mode"]) != "VIOLATE", "leg=%f mode=%s（怕而服从不等于认同）" % [leg_z, str(dec_z["mode"])])
+	# AA 修订：执行力崩 + 合法性低 → should_amend
+	fearful["perceived_group_beliefs"][rule["rule_id"]]["perceived_enforcement"] = 0.1
+	fearful["perceived_group_beliefs"][rule["rule_id"]]["legitimacy"] = 0.3
+	_check("aa_amend_triggered", ComplianceSystem.should_amend(fearful, rule["rule_id"]))
+
+func _test_ab_ac_ad() -> void:
+	# AB 涌现角色：目击卡德加反复建造 → 建筑权威升（无任何 role 配置）
+	var vera := _actor("npc_weila")
+	for i in 6:
+		AuthoritySystem.observe_competence(vera, "crafted", "npc_kadga", i, 10 + i)
+		AuthoritySystem.observe_competence(vera, "shelter_built", "npc_kadga", i + 10, 20 + i)
+	var auth_build: float = AuthoritySystem.perceived_authority(vera, "npc_kadga", "construction")
+	var auth_food: float = AuthoritySystem.perceived_authority(vera, "npc_kadga", "food")
+	_check("ab_role_emerges_from_observation", auth_build > 0.1 and auth_food < auth_build,
+		"build=%f food=%f（领域化：只见他建过东西）" % [auth_build, auth_food])
+	# AC 权威涌现：公开背书加成
+	var oun := _actor("npc_oun")
+	AuthoritySystem.public_endorsement(oun, "npc_kadga", "coordination", 99, 50)
+	var auth_coord: float = AuthoritySystem.perceived_authority(oun, "npc_kadga", "coordination")
+	_check("ac_endorsement_builds_authority", auth_coord > 0.05, str(auth_coord))
+	# AD 权威崩塌：提案者违背自己的规则
+	AuthoritySystem.authority_violation(oun, "npc_kadga", 100, 60)
+	var after: float = AuthoritySystem.perceived_authority(oun, "npc_kadga", "coordination")
+	_check("ad_authority_collapses", after < auth_coord, "%f -> %f" % [auth_coord, after])
+	# 自我身份反馈
+	var kadga := _actor("npc_kadga")
+	for i in 5:
+		AuthoritySystem.self_identity(kadga, "crafted")
+	_check("ab_self_identity_forms", int(kadga.get("self_identity", {}).get("construction", 0)) >= 5
+		and AuthoritySystem.self_identity_boost(kadga, "crafted") > 0.1, str(kadga.get("self_identity", {})))
