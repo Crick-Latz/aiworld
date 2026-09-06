@@ -1,21 +1,14 @@
 class_name AppraisalSystem
 extends RefCounted
-## 情绪评价系统（阶段 C，FAtiMA）：情绪不是随机 buff，是角色对事件
-## 与自身目标关系的评价结果。同一事件，不同角色产生不同情绪。
+## 情绪评价系统（FAtiMA 式）：情绪不是随机 buff，是角色对事件
+## 与自身目标关系的评价结果。
+##
+## P1.5 职责收缩：本类只负责 (1) 非社会事件的通用评价向量 (2) 向量→情绪的转换。
+## 社会事件（请求/拒绝/接受/分享）的情境化评价与解释已移入 CognitiveTransition——
+## 因为它们必须经过"我当时知道什么、以为什么"的主观化步骤。
 ##
 ## Appraisal Vector: goal_congruence / expectedness / controllability / agency / norm_violation
-## → 产生 anger / fear / joy / sadness / guilt
-##
-## 例：薇拉发现欧恩藏食物
-##   goal_congruence = -0.8（威胁"合作"目标）
-##   expectedness = -0.6（出乎意料）
-##   agency = "npc_oun"（欧恩干的）
-##   norm_violation = 0.9（违反"应该分享"的规范）
-##   → anger ↑↑, trust(欧恩) ↓
-## 但卡德加评价同一事件：
-##   goal_congruence = -0.6（也威胁"团结"但反应较轻）
-##   conflict_avoidance = high
-##   → 不当众指责，选择私聊
+## → anger / fear / joy / sadness / guilt
 
 static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 	var p: PersonalityProfile = actor.get("personality", null)
@@ -31,7 +24,6 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 		"self_agency": str(event.get("actor_id", "")) == str(actor.get("id", "")),
 	}
 
-	# 事件类型 → 评价维度
 	match type:
 		"weather_storm":
 			appraisal["goal_congruence"] = -0.5
@@ -43,45 +35,25 @@ static func appraise(event: Dictionary, actor: Dictionary) -> Dictionary:
 		"explored_found":
 			appraisal["goal_congruence"] = 0.6
 			appraisal["expectedness"] = -0.3
-		"shared_food":
-			appraisal["goal_congruence"] = 0.5 + float(p.traits.get("altruism", 0.5)) * 0.3
 		"ruins_loot":
 			appraisal["goal_congruence"] = 0.7
 			appraisal["expectedness"] = -0.5
 		"ruins_empty":
 			appraisal["goal_congruence"] = -0.3
 			appraisal["expectedness"] = -0.2
-		# ── P1 社会事件：同一事件，不同角色评价不同 ──
-		"food_request_refused":
-			# P2: 规范决定拒绝的道德重量——"同伴就该分享"的人视拒绝为背叛；
-			# "人得自立"的人觉得拒绝理所当然
-			var norms_p: Dictionary = actor.get("norms", {})
-			var sharing_p: float = float(norms_p.get("sharing", 0.5))
-			var self_rel_p: float = float(norms_p.get("self_reliance", 0.5))
-			# 被拒者：目标受阻 + 规范被违反的强度由自己的分享规范决定
-			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
-				appraisal["goal_congruence"] = -0.7
-				appraisal["expectedness"] = -0.3
-				appraisal["norm_violation"] = 0.2 + sharing_p * 0.6
-				appraisal["controllability"] = 0.2
-			# 拒绝者本人：分享规范高 → 内疚；自立规范高 → 理直气壮
-			elif appraisal["self_agency"]:
-				appraisal["goal_congruence"] = -0.2
-				appraisal["norm_violation"] = 0.2 + sharing_p * 0.6 - self_rel_p * 0.3
-		"food_request_accepted":
-			# 求助成功者：如释重负
-			if str(event.get("proposer_id", "")) == str(actor.get("id", "")):
-				appraisal["goal_congruence"] = 0.7
-				appraisal["expectedness"] = -0.4
-			# 分享者：利他满足感
-			elif appraisal["self_agency"]:
-				appraisal["goal_congruence"] = 0.3 + float(p.traits.get("altruism", 0.5)) * 0.3
-		"food_requested":
-			# 有人向我开口：轻微的决策压力；自立规范高的人觉得被冒犯
-			if str(event.get("target_id", "")) == str(actor.get("id", "")):
-				var self_rel_t: float = float(actor.get("norms", {}).get("self_reliance", 0.5))
-				appraisal["goal_congruence"] = -0.05 - self_rel_t * 0.15
-				appraisal["controllability"] = 0.8
+		"foraged", "fished":
+			appraisal["goal_congruence"] = 0.5
+			appraisal["expectedness"] = -0.2
+		"foraged_empty", "fished_empty":
+			appraisal["goal_congruence"] = -0.25
+			appraisal["expectedness"] = -0.1
+		"ate_food":
+			appraisal["goal_congruence"] = 0.3
+		"socialized":
+			appraisal["goal_congruence"] = 0.4
+		"shared_food":
+			# 分享者自己的满足（受助者的评价在 Transition 的解释链里）
+			appraisal["goal_congruence"] = 0.4 + float(p.traits.get("altruism", 0.5)) * 0.3
 
 	# 性格修饰评价
 	var empathy := p.effective_trait("empathy", {})

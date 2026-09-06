@@ -76,9 +76,12 @@ func adjust_emotion(key: String, delta: float) -> void:
 		emotions[key] = clampf(float(emotions[key]) + delta, -1.0, 1.0)
 
 # 情绪恢复（每 tick 向 0 衰减，韧性越高衰减越快）
+# trust_open 是性格基线不是心情——不参与衰减（否则 50 tick 后人人归零）
 func decay_emotions() -> void:
 	var decay_rate := 0.01 + float(traits["resilience"]) * 0.02
 	for key in emotions:
+		if key == "trust_open":
+			continue
 		var v: float = emotions[key]
 		if v > 0:
 			emotions[key] = maxf(0.0, v - decay_rate)

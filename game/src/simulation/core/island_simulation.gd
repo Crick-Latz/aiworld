@@ -18,13 +18,26 @@ var relationships := RelationshipStore.new()  # P1: 有向信任（A 信 B ≠ B
 var map_query
 
 var _seq := 0
+var _hunger_samples := {}   # P1.5 采样：id -> 饥饿累计（运行均值）
+var _sample_count := 0
+var _switch_counts := {}    # P1.5 采样：id -> 行动类型切换数（身份稳定性度量）
+var _last_action_types := {}
 var _rng := RandomNumberGenerator.new()
 
-func _init(map_query, seed: int, actor_configs: Array) -> void:
+func _init(map_query, seed: int, actor_configs: Array, economy_overrides: Dictionary = {}) -> void:
 	self.map_query = map_query
 	_rng.seed = seed
+	_economy = {
+		"berry_count": 3, "berry_food": 1, "berry_regrow_days": 5,
+		"fish_prob": 0.5, "fish_amount": 1, "explore_food_prob": 0.04,
+	}.duplicate()
+	for k in economy_overrides:
+		if _economy.has(k):
+			_economy[k] = economy_overrides[k]
 	_init_world_resources()
 	_init_actors(actor_configs)
+
+var _economy := {}
 
 func _init_world_resources() -> void:
 	var map_size: Vector2i = map_query.map_size()
@@ -36,9 +49,9 @@ func _init_world_resources() -> void:
 	var ruins: Array = []
 	var trees: Array = []
 
-	for i in 3:  # 3 个浆果丛（1 份/丛，5 天一茬——匮乏驱动社交）
+	for i in int(_economy["berry_count"]):  # 浆果丛（默认稀疏——匮乏驱动社交；富裕世界可覆盖）
 		var pos := _find_walkable_spot(map_size)
-		berry_bushes.append({"pos": pos, "food": 1, "regrow_day": -1})
+		berry_bushes.append({"pos": pos, "food": int(_economy["berry_food"]), "regrow_day": -1})
 	for i in 1:  # 1 个水泉
 		var pos2 := _find_walkable_spot(map_size)
 		water_springs.append(pos2)
@@ -136,8 +149,12 @@ func _init_actors(actor_configs: Array) -> void:
 			"action_ticks_left": 0,
 			"visited_tiles": {},
 			"relationships": {},
-			"tom": TheoryOfMind.new(),  # P1: 一阶心智模型
-			"norms": _init_norms(cfg.get("norms", {})),  # P2: 内化规范（会随经历漂移）
+			"tom": TheoryOfMind.new(),  # 一阶心智模型（证据累积+响应预测）
+			"norms": _init_norms(cfg.get("norms", {})),  # P1.5: personal/descriptive/injunctive 三层
+			"social_stance": {},    # P1.5: 对每人的接近/回避倾向（解释系统写入）
+			"pending_predictions": [],  # P1.5: 我对他人反应的预测（待观察验证）
+			"grudges": {},          # P1.5: 已形成的记恨（可被新证据推翻）
+			"last_transition": {},  # P1.5: 最近一次认知转移摘要（DecisionTrace 用）
 			"last_decision_trace": {},
 			"memories": [],
 		}
@@ -148,12 +165,34 @@ func _init_actors(actor_configs: Array) -> void:
 	for id in actors:
 		actors[id]["display_names"] = display_names
 
-## P2: 规范默认中性，由剧本数据覆盖。规范不是特质——是"人应该怎样"的期待。
+func get_actor_hunger_samples() -> Dictionary:
+	var out := {}
+	for id in _hunger_samples:
+		out[id] = float(_hunger_samples[id]) / maxf(float(_sample_count), 1.0)
+	return out
+
+func get_actor_switch_counts() -> Dictionary:
+	return _switch_counts.duplicate()
+
+## P1.5: 规范三层——personal（我认为该怎样）/descriptive（我以为别人通常怎样）/
+## injunctive（我以为大家会谴责什么）。旧扁平格式自动归入 personal 层。
 func _init_norms(overrides: Dictionary) -> Dictionary:
-	var norms := {"sharing": 0.5, "self_reliance": 0.5, "reciprocity": 0.5}
-	for k in overrides:
-		if norms.has(k):
-			norms[k] = clampf(float(overrides[k]), 0.0, 1.0)
+	var norms := {
+		"personal": {"sharing": 0.5, "self_reliance": 0.5, "reciprocity": 0.5},
+		"descriptive": {"sharing": 0.5, "reciprocity": 0.5},
+		"injunctive": {"sharing": 0.5},
+	}
+	if overrides.has("personal"):
+		for layer in ["personal", "descriptive", "injunctive"]:
+			if overrides.has(layer):
+				for k in overrides[layer]:
+					if norms[layer].has(k):
+						norms[layer][k] = clampf(float(overrides[layer][k]), 0.0, 1.0)
+	else:
+		for k in overrides:  # 旧扁平格式 → personal
+			for layer in ["personal", "descriptive", "injunctive"]:
+				if norms[layer].has(k):
+					norms[layer][k] = clampf(float(overrides[k]), 0.0, 1.0)
 	return norms
 
 # ── 主循环 ──
@@ -177,6 +216,22 @@ func step() -> Array:
 			var result: Dictionary = ReflectionSystem.reflect(actors[id], tick)
 			for insight in result.get("insights", []):
 				_emit("reflected", id, "%s" % str(insight), {})
+	# P1.5: 每 8 tick 解决到期的社会预测（预测误差学习）
+	if tick % 8 == 0:
+		_resolve_predictions()
+
+	# P1.5 行为采样（测试/扫描用）
+	_sample_count += 1
+	for id in actors:
+		_hunger_samples[id] = float(_hunger_samples.get(id, 0.0)) + float(actors[id]["needs"]["hunger"])
+		var ca = actors[id].get("current_action", null)
+		var at := ""
+		if ca != null and typeof(ca) == TYPE_DICTIONARY:
+			at = str(ca.get("action", ""))
+		if at != "":
+			if _last_action_types.has(id) and str(_last_action_types[id]) != at:
+				_switch_counts[id] = int(_switch_counts.get(id, 0)) + 1
+			_last_action_types[id] = at
 
 	_update_nearby_info()
 	world["tick"] = tick
@@ -191,10 +246,20 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	# 如果正在执行行动，倒计时
 	if int(a.get("action_ticks_left", 0)) > 0:
 		a["action_ticks_left"] = int(a["action_ticks_left"]) - 1
+		# 追踪移动：指向具体的人的行动（求助）在执行期间逐 tick 向对方走去；
+		# 对方也会走动——追不上就扑空（request_missed），这是真实的社会摩擦
+		var cur_action: Dictionary = a.get("current_action", {})
+		if cur_action.has("target_actor") and actors.has(str(cur_action["target_actor"])):
+			var pursue_tile: Vector2i = actors[str(cur_action["target_actor"])]["tile"]
+			var away := str(cur_action.get("action", "")) == "keep_distance"
+			if away:
+				pursue_tile = _away_tile(a["tile"], pursue_tile)
+			if a["tile"] != pursue_tile:
+				_move_toward(a, pursue_tile)
 		if int(a["action_ticks_left"]) <= 0:
 			_complete_action(id, a, new_events)
 		else:
-			a["activity"] = str(a.get("current_action", {}).get("desc", "忙碌"))
+			a["activity"] = str(cur_action.get("desc", "忙碌"))
 		return
 
 	# P0: 每次决策前重新生成目标（需求+人格→目标）
@@ -251,6 +316,12 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_share(id, a, new_events)
 		"request_share":
 			_do_request(id, a, action, new_events)
+		"keep_distance":
+			_do_keep_distance(id, a, action, new_events)
+		"gather_wood":
+			_do_gather_wood(id, a, new_events)
+		"sit_by_fire":
+			_do_sit_by_fire(id, a, new_events)
 		"eat_food":
 			_do_eat(id, a, new_events)
 		"rest":
@@ -268,15 +339,13 @@ func _do_forage(id: String, a: Dictionary, ev: Array) -> void:
 			var got := mini(2, int(bush["food"]))
 			bush["food"] = int(bush["food"]) - got
 			if int(bush["food"]) <= 0:
-				bush["regrow_day"] = int(world_time["day"]) + 5
+				bush["regrow_day"] = int(world_time["day"]) + int(_economy["berry_regrow_days"])
 			a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + got
 			a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 300, 0, 1000)
-			a["personality"].adjust_emotion("joy", 0.1)
 			_emit("foraged", id, "%s 采到了 %d 份浆果" % [a["display_name"], got], {"food": got})
 			_flatten_resources()
 			return
 	_emit("foraged_empty", id, "%s 找了一圈，浆果已经被采光了" % a["display_name"], {})
-	a["personality"].adjust_emotion("sadness", 0.05)
 
 func _do_drink(id: String, a: Dictionary, ev: Array) -> void:
 	for spring in world["water_springs"]:
@@ -286,13 +355,12 @@ func _do_drink(id: String, a: Dictionary, ev: Array) -> void:
 			return
 
 func _do_fish(id: String, a: Dictionary, ev: Array) -> void:
-	# 海里的鱼不多：0.5 概率 1 份——鱼叉有用但不是印钞机
-	if _rng.randf() < 0.5:
-		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
-		a["personality"].adjust_emotion("joy", 0.15)
-		_emit("fished", id, "%s 捕到了一条鱼！" % a["display_name"], {"food": 1})
+	# 海里的鱼不多（默认 0.5 概率 1 份）——鱼叉有用但不是印钞机
+	if _rng.randf() < float(_economy["fish_prob"]):
+		var got := int(_economy["fish_amount"])
+		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + got
+		_emit("fished", id, "%s 捕到了一条鱼！" % a["display_name"], {"food": got})
 	else:
-		a["personality"].adjust_emotion("sadness", 0.05)
 		_emit("fished_empty", id, "%s 空手而归" % a["display_name"], {})
 
 func _do_shells(id: String, a: Dictionary, ev: Array) -> void:
@@ -303,12 +371,11 @@ func _do_explore(id: String, a: Dictionary, ev: Array) -> void:
 	a["visited_tiles"][str(a["tile"])] = true
 	# 随机发现（好奇心驱动探索的奖励）——野果稀少，否则探索成了食物印钞机
 	var roll := _rng.randf()
-	if roll < 0.04:
+	if roll < float(_economy["explore_food_prob"]):
 		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
 		_emit("explored_found", id, "%s 探索时意外发现了一些野果" % a["display_name"], {"food": 1})
-	elif roll < 0.05:
+	elif roll < float(_economy["explore_food_prob"]) + 0.01:
 		a["physical"]["injured"] = true
-		a["personality"].adjust_emotion("fear", 0.4)
 		_emit("explored_hurt", id, "%s 探索时被蛇咬伤了！" % a["display_name"], {"injury": true})
 	else:
 		_emit("explored", id, "%s 探索了周围" % a["display_name"], {})
@@ -319,7 +386,6 @@ func _do_ruins(id: String, a: Dictionary, ev: Array) -> void:
 			ruin["searched"] = true
 			var loot: Dictionary = ruin["loot"]
 			if loot.is_empty():
-				a["personality"].adjust_emotion("sadness", 0.1)
 				_emit("ruins_empty", id, "%s 翻遍了废弃营地，什么也没找到" % a["display_name"], {})
 			else:
 				for item in loot:
@@ -327,7 +393,6 @@ func _do_ruins(id: String, a: Dictionary, ev: Array) -> void:
 				var loot_names: Array = []
 				for item in loot:
 					loot_names.append("%s×%d" % [item, loot[item]])
-				a["personality"].adjust_emotion("joy", 0.2)
 				_emit("ruins_loot", id, "%s 在废弃营地找到了 %s" % [a["display_name"], "、".join(loot_names)], loot)
 			return
 
@@ -352,7 +417,6 @@ func _do_fire(id: String, a: Dictionary, ev: Array) -> void:
 
 func _do_socialize(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["social"] = clampi(int(a["needs"]["social"]) - 300, 0, 1000)
-	a["personality"].adjust_emotion("joy", 0.1)
 	var others: Array = []
 	for other_id in actors:
 		if other_id != id:
@@ -360,16 +424,19 @@ func _do_socialize(id: String, a: Dictionary, ev: Array) -> void:
 	_emit("socialized", id, "%s 和 %s 聊了聊天" % [a["display_name"], "、".join(others)], {})
 
 func _do_share(id: String, a: Dictionary, ev: Array) -> void:
-	# P1: 分享是双向互动——找到最近的真实挨饿者，食物给到具体的人
+	# 分享是双向互动——找到最近的真实挨饿者，食物给到具体的人
 	if int(a["inventory"].get("food", 0)) < 2:
 		return
 	var hungriest := ""
-	var hungriest_v := 600  # 只分给真的饿的人（>600）
+	var hungriest_v := 550  # 对方真的饿（>500），或明显比自己饿（+150）——富裕世界也有分享场合
+	var my_h := int(a["needs"].get("hunger", 0))
 	for other_id in actors:
 		if other_id == id:
 			continue
 		var h := int(actors[other_id]["needs"].get("hunger", 0))
-		if h > hungriest_v and _is_nearby(a["tile"], actors[other_id]["tile"]):
+		var surplus := int(a["inventory"].get("food", 0)) >= 3
+		var worth := h > 550 or h > my_h + 200 or (surplus and h > my_h + 100)  # 盈余慷慨：富裕世界开
+		if worth and h > hungriest_v and _is_nearby(a["tile"], actors[other_id]["tile"]):
 			hungriest_v = h
 			hungriest = other_id
 	if hungriest == "":
@@ -377,13 +444,13 @@ func _do_share(id: String, a: Dictionary, ev: Array) -> void:
 	a["inventory"]["food"] = int(a["inventory"]["food"]) - 1
 	actors[hungriest]["inventory"]["food"] = int(actors[hungriest]["inventory"].get("food", 0)) + 1
 	actors[hungriest]["needs"]["hunger"] = clampi(int(actors[hungriest]["needs"]["hunger"]) - 200, 0, 1000)
-	a["personality"].adjust_emotion("joy", 0.15)
-	relationships.on_transfer_complete(id, hungriest)
 	_emit("shared_food", id, "%s 把食物分给了 %s" % [a["display_name"], actors[hungriest]["display_name"]],
 		{"to_id": hungriest})
 
-## P1: 请求-回应协议。提议者开口（一次决策），目标独立评估（第二次决策）。
-## 接受/拒绝都产生事件 → 双方 Appraisal + ToM 更新 + 记忆 → 关系变化。
+## P1.5: 请求-回应协议。提议者开口（一次决策），目标独立评估（第二次决策）。
+## 接受/拒绝都产生事件 → 双方经 CognitiveTransition 完成评价/解释/信念/关系更新。
+## 本函数不再直接修改任何认知状态（无固定 trust/norm 变化）——
+## 并在目标决策时记录其预测（供预测误差学习）。
 func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var target_id := str(action.get("target_actor", ""))
 	if not actors.has(target_id):
@@ -395,32 +462,88 @@ func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> vo
 		return
 	_emit("food_requested", id, "%s 向 %s 开口要食物" % [a["display_name"], target["display_name"]],
 		{"target_id": target_id})
-	var trust_toward_proposer := relationships.get_trust(target_id, id)
+	var trust_toward_proposer := relationships.composite_trust(target_id, id)
 	var result: Dictionary = SocialSystem.evaluate_food_request(target, a, trust_toward_proposer, _rng)
+	# 目标决策时记录自己的预测（Predict → 之后 Observe → Learn）
+	(target.get("pending_predictions", []) as Array).append({
+		"tick": tick, "about_id": id, "resolve_tick": tick + 24,
+		"my_tile": target["tile"], "about_tile": a["tile"],
+		"predictions": result.get("reactions_forecast", {}),
+	})
 	if bool(result.get("accepted", false)):
 		target["inventory"]["food"] = int(target["inventory"].get("food", 0)) - 1
 		a["inventory"]["food"] = int(a["inventory"].get("food", 0)) + 1
 		a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 200, 0, 1000)
-		relationships.on_help_accepted(target_id, id)
-		# P2: 规范漂移——受助让人相信分享是岛上的活法
-		_drift_norm(a, "sharing", 0.02)
-		_drift_norm(a, "self_reliance", -0.01)
 		_emit("food_request_accepted", target_id,
 			"%s 把食物分给了 %s" % [target["display_name"], a["display_name"]],
 			{"proposer_id": id, "reason": str(result.get("reason", ""))})
 	else:
-		relationships.on_help_declined(target_id, id)
-		# P2: 规范漂移——被拒让人对"同伴该分享"幻灭
-		_drift_norm(a, "sharing", -0.03)
-		_drift_norm(a, "self_reliance", 0.02)
 		_emit("food_request_refused", target_id,
 			"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
 			{"proposer_id": id, "reason": str(result.get("reason", ""))})
 
-func _drift_norm(a: Dictionary, key: String, delta: float) -> void:
-	var norms: Dictionary = a.get("norms", {})
-	if norms.has(key):
-		norms[key] = clampf(float(norms[key]) + delta, 0.0, 1.0)
+## 预测误差学习：解决到期的社会预测——预测 vs 实际观察 → 修正响应模型
+func _resolve_predictions() -> void:
+	for decider_id in actors:
+		var decider: Dictionary = actors[decider_id]
+		var pending: Array = decider.get("pending_predictions", [])
+		var keep: Array = []
+		for pred in pending:
+			if tick < int(pred.get("resolve_tick", 0)):
+				keep.append(pred)
+				continue
+			var about_id := str(pred.get("about_id", ""))
+			if actors.has(about_id):
+				_observe_and_learn(decider, pred, about_id)
+		decider["pending_predictions"] = keep
+
+func _observe_and_learn(decider: Dictionary, pred: Dictionary, about_id: String) -> void:
+	var tom: TheoryOfMind = decider.get("tom", null)
+	if tom == null:
+		return
+	var since := int(pred.get("tick", 0))
+	var predictions: Dictionary = pred.get("predictions", {})
+	if predictions.is_empty():
+		return
+	var observed := {}
+	for e in events:
+		if int(e.get("tick", 0)) <= since:
+			continue
+		var t := str(e.get("type", ""))
+		if t == "food_requested" and str(e.get("actor_id", "")) == about_id:
+			if str(e.get("target_id", "")) == str(decider.get("id", "")):
+				observed["asks_me_again"] = 1.0
+			else:
+				observed["asks_other"] = 1.0
+		elif (t == "shared_food" and str(e.get("actor_id", "")) == about_id and str(e.get("to_id", "")) == str(decider.get("id", ""))) \
+			or (t == "food_request_accepted" and str(e.get("actor_id", "")) == about_id and str(e.get("proposer_id", "")) == str(decider.get("id", ""))):
+			observed["shares_with_me"] = 1.0
+	# 距离观察：她现在比预测时离我更远很多 → 她在回避我
+	if actors.has(about_id):
+		var my_tile: Vector2i = decider["tile"]
+		var her_tile: Vector2i = actors[about_id]["tile"]
+		var dist_now := absi(my_tile.x - her_tile.x) + absi(my_tile.y - her_tile.y)
+		var my_then: Vector2i = pred.get("my_tile", my_tile)
+		var her_then: Vector2i = pred.get("about_tile", her_tile)
+		var dist_then := absi(my_then.x - her_then.x) + absi(my_then.y - her_then.y)
+		if dist_now - dist_then >= 4:
+			observed["avoids_me"] = 1.0
+		elif dist_now - dist_then <= 1:
+			observed["avoids_me"] = 0.0
+	# 误差 → 修正响应模型
+	var total_error := 0.0
+	var n := 0
+	for dim in observed:
+		if not predictions.has(dim):
+			continue
+		var p_val := float(predictions[dim])
+		var o_val := float(observed[dim])
+		var err := absf(p_val - o_val)
+		total_error += err
+		n += 1
+		tom.update_response(about_id, dim, o_val, 0.3 + err * 0.5)
+	if n > 0:
+		tom.record_prediction_error(tick, about_id, total_error / n)
 
 func _do_rest(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 400, 0, 1000)
@@ -434,6 +557,57 @@ func _do_eat(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 350, 0, 1000)
 	_emit("ate_food", id, "%s 吃了些存粮" % a["display_name"], {"food": -1})
 
+func _do_gather_wood(id: String, a: Dictionary, ev: Array) -> void:
+	for tree in world["trees"]:
+		if absi(tree.x - a["tile"].x) + absi(tree.y - a["tile"].y) <= 1:
+			a["inventory"]["wood"] = int(a["inventory"].get("wood", 0)) + 1
+			_emit("gathered_wood", id, "%s 拾了一些柴火" % a["display_name"], {"wood": 1})
+			return
+	_emit("gather_wood_empty", id, "%s 找了一圈，附近没有合适的柴" % a["display_name"], {})
+
+## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）
+func _do_sit_by_fire(id: String, a: Dictionary, ev: Array) -> void:
+	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 200, 0, 1000)
+	a["needs"]["social"] = clampi(int(a["needs"]["social"]) - 80, 0, 1000)
+	# 营地=共同在场：火边有同伴时，这就是社交（同 socialized 事件，下游全兼容）
+	var company: Array = []
+	for other_id in actors:
+		if other_id != id and absi(actors[other_id]["tile"].x - a["tile"].x) + absi(actors[other_id]["tile"].y - a["tile"].y) <= 3:
+			company.append(actors[other_id]["display_name"])
+	if company.size() > 0:
+		a["needs"]["social"] = clampi(int(a["needs"]["social"]) - 150, 0, 1000)
+		_emit("socialized", id, "%s 和 %s 在火边聊了聊天" % [a["display_name"], "、".join(company)], {})
+	else:
+		a["personality"].adjust_emotion("fear", -0.1)
+		_emit("sat_by_fire", id, "%s 独自在篝火边坐了一会儿" % a["display_name"], {})
+
+## 回避：朝远离目标的方向走（不是 fallback——回避是主动的合法行为）
+func _do_keep_distance(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var avoid_id := str(action.get("avoid_of", ""))
+	if not actors.has(avoid_id):
+		return
+	var their: Vector2i = actors[avoid_id]["tile"]
+	var mine: Vector2i = a["tile"]
+	# 候选：沿"远离他"的方向走 3 格
+	var dir := mine - their
+	if dir == Vector2i.ZERO:
+		dir = Vector2i(1, 1)
+	var candidates := [mine + Vector2i(sign(dir.x) * 3, 0), mine + Vector2i(0, sign(dir.y) * 3),
+		mine + Vector2i(sign(dir.x) * 2, sign(dir.y) * 2)]
+	var best: Vector2i = mine
+	var best_dist := absi(mine.x - their.x) + absi(mine.y - their.y)
+	for c in candidates:
+		if c.x < 2 or c.y < 2:
+			continue
+		if map_query.is_walkable_tile(Vector3i(c.x, 0, c.y)):
+			var d := absi(c.x - their.x) + absi(c.y - their.y)
+			if d > best_dist:
+				best_dist = d
+				best = c
+	if best != mine:
+		_move_toward(a, best)
+	_emit("kept_distance", id, "%s 悄悄拉开了距离" % a["display_name"], {"avoid_of": avoid_id})
+
 # ── 系统更新 ──
 
 func _update_world_time() -> void:
@@ -445,10 +619,10 @@ func _update_world_time() -> void:
 	world["is_night"] = int(world_time["hour"]) >= 20 or int(world_time["hour"]) < 6
 
 func _daily_update() -> void:
-	# 浆果丛刷新（稀疏：5 天一茬，岛上养不活三个人——匮乏驱动社交）
+	# 浆果丛刷新（默认 5 天一茬；岛上养不活三个人——匮乏驱动社交）
 	for bush in world["berry_bushes"]:
 		if int(bush["food"]) <= 0 and int(world_time["day"]) >= int(bush.get("regrow_day", 9999)):
-			bush["food"] = 1
+			bush["food"] = int(_economy["berry_food"])
 			bush["regrow_day"] = -1
 	_flatten_resources()
 	# P1: 对他人的旧印象每天淡忘一点（回到中性）
@@ -509,8 +683,7 @@ func _update_weather() -> void:
 		world["weather"] = "storm"
 		_emit("weather_storm", "", "暴风雨来袭！", {})
 		for id in actors:
-			actors[id]["personality"].adjust_emotion("fear", 0.2)
-			actors[id]["physical"]["wet"] = true
+			actors[id]["physical"]["wet"] = true  # 情绪反应由 CognitiveTransition 处理
 	elif roll < 0.15:
 		world["weather"] = "rain"
 	else:
@@ -556,14 +729,19 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 	# P1: 决策需要的社交信息——ToM、对每人的信任、附近有谁（不含他们的隐私状态）
 	var trust_of := {}
 	var others_nearby: Array = []
+	var others_visible: Array = []
 	var others_all: Array = []
 	for other_id in actors:
 		if other_id == id:
 			continue
 		trust_of[other_id] = relationships.get_trust(id, other_id)
-		others_all.append({"id": other_id, "tile": actors[other_id]["tile"]})
+		var otile: Vector2i = actors[other_id]["tile"]
+		others_all.append({"id": other_id, "tile": otile})
+		var d := absi(a["tile"].x - otile.x) + absi(a["tile"].y - otile.y)
+		if d <= 12:
+			others_visible.append({"id": other_id, "tile": otile})  # 喊话/可视范围：求助可以走过去问
 		if other_id in world.get("nearby_" + id, []):
-			others_nearby.append({"id": other_id, "tile": actors[other_id]["tile"]})
+			others_nearby.append({"id": other_id, "tile": otile})
 	return {
 		"id": id,
 		"tile": a["tile"],
@@ -579,8 +757,11 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"tom": a.get("tom", TheoryOfMind.new()),
 		"trust_of": trust_of,
 		"others_nearby": others_nearby,
+		"others_visible": others_visible,
 		"others_all": others_all,
 		"norms": a.get("norms", {}),
+		"social_stance": a.get("social_stance", {}),
+		"grudges": a.get("grudges", {}),
 	}
 
 ## P0: 丰富 DecisionTrace——把 belief/goal/intention/memories 写入
@@ -629,71 +810,28 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		e[k] = extra[k]
 	_seq += 1
 	events.append(e)
-	# 阶段 C：事件触发情绪评价（FAtiMA 式），记忆存储
-	# P1：目击同时更新一阶心智模型（"我看见欧恩采到果子了→他有食物"）
+	# P1.5：目击者一律经 CognitiveTransition 处理——
+	# 主观事件 → 记忆检索 → 评价 → 解释竞争 → 信念/情绪/关系/倾向更新 → 主观记忆。
+	# 禁止任何旁路直接改情绪/信任/规范。
 	for id in actors:
 		var a: Dictionary = actors[id]
 		var is_witness: bool = id == actor_id or _is_nearby(actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO, a["tile"])
 		if is_witness:
-			_appraise_and_react(e, a)
-			_store_memory(a, e)
-			if id != actor_id:
-				TheoryOfMind.observe(a["tom"], e)
+			CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
 	return int(e["seq"])
+
+## 远离目标方向的可行走格（回避用）
+func _away_tile(mine: Vector2i, their: Vector2i) -> Vector2i:
+	var dir := mine - their
+	if dir == Vector2i.ZERO:
+		dir = Vector2i(1, 1)
+	for c in [mine + Vector2i(sign(dir.x) * 3, 0), mine + Vector2i(0, sign(dir.y) * 3), mine + Vector2i(sign(dir.x) * 2, sign(dir.y) * 2)]:
+		if c.x > 2 and c.y > 2 and map_query.is_walkable_tile(Vector3i(c.x, 0, c.y)):
+			return c
+	return mine
 
 func _is_nearby(a: Vector2i, b: Vector2i) -> bool:
 	return absi(a.x - b.x) + absi(a.y - b.y) <= 8
-
-func _appraise_and_react(event: Dictionary, actor: Dictionary) -> void:
-	var p: PersonalityProfile = actor.get("personality", null)
-	if p == null:
-		return
-	var appraisal: Dictionary = AppraisalSystem.appraise(event, actor)
-	if appraisal.is_empty():
-		return
-	var changes: Dictionary = AppraisalSystem.appraisal_to_emotions(appraisal, p)
-	for key in changes:
-		p.adjust_emotion(key, float(changes[key]))
-
-func _store_memory(actor: Dictionary, event: Dictionary) -> void:
-	var type := str(event.get("type", ""))
-	# 只记住重要事件
-	var important_types := ["explored_hurt", "explored_found", "ruins_loot", "shared_food",
-		"weather_storm", "food_requested", "food_request_accepted", "food_request_refused"]
-	if not important_types.has(type):
-		return
-	# P1: 记忆带"对手方"，并从我的视角归一化类型。
-	# 关键区分："我拒绝了他"(i_refused_request) ≠ "他拒绝了我"(food_request_refused)——
-	# 反思系统据此统计恩怨，混淆会让拒绝者反过来记恨求助者。
-	var me := str(actor.get("id", ""))
-	var counterpart := ""
-	var my_type := type
-	if me == str(event.get("actor_id", "")):
-		counterpart = str(event.get("to_id", event.get("proposer_id", event.get("target_id", ""))))
-		if type == "shared_food":
-			my_type = "i_shared_food"            # 我分给了他
-		elif type == "food_request_accepted":
-			my_type = "i_shared_on_request"      # 他求我，我答应了
-		elif type == "food_request_refused":
-			my_type = "i_refused_request"        # 他求我，我拒绝了
-	elif me == str(event.get("proposer_id", "")):
-		counterpart = str(event.get("actor_id", ""))
-		# food_request_accepted → 他帮了我；food_request_refused → 他拒绝了我（类型保留）
-	elif me == str(event.get("to_id", "")):
-		counterpart = str(event.get("actor_id", ""))
-		if type == "shared_food":
-			my_type = "shared_food_to_me"  # 从受助者视角：有人分给了我
-	var mem := {
-		"seq": int(event.get("seq", 0)),
-		"tick": int(event.get("tick", 0)),
-		"type": my_type,
-		"text": str(event.get("text", "")),
-		"actor_id": str(event.get("actor_id", "")),
-		"counterpart_id": counterpart,
-	}
-	actor["memories"].append(mem)
-	if actor["memories"].size() > 20:
-		actor["memories"].pop_front()
 
 # ── 查询接口 ──
 

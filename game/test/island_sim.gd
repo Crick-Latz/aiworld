@@ -89,13 +89,16 @@ func _run_all_tests() -> void:
 	_check("needs_decaying", any_need_changed, "needs should have changed from initial values")
 
 	# ── 4. 情绪在变化 ──
+	# P1.5：情绪严格由评价产生、按韧性衰减——全程采样，而非只看末刻
 	var any_emotion := false
-	for id in sim.actors:
-		var e: Dictionary = sim.actors[id]["personality"].emotions
-		for key in e:
-			if float(e[key]) != 0.0 and key != "trust_open":
-				any_emotion = true
-	_check("emotions_tracking", any_emotion, "some emotion should be non-zero after 300 ticks")
+	for i in 300:
+		sim.step()
+		for id in sim.actors:
+			var e: Dictionary = sim.actors[id]["personality"].emotions
+			for key in e:
+				if float(e[key]) != 0.0 and key != "trust_open":
+					any_emotion = true
+	_check("emotions_tracking", any_emotion, "some emotion should spike during 600 ticks")
 
 	# ── 5. 性格影响身体状态修饰 ──
 	var weila_p: PersonalityProfile = sim.actors["npc_weila"]["personality"]

@@ -8,54 +8,177 @@
       "id": "npc_weila",
       "name": "薇拉",
       "traits": {
-        "resilience": 0.85, "curiosity": 0.75, "action_bias": 0.80, "caution": 0.30,
-        "empathy": 0.65, "sociability": 0.60, "altruism": 0.55, "expressiveness": 0.85,
-        "conflict_avoidance": 0.30, "pragmatism": 0.50
+        "resilience": 0.85,
+        "curiosity": 0.75,
+        "action_bias": 0.8,
+        "caution": 0.3,
+        "empathy": 0.65,
+        "sociability": 0.6,
+        "altruism": 0.55,
+        "expressiveness": 0.85,
+        "conflict_avoidance": 0.3,
+        "pragmatism": 0.5
       },
-      "beliefs": { "活着就有希望": 0.9, "知识就是生存的资本": 0.7, "坐等救援是死路一条": 0.6 },
-      "norms": { "sharing": 0.55, "self_reliance": 0.35, "reciprocity": 0.6 },
+      "beliefs": {
+        "活着就有希望": 0.9,
+        "知识就是生存的资本": 0.7,
+        "坐等救援是死路一条": 0.6
+      },
+      "norms": {
+        "personal": {
+          "sharing": 0.55,
+          "self_reliance": 0.35,
+          "reciprocity": 0.6
+        },
+        "descriptive": {
+          "sharing": 0.5,
+          "reciprocity": 0.5
+        },
+        "injunctive": {
+          "sharing": 0.55
+        }
+      },
       "life_history": [
-        { "age": 12, "type": "cooperation_success", "desc": "第一次海难时全村合力救了她" },
-        { "age": 19, "type": "rescue", "desc": "被商船船长从海里救起并收留" },
-        { "age": 24, "type": "loss", "desc": "第二次海难中失去了最好的朋友" }
+        {
+          "age": 12,
+          "type": "cooperation_success",
+          "desc": "第一次海难时全村合力救了她"
+        },
+        {
+          "age": 19,
+          "type": "rescue",
+          "desc": "被商船船长从海里救起并收留"
+        },
+        {
+          "age": 24,
+          "type": "loss",
+          "desc": "第二次海难中失去了最好的朋友"
+        }
       ],
-      "inventory": {"food": 1}
+      "inventory": {
+        "food": 1
+      }
     },
     {
       "id": "npc_oun",
       "name": "缄默者欧恩",
       "traits": {
-        "resilience": 0.50, "curiosity": 0.15, "action_bias": 0.40, "caution": 0.85,
-        "empathy": 0.40, "sociability": 0.20, "altruism": 0.30, "expressiveness": 0.15,
-        "conflict_avoidance": 0.70, "pragmatism": 0.90
+        "resilience": 0.5,
+        "curiosity": 0.15,
+        "action_bias": 0.4,
+        "caution": 0.85,
+        "empathy": 0.4,
+        "sociability": 0.2,
+        "altruism": 0.3,
+        "expressiveness": 0.15,
+        "conflict_avoidance": 0.7,
+        "pragmatism": 0.9
       },
-      "beliefs": { "只有自己靠得住": 0.8, "食物是命": 0.9, "话多的人死得快": 0.5 },
-      "norms": { "sharing": 0.15, "self_reliance": 0.9, "reciprocity": 0.75 },
+      "beliefs": {
+        "只有自己靠得住": 0.8,
+        "食物是命": 0.9,
+        "话多的人死得快": 0.5
+      },
+      "norms": {
+        "personal": {
+          "sharing": 0.15,
+          "self_reliance": 0.9,
+          "reciprocity": 0.75
+        },
+        "descriptive": {
+          "sharing": 0.4,
+          "reciprocity": 0.5
+        },
+        "injunctive": {
+          "sharing": 0.3
+        }
+      },
       "life_history": [
-        { "age": 17, "type": "famine", "desc": "经历海上饥荒，弟弟死于饥饿" },
-        { "age": 18, "type": "authority_abuse", "desc": "船长公开承诺公平分配却私藏储备" },
-        { "age": 20, "type": "betrayal", "desc": "信任的同伴偷了他的口粮后消失" },
-        { "age": 26, "type": "rescue", "desc": "被船长救过一次" },
-        { "age": 31, "type": "cooperation_success", "desc": "曾偷偷救下一名病重的船员" }
+        {
+          "age": 17,
+          "type": "famine",
+          "desc": "经历海上饥荒，弟弟死于饥饿"
+        },
+        {
+          "age": 18,
+          "type": "authority_abuse",
+          "desc": "船长公开承诺公平分配却私藏储备"
+        },
+        {
+          "age": 20,
+          "type": "betrayal",
+          "desc": "信任的同伴偷了他的口粮后消失"
+        },
+        {
+          "age": 26,
+          "type": "rescue",
+          "desc": "被船长救过一次"
+        },
+        {
+          "age": 31,
+          "type": "cooperation_success",
+          "desc": "曾偷偷救下一名病重的船员"
+        }
       ],
-      "inventory": {"food": 3, "knife": 1}
+      "inventory": {
+        "food": 3,
+        "knife": 1
+      }
     },
     {
       "id": "npc_kadga",
       "name": "卡德加",
       "traits": {
-        "resilience": 0.60, "curiosity": 0.40, "action_bias": 0.60, "caution": 0.45,
-        "empathy": 0.80, "sociability": 0.85, "altruism": 0.70, "expressiveness": 0.60,
-        "conflict_avoidance": 0.85, "pragmatism": 0.55
+        "resilience": 0.6,
+        "curiosity": 0.4,
+        "action_bias": 0.6,
+        "caution": 0.45,
+        "empathy": 0.8,
+        "sociability": 0.85,
+        "altruism": 0.7,
+        "expressiveness": 0.6,
+        "conflict_avoidance": 0.85,
+        "pragmatism": 0.55
       },
-      "beliefs": { "三个人一起才能活下去": 0.95, "我有手艺我是有用的": 0.8, "欧恩其实不坏只是不善表达": 0.4 },
-      "norms": { "sharing": 0.85, "self_reliance": 0.2, "reciprocity": 0.8 },
+      "beliefs": {
+        "三个人一起才能活下去": 0.95,
+        "我有手艺我是有用的": 0.8,
+        "欧恩其实不坏只是不善表达": 0.4
+      },
+      "norms": {
+        "personal": {
+          "sharing": 0.85,
+          "self_reliance": 0.2,
+          "reciprocity": 0.8
+        },
+        "descriptive": {
+          "sharing": 0.6,
+          "reciprocity": 0.6
+        },
+        "injunctive": {
+          "sharing": 0.75
+        }
+      },
       "life_history": [
-        { "age": 8, "type": "loss", "desc": "父亲出海未归" },
-        { "age": 15, "type": "cooperation_success", "desc": "全村帮他家重建被台风摧毁的房子" },
-        { "age": 28, "type": "cooperation_success", "desc": "与工友协作修好了被认为不可能修好的船" }
+        {
+          "age": 8,
+          "type": "loss",
+          "desc": "父亲出海未归"
+        },
+        {
+          "age": 15,
+          "type": "cooperation_success",
+          "desc": "全村帮他家重建被台风摧毁的房子"
+        },
+        {
+          "age": 28,
+          "type": "cooperation_success",
+          "desc": "与工友协作修好了被认为不可能修好的船"
+        }
       ],
-      "inventory": {"wood": 2}
+      "inventory": {
+        "wood": 2
+      }
     }
   ]
 }

@@ -1,25 +1,25 @@
 class_name SocialSystem
 extends RefCounted
-## 社会提案协议（P1）：一次社交互动 = 两次独立决策。
-##   提议者：基于自己的需求 + 对目标的 ToM 信念（"他应该有食物"）发起请求
-##   目标：  基于自己的库存 + 对提议者的信任/ToM + 人格（利他/共情/自身饥饿）回应
-## 拒绝不是"失败"，是戏剧的开始：拒绝 → 提议者愤怒/悲伤 → 信任下降
-## → 下次不再找他 → 关系裂痕。接受则相反。没有任何剧本，全是各自立场的涌现。
-##
+## 社会提案协议：一次社交互动 = 两次独立决策 + 两次独立预测。
+##   提议者：基于需求 + ToM（"他应该有食物"）发起，预期效用经 ActionForecaster 计算
+##   目标：  库存 + 信任 + 人格 + 个人/命令性规范 + 预测的社会成本/收益 独立回应
 ## 本类只做纯评估，不改世界状态——效果应用在 IslandSimulation 层（保持模块边界）。
+## P1.5：目标决策时产出 reactions_forecast（预测），由模拟层记录并事后验证（预测误差学习）。
 
 const MIN_FOOD_TO_SPARE := 2  # 少于 2 份时"分享"就威胁自身生存
 
 ## 目标评估是否接受食物请求。
-## 返回 { accepted: bool, weight: float, reason: String }
-## weight 是接受倾向（0..1 概率化前的值），reason 供 DecisionTrace/事件文案用。
+## 返回 { accepted, weight, reason, reactions_forecast }
 static func evaluate_food_request(target: Dictionary, proposer: Dictionary, trust_toward_proposer: int, rng: RandomNumberGenerator) -> Dictionary:
 	var inv_food := int(target.get("inventory", {}).get("food", 0))
-	if inv_food < MIN_FOOD_TO_SPARE:
-		return {"accepted": false, "weight": 0.0, "reason": "自己也不够吃"}
 	var p: PersonalityProfile = target.get("personality", null)
+	var proposer_id := str(proposer.get("id", ""))
 	if p == null:
-		return {"accepted": false, "weight": 0.0, "reason": "……"}
+		return {"accepted": false, "weight": 0.0, "reason": "……", "reactions_forecast": {}}
+	# 预测他的反应（记录下来，24 tick 后对照实际 → 修正响应模型）
+	var forecast := ActionForecaster.forecast_reactions(target, proposer_id)
+	if inv_food < MIN_FOOD_TO_SPARE:
+		return {"accepted": false, "weight": 0.0, "reason": "自己也不够吃", "reactions_forecast": forecast}
 
 	var needs: Dictionary = target.get("needs", {})
 	var altruism := p.effective_trait("altruism", needs)
@@ -27,27 +27,33 @@ static func evaluate_food_request(target: Dictionary, proposer: Dictionary, trus
 	var own_hunger := clampf(float(needs.get("hunger", 0)) / 1000.0, 0.0, 1.0)
 	var trust_f := clampf(float(trust_toward_proposer) / 400.0, -1.0, 1.0)
 
-	# ToM：目标对提议者的"可靠"认知（他是不是蹭吃蹭喝的人）
+	# ToM：目标对提议者的"可靠"认知
 	var tom: TheoryOfMind = target.get("tom", null)
 	var reliable := 0.0
 	if tom != null:
-		reliable = tom.belief_about(str(proposer.get("id", "")), "reliable")
+		reliable = tom.belief_about(proposer_id, "reliable")
 
-	# 一阶心智：如果目标看得见提议者真的很饿（需求字段在场），共情放大
+	# 一阶心智：看得见的苦处才打动人
 	var proposer_hunger := clampf(float(proposer.get("needs", {}).get("hunger", 0)) / 1000.0, 0.0, 1.0)
-	var visible_need := proposer_hunger * empathy  # 看得见的苦处才打动人
+	var visible_need := proposer_hunger * empathy
 
-	# P2: 内化规范——"同伴该分享"的人拒绝时过不了自己那关；
-	# "人得自立"的人觉得纵容乞食反而是害他
+	# 规范三层：personal（我该分享）+ injunctive（大家会谴责自私）
 	var norms: Dictionary = target.get("norms", {})
-	var sharing_norm: float = float(norms.get("sharing", 0.5))
-	var self_reliance_norm: float = float(norms.get("self_reliance", 0.5))
+	var personal: Dictionary = norms.get("personal", norms)  # 旧扁平格式兼容
+	var sharing_norm: float = float(personal.get("sharing", 0.5))
+	var self_reliance_norm: float = float(personal.get("self_reliance", 0.5))
+	var injunctive: float = float(norms.get("injunctive", {}).get("sharing", 0.5))
 
-	var weight := 0.25 + altruism * 0.4 + empathy * 0.1 + trust_f * 0.3 + reliable * 0.15 \
-		+ visible_need * 0.3 - own_hunger * 0.6 \
-		+ sharing_norm * 0.25 - self_reliance_norm * 0.15
+	# 预测后果的社会权衡（P1.5 第二刀）：拒绝的预期社会成本 / 接受的预期收益
+	var refusal_cost := ActionForecaster.refusal_social_cost(target, p, proposer_id)
+	var accept_gain := ActionForecaster.acceptance_social_gain(target, proposer_id)
 
-	# 受限理性：不是硬阈值，带噪声的倾向（同一处境不同 roll 可能不同回应）
+	var weight := 0.25 + altruism * 0.35 + empathy * 0.1 + trust_f * 0.25 + reliable * 0.1 \
+		+ visible_need * 0.3 - own_hunger * 0.55 \
+		+ sharing_norm * 0.2 + injunctive * 0.1 - self_reliance_norm * 0.12 \
+		+ accept_gain * 0.25 - refusal_cost * 0.35
+
+	# 受限理性：不是硬阈值，带噪声的倾向
 	var roll := rng.randf()
 	var accepted := roll < clampf(weight, 0.0, 0.95)
 	var reason := ""
@@ -60,24 +66,26 @@ static func evaluate_food_request(target: Dictionary, proposer: Dictionary, trus
 			reason = "自己也快饿晕了"
 		else:
 			reason = "犹豫了一下还是收回了手"
-	return {"accepted": accepted, "weight": clampf(weight, -1.0, 1.0), "reason": reason}
+	return {"accepted": accepted, "weight": clampf(weight, -1.0, 1.0), "reason": reason, "reactions_forecast": forecast}
 
-## 提议者挑选请求目标：ToM"他应该有食物" + 信任过滤。
-## 返回 target_id 或 ""（没人值得开口）。
+## 提议者挑选请求目标：ToM"他应该有食物" + 信任过滤 + 回避倾向过滤。
 static func pick_request_target(proposer: Dictionary, nearby_infos: Array, trust_of: Dictionary) -> String:
 	var tom: TheoryOfMind = proposer.get("tom", null)
 	if tom == null or nearby_infos.is_empty():
 		return ""
+	var stance: Dictionary = proposer.get("social_stance", {})
 	var best_id := ""
-	var best_score := 0.1  # 低于这个值不值得开口
+	var best_score := 0.1
 	for o in nearby_infos:
 		var oid := str(o.get("id", ""))
 		if oid == "":
 			continue
 		var t := int(trust_of.get(oid, 0))
 		if t <= RelationshipStore.TRUST_THRESHOLD_LOW:
-			continue  # 深度不信任的人，饿死也不求他（除非……这是 P2 的钩子）
-		var has_food := tom.belief_about(oid, "has_food")
+			continue
+		if float(stance.get(oid, 0.0)) > 0.6:
+			continue  # 我已倾向回避此人，饿死也不求他（解释系统写入的倾向）
+		var has_food := tom.raw_belief(oid, "has_food")  # 挑目标看证据方向；把握程度进预测器
 		var trust_f := clampf(float(t) / 400.0, -1.0, 1.0)
 		var score := has_food * 0.65 + trust_f * 0.35
 		if score > best_score:
