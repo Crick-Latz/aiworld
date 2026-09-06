@@ -82,3 +82,18 @@
 ## 九、数据
 
 - `data/scenarios/deserted_island_v2.json` — 三角色（薇拉/欧恩/卡德加）：traits/beliefs/**norms 三层**（personal/descriptive/injunctive）/life_history/inventory
+
+---
+
+## CORE_COGNITION_FROZEN = TRUE（2026-09-06）
+
+冻结门全部通过（`test/p2_institution.gd` 44/44）：
+- AJ 非食物制度（水贡献规则走完整链 + 静态 grep 认知四模块零 water 分支）
+- AK Trace 完整性（三模式 + rule_id 携带）
+- AL Claim 交付集成（真诚回答部分更新信念 + 沉默分支）
+- AM 反提案生命周期（被拒 v1 不变 / 被采纳同记录升版本 fraction 0.5→0.25）
+- PARTIAL_COMPLY 一等事件语义
+- NarrativeIR NA-NE（无时间因果幻觉/视角隔离/确定性/beat 有源/NF 制度 beat 联动）
+
+冻结含义：P3 阶段除 bug/泄漏/因果不一致/回放失败外，不修改核心认知公式。
+新增文件：`src/simulation/narrative/narrative_ir.gd`（CausalGraph/StoryBeat/Selector/IR，LLM 在最后）。

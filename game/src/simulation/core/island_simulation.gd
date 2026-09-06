@@ -353,7 +353,7 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_seek_person(id, a, action, new_events)
 		"relocate":
 			_do_relocate(id, a, action, new_events)
-		"propose_rule":
+		"propose_rule", "counter_propose_rule":
 			_do_propose_rule(id, a, action, new_events)
 		"keep_distance":
 			_do_keep_distance(id, a, action, new_events)
@@ -569,6 +569,7 @@ func _do_relocate(id: String, a: Dictionary, action: Dictionary, ev: Array) -> v
 ## P2b 规则提议执行：公共讨论（PublicEvent）→ 各人独立表态 → InstitutionRecord
 ## 规则建立只记录客观事实"被正式建立过"；每个 NPC 的认知仍走 PerceivedGroupBelief
 func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	# P2.1 Gate5: counter 意图也走同一条公共讨论管线（is_counter 标记，被拒不改世界，被采纳升版本）
 	var object_id := str(action.get("object", "food"))
 	var fraction: float = float(action.get("fraction", 0.5))
 	var goal_kind := str(action.get("goal_kind", ""))
@@ -608,7 +609,7 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 			RuleDiscourse.witness_stance(actors[wid], rule, other_id2, int(stance_records[other_id2]), audience.size() + 1, tick)
 	# P2.1.1 事务式：先表决后改世界——被否决的提案绝不触碰 InstitutionRecord（修"先改后查"倒序）
 	var adopted := public_supports >= 2
-	if goal_kind == "amend" and adopted:
+	if (goal_kind == "amend" or goal_kind == "counter_propose") and adopted:
 		for inst in institutions:
 			if str(inst["rule"].get("object", "")) == object_id:
 				inst["rule"]["fraction"] = fraction
@@ -616,7 +617,7 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 				break
 		_emit("rule_revised", id, "%s 的修订提议通过：比例改为 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction})
 	# InstitutionRecord（P2.1.1 去重：同 object 已有活制度不重复建立——修 729/629 膨胀）
-	if adopted and goal_kind != "amend":
+	if adopted and goal_kind != "amend" and goal_kind != "counter_propose":
 		var already := false
 		for inst in institutions:
 			if str(inst["rule"].get("object", "")) == object_id:

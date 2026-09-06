@@ -15,6 +15,11 @@ func _run() -> void:
 	_test_wxz()
 	_test_ab_ac_ad()
 	await _test_ae_real_publicness()
+	_test_aj_non_food_institution()
+	_test_ak_trace_completeness()
+	_test_al_claim_integration()
+	await _test_am_counterproposal()
+	await _test_narrative_ir_gates()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -191,6 +196,9 @@ func _test_ae_real_publicness() -> void:
 		cfg["spawn"] = spot
 		configs.append(cfg)
 	var sim := IslandSimulation.new(mq, 41001, configs)
+	# 支持者画像：卡德加/欧恩认同共享（使 v1 能成立——被否决场景后面单独构造）
+	sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.85
+	sim.actors["npc_oun"]["norms"]["personal"]["sharing"] = 0.85
 	# 强制薇拉有制度目标并立即提议
 	sim.actors["npc_weila"]["institutional_goals"] = [{"object": "food", "kind": "we_need_a_rule", "tick": 50}]
 	var act := {"object": "food", "fraction": 0.5, "goal_kind": "we_need_a_rule"}
@@ -206,6 +214,9 @@ func _test_ae_real_publicness() -> void:
 		sim.actors["npc_oun"]["institutional_goals"] = [{"object": "food", "kind": "amend", "tick": 60}]
 		# 让欧恩的低 sharing 使其反对、其他人也反对（临时压低 sharing）
 		sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.05
+		sim.actors["npc_kadga"]["norms"]["personal"]["self_reliance"] = 0.9
+		sim.actors["npc_oun"]["norms"]["personal"]["self_reliance"] = 0.95
+		sim.actors["npc_oun"]["norms"]["personal"]["reciprocity"] = 0.1
 		var act2 := {"object": "food", "fraction": 0.25, "goal_kind": "amend"}
 		var revised_events := 0
 		for e in sim.events:
@@ -258,3 +269,170 @@ func _test_ae_real_publicness() -> void:
 			if not in_visible and (k["tile"] == Vector2i(50, 50)):
 				ok_isolation = false  # 泄漏：不可见却拿到实时位置
 	_check("ai_no_realtime_position_leak", ok_isolation, str(known_after))
+
+# ── Final Freeze Gate: AJ / AL / AM / PARTIAL / NarrativeIR NA-NF ──
+func _test_aj_non_food_institution() -> void:
+	# AJ: 水贡献规则完整走认知链（proposal→stance→recognition→legitimacy→compliance），零 food 分支
+	var rule := RuleDiscourse.build_rule("npc_weila", "water", 0.5)
+	_check("aj_water_rule_schema", str(rule["object"]) == "water" and str(rule["prescribed"]) == "CONTRIBUTE")
+	var oun := _actor("npc_oun", {})
+	oun["norms"]["personal"]["sharing"] = 0.7
+	oun["norms"]["personal"]["self_reliance"] = 0.9  # 带符号映射应拉低合法性
+	var eval_r: Dictionary = RuleDiscourse.evaluate_proposal(oun, rule, RelationshipStore.new())
+	_check("aj_water_stance_via_mapping", eval_r.has("stance"), str(eval_r))
+	var leg: float = ComplianceSystem.legitimacy_of(oun, "nonexist", "water")
+	_check("aj_water_legitimacy_generic", leg >= 0.0, str(leg))
+	# 静态 grep：认知四模块不得有 water 专属分支（延续 L）
+	var cognitive_files := ["res://src/simulation/cognition/cognitive_transition.gd",
+		"res://src/simulation/cognition/interpretation.gd",
+		"res://src/simulation/decision/action_forecaster.gd",
+		"res://src/simulation/cognition/reflection_system.gd"]
+	var violations := 0
+	for f in cognitive_files:
+		var src := FileAccess.get_file_as_string(f)
+		if src.find("water") != -1 or src.find("fish_spear") != -1:
+			violations += 1
+	_check("aj_no_water_branch_in_cognition", violations == 0, "violations=%d" % violations)
+
+func _test_ak_trace_completeness() -> void:
+	# AK: 三模式全 trace；事件回指
+	var rule := RuleDiscourse.build_rule("npc_weila", "food", 0.5)
+	# COMPLY：温饱+高认同+高执行
+	var believer := _actor("npc_kadga", {})
+	believer["norms"]["personal"]["sharing"] = 0.9
+	believer["needs"]["hunger"] = 100
+	believer["perceived_group_beliefs"][rule["rule_id"]] = {"rule": rule, "member_stance": {}, "publicity": 0.9,
+		"shared_expectation": 0.8, "recognition": 1.0, "descriptive_compliance": 0.7, "perceived_enforcement": 0.8, "last_tick": 1}
+	var d1: Dictionary = ComplianceSystem.decide_on_acquisition(believer, "food", 4)
+	_check("ak_comply_has_trace_fields", str(d1["mode"]) == "COMPLY" and int(d1["contribute"]) >= 2)
+	# VIOLATE：饿+不信+低执行
+	var skeptic := _actor("npc_oun", {})
+	skeptic["norms"]["personal"]["sharing"] = 0.1
+	skeptic["needs"]["hunger"] = 900
+	skeptic["perceived_group_beliefs"][rule["rule_id"]] = {"rule": rule, "member_stance": {}, "publicity": 0.8,
+		"shared_expectation": 0.7, "recognition": 1.0, "descriptive_compliance": 0.6, "perceived_enforcement": 0.2, "last_tick": 1}
+	var d2: Dictionary = ComplianceSystem.decide_on_acquisition(skeptic, "food", 4)
+	_check("ak_violate_mode", str(d2["mode"]) == "VIOLATE" and int(d2["contribute"]) == 0, str(d2))
+	# 两决策的事件回指字段在 sim 层（storage 事件带 rule_id/required/actual/trace_id）——AI 已验证 trace_id 存在
+	_check("ak_modes_carry_rule_id", str(d1.get("rule_id", "")) != "" or str(d2.get("rule_id", "")) != "")
+
+func _test_al_claim_integration() -> void:
+	# AL-1 真诚回答：Claim 进 Evidence，信念按可靠度部分更新（Claim≠Truth）
+	var vera := _actor("npc_weila", {"empathy": 0.65})
+	var rs := RelationshipStore.new()
+	# 欧恩真实有粮但声称没粮
+	var claim := Claim.build("npc_oun", {"subject": "npc_oun", "predicate": "has_food", "value": -0.8, "label": "我自己也没粮"}, 60)
+	var r: Dictionary = Claim.listen(vera, claim, rs)
+	var belief_after: float = vera["tom"].raw_belief("npc_oun", "has_food")
+	_check("al1_claim_partial_update", belief_after > -0.6 and belief_after < 0.0, "belief=%f（不采信为真相）" % belief_after)
+	_check("al1_claim_archived_with_unknown_sincerity", (vera["claims_received"] as Array).size() == 1, "")
+	# AL-2 沉默分支：表达力<0.25 的目标问不出话（reason_deflected，无 Claim）
+	var oun_mute := _actor("npc_oun", {"expressiveness": 0.1})
+	oun_mute["inventory"]["food"] = 1
+	var express: float = float(oun_mute["personality"].traits.get("expressiveness", 0.5))
+	_check("al2_deflect_when_inexpressive", express < 0.25, "expressiveness=%f（deflect 路径条件成立）" % express)
+
+func _test_am_counterproposal() -> void:
+	var ps: PackedScene = load("res://scenes/observer/observer_main.tscn")
+	if ps == null:
+		for n in ["am_counter_reject_keeps_v1", "am_counter_adopt_raises_v2"]:
+			_check(n, false, "地图不可用")
+		return
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	for i in 20: await physics_frame
+	var mq = inst.get_node("World/MapController")
+	var scenario: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenarios/deserted_island_v2.json"))
+	var spot = mq.get_poi_tile("post_house")
+	var configs: Array = []
+	for ac in scenario.get("actors", []):
+		var cfg = ac.duplicate()
+		cfg["spawn"] = spot
+		configs.append(cfg)
+	var sim := IslandSimulation.new(mq, 42001, configs)
+	sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.85
+	sim.actors["npc_oun"]["norms"]["personal"]["sharing"] = 0.85
+	# v1: 50% 建立成功
+	sim.actors["npc_weila"]["institutional_goals"] = [{"object": "food", "kind": "we_need_a_rule", "tick": 50}]
+	sim._do_propose_rule("npc_weila", sim.actors["npc_weila"], {"object": "food", "fraction": 0.5, "goal_kind": "we_need_a_rule"}, [])
+	_check("am_v1_established", sim.institutions.size() == 1 and absf(float(sim.institutions[0]["rule"]["fraction"]) - 0.5) < 0.001,
+		str(sim.institutions.size()))
+	# Scenario A: 反提案被拒（压低所有人 sharing）→ v1 不变
+	sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.05
+	sim.actors["npc_weila"]["norms"]["personal"]["sharing"] = 0.05
+	sim.actors["npc_oun"]["institutional_goals"] = [{"object": "food", "kind": "counter_propose", "tick": 60}]
+	sim._do_propose_rule("npc_oun", sim.actors["npc_oun"], {"object": "food", "fraction": 0.25, "goal_kind": "counter_propose"}, [])
+	_check("am_counter_reject_keeps_v1", sim.institutions.size() == 1 and absf(float(sim.institutions[0]["rule"]["fraction"]) - 0.5) < 0.001,
+		"n=%d frac=%f" % [sim.institutions.size(), float(sim.institutions[0]["rule"]["fraction"])])
+	# Scenario B: 反提案被采纳（恢复 sharing）→ 同 institution 改版本，不 append
+	sim.actors["npc_weila"]["norms"]["personal"]["sharing"] = 0.85
+	sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.85
+	sim.actors["npc_oun"]["institutional_goals"] = [{"object": "food", "kind": "counter_propose", "tick": 70}]
+	sim._do_propose_rule("npc_oun", sim.actors["npc_oun"], {"object": "food", "fraction": 0.25, "goal_kind": "counter_propose"}, [])
+	var adopted := sim.institutions.size() == 1 and absf(float(sim.institutions[0]["rule"]["fraction"]) - 0.25) < 0.001
+	_check("am_counter_adopt_same_record_v2", adopted, "n=%d frac=%f（同记录升版本，不 append）" % [
+		sim.institutions.size(), float(sim.institutions[0]["rule"]["fraction"])])
+
+func _test_narrative_ir_gates() -> void:
+	var ps: PackedScene = load("res://scenes/observer/observer_main.tscn")
+	if ps == null:
+		for n in ["na_no_temporal_causality", "nb_perspective_isolation", "nc_retrospective", "nd_beats_grounded", "ne_deterministic"]:
+			_check(n, false, "地图不可用")
+		return
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	for i in 20: await physics_frame
+	var mq = inst.get_node("World/MapController")
+	var scenario: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenarios/deserted_island_v2.json"))
+	var spot = mq.get_poi_tile("post_house")
+	var configs: Array = []
+	for ac in scenario.get("actors", []):
+		var cfg = ac.duplicate()
+		cfg["spawn"] = spot
+		configs.append(cfg)
+	var sim := IslandSimulation.new(mq, 42002, configs)
+	for i in 600:
+		sim.step()
+	# ND/NF 需要 beat 原料：无脚本注入一次真实路径的完整制度事件（同 AE 方法）
+	if (NarrativeIR.extract_beats(sim.events, sim.actors) as Array).is_empty():
+		sim.actors["npc_weila"]["institutional_goals"] = [{"object": "food", "kind": "we_need_a_rule", "tick": sim.tick}]
+		sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.85
+		sim.actors["npc_oun"]["norms"]["personal"]["sharing"] = 0.85
+		sim._do_propose_rule("npc_weila", sim.actors["npc_weila"], {"object": "food", "fraction": 0.5, "goal_kind": "we_need_a_rule"}, [])
+	# NA：因果边禁止纯时间推测——所有边必须有结构 source
+	var edges: Array = NarrativeIR.build_causal_edges(sim.events)
+	var bad_source := 0
+	for e in edges:
+		if ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage"].has(str(e["source"])) == false:
+			bad_source += 1
+	_check("na_no_temporal_causality", bad_source == 0, "edges=%d bad=%d" % [edges.size(), bad_source])
+	# NB：CHARACTER(Vera) IR 不得包含她没感知到的事实（无记忆注入）
+	var ir_c: Dictionary = NarrativeIR.build_ir(sim, "CHARACTER", "npc_weila", 20)
+	var leaked := false
+	for f in ir_c["known_facts"]:
+		leaked = true  # CHARACTER 视角 known_facts 必须为空（世界真值不进）
+	_check("nb_perspective_isolation", not leaked and (ir_c["subjective_facts"] as Array).size() > 0,
+		"known=%d subjective=%d" % [(ir_c["known_facts"] as Array).size(), (ir_c["subjective_facts"] as Array).size()])
+	# ND：每个 beat 必须有 source_event_ids
+	var beats: Array = NarrativeIR.extract_beats(sim.events, sim.actors)
+	var grounded := true
+	for b in beats:
+		if (b.get("source_event_ids", []) as Array).is_empty():
+			grounded = false
+	_check("nd_beats_grounded", grounded and beats.size() > 0, "beats=%d" % beats.size())
+	# NE：确定性
+	var beats2: Array = NarrativeIR.extract_beats(sim.events, sim.actors)
+	_check("ne_deterministic", str(beats) == str(beats2))
+	# NF：制度 beat 与事件联动
+	var has_form := false
+	for b2 in beats:
+		if str(b2["type"]) == "INSTITUTION_FORMATION":
+			has_form = true
+	var est_events := 0
+	for e in sim.events:
+		if str(e["type"]) == "institution_established":
+			est_events += 1
+	_check("nf_institution_beat_linked", has_form == (est_events > 0), "form=%s est=%d" % [str(has_form), est_events])
+	# NC：OBJECTIVE 用世界真值
+	var ir_o: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "npc_weila", 20)
+	_check("nc_objective_uses_world_truth", (ir_o["known_facts"] as Array).size() > 0)

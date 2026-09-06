@@ -1,5 +1,12 @@
 class_name RuleDiscourse
 extends RefCounted
+
+## P2.1.1 Gate 19：与 ComplianceSystem 同一套带符号价值映射（单一事实源语义，双处常量）
+const VALUE_MAPPING := {
+	"CONTRIBUTE": {"sharing": 1.0, "reciprocity": 0.5, "self_reliance": -0.7},
+	"OBEY": {"self_reliance": 0.3, "reciprocity": 0.4},
+	"DISCLOSE": {"reciprocity": 0.8, "self_reliance": -0.2},
+}
 ## P2b 公共性与规则提议（Institutional Cognition 第二层）：
 ## 核心科研假设——制度的真正产生点不是"多数人支持"，
 ## 而是私人信念跨过 Publicness 变成 Shared Expectation 的那一刻：
@@ -70,7 +77,15 @@ static func evaluate_proposal(actor: Dictionary, rule: Dictionary, relationships
 	var p: PersonalityProfile = actor.get("personality", null)
 	if p == null:
 		return {"stance": 0, "counter_fraction": fraction, "reason": "?"}
-	var personal: float = float(actor.get("norms", {}).get("personal", {}).get("sharing", 0.5))
+	# P2.1.1 Gate 19：提案评估复用带符号 RuleValueMapping（与 Compliance 同一价值语义）
+	var mapping: Dictionary = VALUE_MAPPING.get(str(rule.get("prescribed", "CONTRIBUTE")), {"sharing": 1.0})
+	var personal_norms: Dictionary = actor.get("norms", {}).get("personal", {})
+	var value_alignment := 0.0
+	var wsum := 0.0
+	for v in mapping:
+		value_alignment += float(personal_norms.get(v, 0.5)) * float(mapping[v])
+		wsum += absf(float(mapping[v]))
+	var personal: float = clampf(value_alignment / maxf(wsum, 0.1) * 0.5 + 0.5, 0.0, 1.0)
 	# 预期他人遵守：来自我对大家的约定观察
 	var expected_compliance := ConventionSystem.expectation_of(actor, "GIVE:" + object_id)
 	# 饥荒经历者可能认为统一储备更安全（个人资源保护 vs 集体稳定冲突）
@@ -82,7 +97,7 @@ static func evaluate_proposal(actor: Dictionary, rule: Dictionary, relationships
 	var proposer_trust := 0.0
 	if relationships != null:
 		proposer_trust = clampf(float(relationships.composite_trust(str(actor.get("id", "")), str(rule.get("proposer", "")))) / 400.0, -1.0, 1.0)
-	var score := personal * 0.4 + expected_compliance * 0.25 + proposer_trust * 0.2 + collective_security - burden * 0.5
+	var score := (personal - 0.5) * 0.8 + expected_compliance * 0.2 + proposer_trust * 0.2 + collective_security * 0.3 - burden * 0.4  # P2.1.1：对齐度用带符号原值，集体安全只做 0.3 权重修正
 	var stance := 1 if score > 0.15 else (-1 if score < -0.15 else 0)
 	# 反提案：不接受但也不彻底拒绝 → 谈判（更低比例）
 	var counter := clampf(fraction * 0.5, 0.1, 0.5)
