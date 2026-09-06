@@ -20,7 +20,7 @@ static func render(renderer_impl: Dictionary, ir: Dictionary, style: String = "c
 		return _fallback(ir, style, language, length, "E_RENDERER_MISSING")
 	if not bool(ir.get("ok", false)):
 		return _fallback(ir, style, language, length, "E_IR_INVALID")
-	var raw = (renderer_impl["render"] as Callable).call(ir, style, language, length)
+	var raw = await (renderer_impl["render"] as Callable).call(ir, style, language, length)
 	# Validator：LLM/Mock 输出一律验证；不合法 → fallback
 	var verdict: Dictionary = NarrativeOutputValidator.validate(raw, ir)
 	if bool(verdict.get("ok", false)):

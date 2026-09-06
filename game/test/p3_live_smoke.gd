@@ -56,7 +56,12 @@ func _run() -> void:
 
 	# LLM 调用（全链）
 	var provider: Dictionary = LlmNarrativeRenderer.make_provider(cfg)
-	var llm_out: Dictionary = NarrativeRenderer.render(provider, ir, "neutral_chronicle", "zh", 3)
+	var llm_out: Dictionary = await NarrativeRenderer.render(provider, ir, "neutral_chronicle", "zh", 3)
+	# Debug: 直接看 claim package + 原始响应
+	var pkg_dbg: Array = LlmNarrativeRenderer._build_claim_package(ir, 3)
+	print("SMOKE_PKG %s" % str(pkg_dbg).substr(0, 400))
+	var raw_dbg: String = await LlmNarrativeRenderer._call_api(cfg, pkg_dbg)
+	print("SMOKE_RAW %s" % raw_dbg.substr(0, 500))
 	if llm_out.has("fallback_reason"):
 		print("SMOKE_FALLBACK reason=%s（LLM 失败，template 兜底）" % str(llm_out.get("fallback_reason", "")))
 	else:

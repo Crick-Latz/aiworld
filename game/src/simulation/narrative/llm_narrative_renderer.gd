@@ -54,13 +54,16 @@ static func _build_claim_package(ir: Dictionary, max_sentences: int) -> Array:
 	var beat_claims := {}
 	for b in beats:
 		beat_claims[str(b.get("beat_id", ""))] = b.get("claim_ids", [])
+	# P3c-0：IR 携带 actor_names（display name）——claim package 的 subject 用人名
+	var name_map: Dictionary = ir.get("actor_names", {})
 	var out: Array = []
 	for c in claims:
 		if c.get("beat_id", "") == "":
 			continue  # 只发已被 beat 选中的主张（叙事显著的）
+		var subj_raw := str(c.get("subject", ""))
 		out.append({
 			"claim_id": str(c.get("claim_id", "")),
-			"subject": str(c.get("subject", "")),
+			"subject": name_map.get(subj_raw, subj_raw),
 			"predicate": str(c.get("predicate", "")),
 			"object": c.get("object", {}),
 			"epistemic_status": str(c.get("epistemic_status", "OBJECTIVE")),

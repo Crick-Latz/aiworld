@@ -304,9 +304,16 @@ static func build_ir(sim, perspective: String, focus_actor: String, limit: int) 
 		"window": {"start": 0, "end": int(sim.tick)}, "causal_graph": graph,
 		"selected_beats": beats, "claims": claims, "known_facts": known_facts,
 		"subjective_facts": subjective_facts, "forbidden_inferences": forbidden,
-		"source_refs": {"event_ids": event_refs, "trace_ids": trace_refs, "beat_ids": beat_refs}}
+		"source_refs": {"event_ids": event_refs, "trace_ids": trace_refs, "beat_ids": beat_refs},
+		"actor_names": _actor_names(actors)}
 	result["ir_hash"] = _sha256(JSON.stringify(_canonicalize(result)))
 	return result
+
+static func _actor_names(actors: Dictionary) -> Dictionary:
+	var out := {}
+	for id in actors:
+		out[str(id)] = str(actors[id].get("display_name", id))
+	return out
 
 static func _canonicalize(value):
 	if typeof(value) == TYPE_DICTIONARY:
