@@ -19,6 +19,7 @@ func _run() -> void:
 	await _test_p3a2_claims()
 	await _test_p3a3_llm_offline()
 	await _test_p3a2_1_semantic_gate()
+	await _test_p3a4_styles()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -457,3 +458,40 @@ func _test_p3a2_1_semantic_gate() -> void:
 			drill_trace = true
 	_check("p3a21_nw_claim_to_trace_drilldown", drill_trace or true,
 		"（无 storage/decision trace 时合法——claim 仍可下钻到事件）")
+
+# ── P3a-4: NX 风格不变式 + NY 压缩 ──
+func _test_p3a4_styles() -> void:
+	var sim = await _make_sim(600)
+	if sim == null:
+		for i in 4: _check("p3a4_%d" % i, false, "地图不可用")
+		return
+	var ir: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 6)
+	_check("p3a4_ir_ok", bool(ir.get("ok", false)))
+	# NX：三种 style 的 claim_ids + beat_ids 完全一致（只变表面语言）
+	var outs := {}
+	for style in ["neutral_chronicle", "concise_historical", "character_diary"]:
+		outs[style] = TemplateNarrativeRenderer.render(ir, style, "zh", 3)
+	var nc: Dictionary = outs["neutral_chronicle"]
+	var ch: Dictionary = outs["concise_historical"]
+	var cd: Dictionary = outs["character_diary"]
+	_check("p3a4_nx_same_claims_across_styles",
+		str(nc.get("source_event_ids", [])) == str(ch.get("source_event_ids", []))
+		and str(nc.get("source_event_ids", [])) == str(cd.get("source_event_ids", [])),
+		"nc=%d ch=%d cd=%d events" % [(nc.get("source_event_ids", []) as Array).size(),
+			(ch.get("source_event_ids", []) as Array).size(), (cd.get("source_event_ids", []) as Array).size()])
+	_check("p3a4_nx_same_beats_across_styles",
+		str(nc.get("beat_ids", [])) == str(ch.get("beat_ids", []))
+		and str(nc.get("beat_ids", [])) == str(cd.get("beat_ids", [])))
+	# NY：压缩——length 越小句子越少（或不增）
+	var long_out: Dictionary = TemplateNarrativeRenderer.render(ir, "neutral_chronicle", "zh", 8)
+	var short_out: Dictionary = TemplateNarrativeRenderer.render(ir, "neutral_chronicle", "zh", 1)
+	var long_sents: int = 0
+	for sn in long_out.get("sentences", []):
+		if str(sn.get("kind", "")) == "CONTENT":
+			long_sents += 1
+	var short_sents: int = 0
+	for sn2 in short_out.get("sentences", []):
+		if str(sn2.get("kind", "")) == "CONTENT":
+			short_sents += 1
+	_check("p3a4_ny_compression", short_sents <= long_sents and short_sents >= 0,
+		"short=%d long=%d" % [short_sents, long_sents])

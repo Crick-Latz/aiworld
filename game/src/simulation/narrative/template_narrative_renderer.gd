@@ -19,7 +19,7 @@ const BEAT_LABELS := {
 }
 
 ## P3a-2 claim-first 渲染：每句 = 一组已验证的原子主张（sentence contract）
-static func render(ir: Dictionary, _style: String = "chronicle", language: String = "zh", length: int = 3) -> Dictionary:
+static func render(ir: Dictionary, style: String = "neutral_chronicle", language: String = "zh", length: int = 3) -> Dictionary:
 	if not bool(ir.get("ok", false)):
 		return _reject("E_IR_INVALID", "IR 无效")
 	var sentences: Array = []
@@ -31,11 +31,7 @@ static func render(ir: Dictionary, _style: String = "chronicle", language: Strin
 	# 头行（HEADER：允许零 claim）
 	var perspective := str(ir.get("perspective", "OBJECTIVE"))
 	var focus := str(ir.get("focus_actor", ""))
-	var header := "【营地记事】"
-	if perspective == "CHARACTER":
-		header = "【%s 的所见所感】" % focus
-	elif perspective == "RETROSPECTIVE":
-		header = "【%s 的回望】" % focus
+	var header := _style_header(style, perspective, focus)
 	sentences.append({"sentence_id": "S0", "kind": "HEADER", "text": header, "claim_ids": [], "beat_ids": [], "source_event_ids": [], "source_trace_ids": []})
 	var used := 0
 	var sid_n := 1
@@ -53,9 +49,8 @@ static func render(ir: Dictionary, _style: String = "chronicle", language: Strin
 			continue
 		var subj := str(c0.get("subject", ""))
 		var pred := str(c0.get("predicate", ""))
-		var text := "%s——%s %s" % [label, subj, PREDICATE_LABELS.get(pred, pred)]
-		if perspective == "RETROSPECTIVE" and int(beat.get("start_tick", 0)) > 0:
-			text = "第 %d 天·%s——%s %s" % [int(beat.get("start_tick", 0)) / 24 + 1, label, subj, PREDICATE_LABELS.get(pred, pred)]
+		var body := "%s %s" % [subj, PREDICATE_LABELS.get(pred, pred)]
+		var text := _style_sentence(style, label, body, int(beat.get("start_tick", 0)), perspective)
 		# 来源：从 claim_ids 系统派生（NL：LLM 未来只给 claim_ids，ids 由系统推导）
 		var derived: Dictionary = NarrativeClaim.derive_sources(claims, cids)
 		sentences.append({"sentence_id": "S%d" % sid_n, "kind": "CONTENT", "text": text,
@@ -122,3 +117,37 @@ static func _day_of(tick: int) -> int:
 static func _reject(code: String, msg: String) -> Dictionary:
 	return {"ok": false, "code": code, "message": msg, "text": "", "beat_ids": [],
 		"source_event_ids": [], "source_trace_ids": [], "renderer": "template"}
+
+## ── P3a-4 风格系统：不同 style 的 claims/beat_ids 完全相同（NX 断言），只变表面语言 ──
+const STYLES := ["neutral_chronicle", "concise_historical", "character_diary"]
+
+static func _style_header(style: String, perspective: String, focus: String) -> String:
+	match style:
+		"concise_historical":
+			return "· 摘要 ·" if perspective == "OBJECTIVE" else "· %s ·" % focus
+		"character_diary":
+			return "——%s——" % focus if focus != "" else "· 日记 ·"
+		_:  # neutral_chronicle（默认）
+			if perspective == "CHARACTER":
+				return "【%s 的所见所感】" % focus
+			elif perspective == "RETROSPECTIVE":
+				return "【%s 的回望】" % focus
+			return "【营地记事】"
+
+static func _style_sentence(style: String, label: String, body: String, tick: int, _perspective: String) -> String:
+	var day := tick / 24 + 1
+	match style:
+		"concise_historical":
+			return body  # 极简：无标签无天数——只有谓语事实
+		"character_diary":
+			return "第%d天，%s。（%s）" % [day, body, label]
+		_:  # neutral_chronicle
+			return "%s——%s" % [label, body]
+
+## 置信度措辞（第 16 条）：<0.6 怀疑 / 0.6-0.8 认为 / >0.8 几乎认定
+static func confidence_hedge(confidence: float) -> String:
+	if confidence < 0.6:
+		return "似乎"
+	elif confidence <= 0.8:
+		return ""
+	return "显然"
