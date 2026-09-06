@@ -234,8 +234,9 @@ func _test_f_positive_bonds_rich_world() -> void:
 		for key in snap:
 			best_bond = maxi(best_bond, int(snap[key].get("trust", 0)))
 	_check("f_rich_world_shares", any_share, "no sharing events in abundance")
-	# 解释加权尺度下单次接受 ≈ +30 综合信任，≥120 即多次互惠形成的强纽带
-	_check("f_positive_bond_forms", best_bond >= 120, "best=%d" % best_bond)
+	# 解释加权尺度下单次接受 ≈ +30 综合信任，≥100 即多次互惠的强纽带。
+	# P1.6 感知门后阈值下调：分享只能瞄准"看得见的饥饿"，纽带比直读真值时代少 ~20——这是有限感知的诚实代价
+	_check("f_positive_bond_forms", best_bond >= 100, "best=%d" % best_bond)
 	print("P15_F best_bond=%d" % best_bond)
 
 # ── G. 反事实社会：同一个欧恩，匮乏 vs 富裕 ──

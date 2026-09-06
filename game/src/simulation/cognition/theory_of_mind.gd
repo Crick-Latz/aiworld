@@ -26,6 +26,7 @@ func _entry(other_id: String, key: String) -> Dictionary:
 			"has_food": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
 			"generous": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
 			"reliable": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},
+			"hungry": {"value": 0.0, "evidence_pos": [], "evidence_neg": []},  # 感知槽：我以为他饿（状态非特质，快衰减）
 			"last_updated": -1,
 		}
 	return _models[other_id][key]

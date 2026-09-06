@@ -216,6 +216,17 @@ func step() -> Array:
 			var result: Dictionary = ReflectionSystem.reflect(actors[id], tick)
 			for insight in result.get("insights", []):
 				_emit("reflected", id, "%s" % str(insight), {})
+	# P1.6: 认识问题过期（人不会永远纠结；observing 到期清理）
+	for id in actors:
+		var qs2: Array = actors[id].get("open_questions", [])
+		var keep_q: Array = []
+		for q in qs2:
+			if tick < int(q.get("expires", 0)):
+				keep_q.append(q)
+		actors[id]["open_questions"] = keep_q
+		var obs: Dictionary = actors[id].get("observing", {})
+		if not obs.is_empty() and tick >= int(obs.get("until", 0)):
+			actors[id]["observing"] = {}
 	# P1.5: 每 8 tick 解决到期的社会预测（预测误差学习）
 	if tick % 8 == 0:
 		_resolve_predictions()
@@ -320,6 +331,12 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_keep_distance(id, a, action, new_events)
 		"gather_wood":
 			_do_gather_wood(id, a, new_events)
+		"ask_reason":
+			_do_ask_reason(id, a, action, new_events)
+		"observe_person":
+			_do_observe_person(id, a, action, new_events)
+		"ask_third_party":
+			_do_ask_third_party(id, a, action, new_events)
 		"sit_by_fire":
 			_do_sit_by_fire(id, a, new_events)
 		"eat_food":
@@ -424,23 +441,26 @@ func _do_socialize(id: String, a: Dictionary, ev: Array) -> void:
 	_emit("socialized", id, "%s 和 %s 聊了聊天" % [a["display_name"], "、".join(others)], {})
 
 func _do_share(id: String, a: Dictionary, ev: Array) -> void:
-	# 分享是双向互动——找到最近的真实挨饿者，食物给到具体的人
+	# 分享对象按【分享者的感知】挑（ToM hungry 感知槽），不读他人真实 hunger——
+	# 看走眼（把不饿的人当饿了）是合法的感知误差，这正是人味来源
 	if int(a["inventory"].get("food", 0)) < 2:
 		return
 	var hungriest := ""
-	var hungriest_v := 550  # 对方真的饿（>500），或明显比自己饿（+150）——富裕世界也有分享场合
-	var my_h := int(a["needs"].get("hunger", 0))
+	var hungriest_percept := 0.45  # 感知饥饿度阈值（0..1 尺度）
+	var surplus := int(a["inventory"].get("food", 0)) >= 3
+	var my_h_percept := clampf(float(a["needs"].get("hunger", 0)) / 1000.0, 0.0, 1.0)
 	for other_id in actors:
 		if other_id == id:
 			continue
-		var h := int(actors[other_id]["needs"].get("hunger", 0))
-		var surplus := int(a["inventory"].get("food", 0)) >= 3
-		var worth := h > 550 or h > my_h + 200 or (surplus and h > my_h + 100)  # 盈余慷慨：富裕世界开
-		if worth and h > hungriest_v and _is_nearby(a["tile"], actors[other_id]["tile"]):
-			hungriest_v = h
+		# 感知门：我只知道"我以为他多饿"——来源是他开口要过/被我看见吃东西
+		var per_hunger: float = a["tom"].belief_about(other_id, "hungry")
+		var worth: bool = per_hunger > 0.45 or per_hunger > my_h_percept + 0.15 \
+			or (surplus and per_hunger > 0.15)
+		if worth and per_hunger > hungriest_percept and _is_nearby(a["tile"], actors[other_id]["tile"]):
+			hungriest_percept = per_hunger
 			hungriest = other_id
 	if hungriest == "":
-		return  # 没有具体的对象，分享没有意义（事件流不记——没发生的事）
+		return  # 没看到有谁需要——分享没有对象（事件流不记——没发生的事）
 	a["inventory"]["food"] = int(a["inventory"]["food"]) - 1
 	actors[hungriest]["inventory"]["food"] = int(actors[hungriest]["inventory"].get("food", 0)) + 1
 	actors[hungriest]["needs"]["hunger"] = clampi(int(actors[hungriest]["needs"]["hunger"]) - 200, 0, 1000)
@@ -556,6 +576,65 @@ func _do_eat(id: String, a: Dictionary, ev: Array) -> void:
 	a["inventory"]["food"] = int(a["inventory"]["food"]) - 1
 	a["needs"]["hunger"] = clampi(int(a["needs"]["hunger"]) - 350, 0, 1000)
 	_emit("ate_food", id, "%s 吃了些存粮" % a["display_name"], {"food": -1})
+
+## P1.6 认识行动执行——调查也必须经过感知/声明系统，绝不直接读真相
+func _do_ask_reason(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var about := str(action.get("target_actor", ""))
+	if not actors.has(about):
+		return
+	var target: Dictionary = actors[about]
+	_emit("reason_asked", id, "%s 问 %s：那天为什么不帮我？" % [a["display_name"], target["display_name"]], {"to_id": about})
+	# 回应：本人陈述（第一版诚实——说自己的真实主要原因；说谎是 Phase 2）
+	var claim_prop := {}
+	if int(target["inventory"].get("food", 0)) < 2:
+		claim_prop = {"subject": about, "predicate": "has_food", "value": -0.8, "label": "我自己也没粮了"}
+	else:
+		claim_prop = {"subject": about, "predicate": "has_food", "value": 0.4, "label": "我想留着应急"}
+	var express: float = float(target["personality"].traits.get("expressiveness", 0.5))
+	if express < 0.25:
+		# 闷葫芦：问不出话——但这本身也是信息（他不愿说）
+		_emit("reason_deflected", about, "%s 沉默了一会儿，什么也没说" % target["display_name"], {"to_id": id})
+		_close_question(id, about)
+		return
+	var claim := Claim.build(about, claim_prop, tick)
+	Claim.listen(a, claim, relationships)
+	_emit("reason_claimed", about, "%s 说：『%s』" % [target["display_name"], claim_prop["label"]], {"to_id": id, "claim": claim_prop["label"]})
+	_close_question(id, about)
+
+func _do_observe_person(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var about := str(action.get("target_actor", ""))
+	if not actors.has(about):
+		return
+	a["observing"] = {"about": about, "until": tick + 12}  # 注意力增益在 CognitiveTransition
+	_emit("observing_person", id, "%s 开始不动声色地留意 %s" % [a["display_name"], actors[about]["display_name"]], {"to_id": about})
+	# 观察不立即关问题：证据随目击累积，问题由证据自行解决或过期
+
+func _do_ask_third_party(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var third := str(action.get("target_actor", ""))
+	var about := str(action.get("about_actor", ""))
+	if not actors.has(third) or not actors.has(about):
+		return
+	var third_a: Dictionary = actors[third]
+	_emit("asked_about", id, "%s 悄悄问 %s：最近见过 %s 拿到吃的吗？" % [a["display_name"], third_a["display_name"], actors[about]["display_name"]], {"to_id": third, "about": about})
+	# 第三人转述的是【他自己的感知】（ToM 信念），不是真相
+	var their_belief: float = third_a["tom"].raw_belief(about, "has_food")
+	if absf(their_belief) < 0.1:
+		_emit("third_party_unknown", third, "%s 摇头：没太注意过" % third_a["display_name"], {"to_id": id})
+		return
+	var claim_prop := {"subject": about, "predicate": "has_food", "value": their_belief,
+		"label": "我见过他最近空手而归" if their_belief < 0.0 else "我见他搞到过吃的"}
+	var claim := Claim.build(third, claim_prop, tick)
+	Claim.listen(a, claim, relationships)
+	_emit("third_party_claimed", third, "%s 说：『%s』" % [third_a["display_name"], claim_prop["label"]], {"to_id": id, "about": about})
+	_close_question(id, about)
+
+func _close_question(id: String, about: String) -> void:
+	var qs: Array = actors[id].get("open_questions", [])
+	for i in range(qs.size()):
+		if str(qs[i].get("about", "")) == about:
+			qs.remove_at(i)
+			break
+	actors[id]["open_questions"] = qs
 
 func _do_gather_wood(id: String, a: Dictionary, ev: Array) -> void:
 	for tree in world["trees"]:
@@ -714,15 +793,32 @@ func _update_nearby_info() -> void:
 				if bool(other["physical"].get("sick", false)) or bool(other["physical"].get("injured", false)):
 					needs_help = true
 		world["nearby_" + id] = nearby
-	# 给 ActionRegistry 用的全局标记
-	var anyone_hungry := false
+	# P1.6 被动感知（看脸色）：身边的人的饥饿是中等可见状态——
+	# 观察者获得朝真实方向、但按可见度衰减的噪声证据（≠直读真值）
+	for id in actors:
+		var a6: Dictionary = actors[id]
+		var vis: float = 0.35 + float(a6["personality"].traits.get("empathy", 0.5)) * 0.25  # 共情高的人看得准
+		for other_id in world["nearby_" + id]:
+			var true_h: float = clampf(float(actors[other_id]["needs"].get("hunger", 0)) / 1000.0, 0.0, 1.0)
+			if true_h > 0.5:
+				a6["tom"].add_evidence(other_id, "hungry", 1.0, 0.12 * vis, -1, tick)
+			elif true_h < 0.25:
+				a6["tom"].add_evidence(other_id, "hungry", -1.0, 0.10 * vis, -1, tick)
+	# P1.6 感知门：「谁看起来饿了」由各观察者的 ToM 感知决定，不读真实 hunger；
+	# 病伤是高可见状态（可观察性分级），保留直读
+	var anyone_appears_hungry := false
 	var anyone_needs_help := false
 	for id in actors:
-		if int(actors[id]["needs"].get("hunger", 0)) > 600:
-			anyone_hungry = true
+		var appears := false
+		for other_id in world["nearby_" + id]:
+			if float(actors[id]["tom"].belief_about(other_id, "hungry")) > 0.4:
+				appears = true
+		world["appears_hungry_" + id] = appears
+		if appears:
+			anyone_appears_hungry = true
 		if bool(actors[id]["physical"].get("sick", false)) or bool(actors[id]["physical"].get("injured", false)):
 			anyone_needs_help = true
-	world["someone_hungry_nearby"] = anyone_hungry
+	world["someone_hungry_nearby"] = anyone_appears_hungry  # 兼容键：语义=有人看起来饿了
 	world["someone_needs_help_nearby"] = anyone_needs_help
 
 func _build_actor_view(id: String, a: Dictionary) -> Dictionary:

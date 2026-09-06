@@ -36,6 +36,10 @@ static func dynamics(p: PersonalityProfile, sensitivities: Dictionary, norms: Di
 		"norm_reactance": clampf(0.3 + (1.0 - float(t.get("pragmatism", 0.5))) * 0.4 + trust_open * 0.2, 0.1, 1.0),
 		# 匮乏敏感（来自人生经历）：对食物证据的注意放大
 		"scarcity_salience": clampf(0.3 + scarcity_sens * 0.6, 0.1, 1.0),
+		# P1.6 认识驱动：好奇+反刍的人想弄清楚；务实的人不在乎为什么
+		"epistemic_drive": clampf(0.15 + float(t.get("curiosity", 0.5)) * 0.5 + float(t.get("expressiveness", 0.5)) * 0.15 + betrayal_sens * 0.25 + (1.0 - trust_open) * 0.15, 0.05, 1.0),  # 好奇+多疑都驱动认识
+		# 不确定容忍：务实+高冲突回避的人能忍受「不知道」
+		"uncertainty_tolerance": clampf(float(t.get("pragmatism", 0.5)) * 0.5 + float(t.get("conflict_avoidance", 0.5)) * 0.3, 0.1, 1.0),
 		# 不确定性容忍：低容忍的人解释权重更极端（更早下结论）
 		"ambiguity_intolerance": clampf(0.4 + float(t.get("caution", 0.5)) * 0.3 + anger * 0.2, 0.1, 1.0),
 	}

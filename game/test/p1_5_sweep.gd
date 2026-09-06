@@ -46,7 +46,7 @@ func _run() -> void:
 		"belief_revision": 0,    # 反思推翻记恨（"错怪"）
 		"grudge_formed": 0,      # 记恨形成
 		"kept_distance": 0,
-		"socialized": 0,
+		"socialized": 0, "ask_reason": 0, "observe_person": 0, "ask_third_party": 0, "reason_claimed": 0, "reason_deflected": 0,
 	}
 	var interp_diversity := {}   # 所有出现过的主导解释
 	var seeds_with_prediction_learning := 0
@@ -81,6 +81,13 @@ func _run() -> void:
 					motifs["avoidance_after_refusal"] += 1
 			elif t == "socialized":
 				motifs["socialized"] += 1
+			elif ["ask_reason", "observing_person", "ask_third_party", "reason_asked", "asked_about"].has(t):
+				var key2 = {"ask_reason": "ask_reason", "observing_person": "observe_person", "ask_third_party": "ask_third_party", "reason_asked": "ask_reason", "asked_about": "ask_third_party"}[t]
+				motifs[key2] += 1
+			elif t == "reason_claimed":
+				motifs["reason_claimed"] += 1
+			elif t == "reason_deflected":
+				motifs["reason_deflected"] += 1
 			elif t == "reflected" and str(e.get("text", "")).find("错怪") != -1:
 				motifs["belief_revision"] += 1
 		# 互惠：双向帮助

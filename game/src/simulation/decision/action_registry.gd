@@ -38,6 +38,8 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a11 != null: actions.append(a11)
 	var a13 = _request(p, needs, actor, world)
 	if a13 != null: actions.append(a13)
+	var a18 = _epistemic_actions(p, actor, world)
+	for ea in a18: actions.append(ea)
 	var a16 = _gather_wood(p, needs, inv, pos, world)
 	if a16 != null: actions.append(a16)
 	var a17 = _sit_by_fire(p, needs, pos, world)
@@ -177,7 +179,8 @@ static func _socialize(p: PersonalityProfile, needs: Dictionary, actor: Dictiona
 			target = nearest
 			score *= 0.8  # 要走过去，稍微降低点吸引力
 	else:
-		score *= 0.3 if not world.get("someone_nearby", false) else 1.0
+		pass  # 人在身边（others_nearby 非空）＝聊天条件最好，无惩罚
+		# 历史 bug：曾在此乘 0.3，但 someone_nearby 从未被设置——有人在场时社交被系统性压低
 	return {"action": "socialize", "target": target, "utility": score, "desc": "找人聊天", "duration": 2}
 
 static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
@@ -214,6 +217,55 @@ static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary
 		return null
 	return {"action": "request_share", "target": target_tile, "target_actor": target_id,
 		"utility": score, "desc": "向同伴求助", "duration": 1}
+
+## P1.6 认识行动：行动目的不是改变世界，而是获取信息。
+## ActionValue = λ_epi × InfoGain × stakes − SocialRisk×人格 − 时机成本。
+## 薇拉（好奇+敢问）直问；欧恩（多疑+怕冲突）暗中观察；卡德加（圆融）问第三人。
+## 「不弄清楚」也是合法选择——λ_epi 低的人根本不会产生这些行动。
+static func _epistemic_actions(p: PersonalityProfile, actor: Dictionary, world: Dictionary) -> Array:
+	var out: Array = []
+	var qs: Array = actor.get("open_questions", [])
+	var visible: Array = actor.get("others_visible", [])
+	if qs.is_empty() or visible.is_empty():
+		return out
+	var dyn := PersonalityDynamics.dynamics(p, actor.get("sensitivities", {}), actor.get("norms", {}))
+	var drive: float = float(dyn["epistemic_drive"]) - float(dyn["uncertainty_tolerance"]) * 0.2
+	if drive <= 0.2:
+		return out  # 务实的人不在乎为什么——不确定是可忍受的
+	var conflict: float = p.effective_trait("conflict_avoidance", actor.get("needs", {}))
+	var sociability: float = p.effective_trait("sociability", actor.get("needs", {}))
+	var q0: Dictionary = qs[0]
+	var about := str(q0.get("about", ""))
+	var stakes: float = float(q0.get("stakes", 0.5))
+	var entropy: float = float(q0.get("entropy", 0.5))
+	var about_visible := false
+	var other_visible := ""
+	for o in visible:
+		var oid := str(o.get("id", ""))
+		if oid == about:
+			about_visible = true
+		elif oid != str(actor.get("id", "")):
+			other_visible = oid
+	if not about_visible:
+		return out
+	# 直问：信息量最大，但当面质询有社交风险
+	var express: float = p.effective_trait("expressiveness", actor.get("needs", {}))
+	var u_ask: float = drive * (0.65 + express * 0.25) * stakes * (0.5 + entropy * 0.5) - conflict * 0.25
+	if u_ask > 0.08:
+		out.append({"action": "ask_reason", "target": null, "target_actor": about,
+			"question_kind": str(q0.get("kind", "")), "utility": u_ask, "desc": "问个明白", "duration": 1})
+	# 暗中观察：信息量中等、慢，但几乎零风险（多疑/谨慎者的首选）
+	var u_watch: float = drive * 0.45 * stakes * (0.5 + entropy * 0.5) - conflict * 0.02
+	if u_watch > 0.08:
+		out.append({"action": "observe_person", "target": null, "target_actor": about,
+			"question_kind": str(q0.get("kind", "")), "utility": u_watch, "desc": "留意他的一举一动", "duration": 4})
+	# 问第三人：信息量中上，风险低，但需要有人在（圆融者首选）
+	if other_visible != "":
+		var u_third: float = drive * 0.45 * stakes * (0.5 + entropy * 0.5) - conflict * 0.08 + sociability * 0.12
+		if u_third > 0.08:
+			out.append({"action": "ask_third_party", "target": null, "target_actor": other_visible,
+				"about_actor": about, "question_kind": str(q0.get("kind", "")), "utility": u_third, "desc": "找人间接打听", "duration": 1})
+	return out
 
 ## P1.5：保持距离。不是 fallback——回避是合法的人类行为。
 ## 敌意解释主导（social_stance 高）+ 怕冲突/恐惧 → 主动拉开与某人的距离。

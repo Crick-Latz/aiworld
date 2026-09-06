@@ -69,6 +69,21 @@ static func _normalize(cands: Array, dyn: Dictionary) -> Dictionary:
 			dominant = str(c["id"])
 	return {"candidates": cands, "dominant": dominant}
 
+## 解释分布的不确定度（归一化熵）：0=已下结论，1=完全不知道他为什么
+## 这是「我不知道」的量化——认识行动的触发源
+static func entropy(interp: Dictionary) -> float:
+	if interp.is_empty():
+		return 0.0
+	var cands: Array = interp.get("candidates", [])
+	if cands.size() <= 1:
+		return 0.0
+	var h := 0.0
+	for c in cands:
+		var w := float(c.get("weight", 0.0))
+		if w > 0.0001:
+			h -= w * log(w) / log(float(cands.size()))
+	return clampf(h, 0.0, 1.0)
+
 ## 取某解释的权重（无则 0）
 static func weight_of(interp: Dictionary, id: String) -> float:
 	if interp.is_empty():

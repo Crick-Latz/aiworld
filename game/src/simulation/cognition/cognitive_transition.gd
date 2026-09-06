@@ -64,6 +64,11 @@ static func process(observer: Dictionary, event: Dictionary, ctx: Dictionary) ->
 
 	# 8. 信念更新：证据累积（解释加权），替换旧固定增量
 	var belief_updates := _update_beliefs(observer, se, interp, dyn, seq, tick)
+	# P1.6 注意力：正在观察此人时，证据权重×1.5（观察是有收获的）
+	var watching: String = str((observer.get("observing", {}) as Dictionary).get("about", ""))
+	if watching != "" and watching == str(se["counterpart_id"]):
+		for key in belief_updates:
+			belief_updates[key] = float(belief_updates[key]) * 1.5
 	summary["belief_updates"] = belief_updates
 
 	# 9. 关系更新：由解释权重决定，四维分立，无固定常数
@@ -75,6 +80,12 @@ static func process(observer: Dictionary, event: Dictionary, ctx: Dictionary) ->
 
 	# 11. 目标/倾向更新：敌意主导 → 回避；温暖主导 → 接近
 	_update_social_stance(observer, se, interp, dyn)
+
+	# P1.6 认识问题：解释不确定度高 + 事关重大 → 角色意识到「我不知道为什么」
+	if not interp.is_empty() and Interpretation.entropy(interp) > 0.72:
+		var stakes := clampf(float(se["context"]["own_hunger"]) * 0.6 + 0.35, 0.0, 1.0)
+		if stakes > 0.45:
+			_open_question(observer, se, interp, stakes, tick)
 
 	# 12. 主观记忆写入（带解释，供反思用）
 	_write_memory(observer, event, se, interp, appraisal)
@@ -166,6 +177,14 @@ static func _update_beliefs(observer: Dictionary, se: Dictionary, interp: Dictio
 		var pos_rate2: float = dyn["positive_learning_rate"]
 		tom.add_evidence(other, "generous", 1.0, 0.4 * pos_rate2, seq, tick)
 		updates["generous"] = 0.4 * pos_rate2
+	elif type == "food_requested":
+		# P1.6 感知门：他开口要食物 = 他饿的最强可观察证据（本人陈述 > 面色推测）
+		tom.add_evidence(other, "hungry", 1.0, 0.5, seq, tick)
+		updates["hungry"] = 0.5
+	elif type == "ate_food":
+		# 看见他吃东西 = 不那么饿了（反向证据，同样只是感知）
+		tom.add_evidence(other, "hungry", -1.0, 0.3, seq, tick)
+		updates["hungry"] = -0.3
 	elif type == "foraged" or type == "fished" or type == "ruins_loot" or type == "explored_found":
 		# 直接知觉证据：看见他获得食物（非解释，知觉）
 		var sal: float = 0.2 + float(dyn["scarcity_salience"]) * 0.15
@@ -304,6 +323,20 @@ static func _my_perspective_type(actor_id: String, me: String, type: String, to_
 	if me == to_id and type == "shared_food":
 		return "shared_food_to_me"
 	return type
+
+## P1.6：把「我想弄清楚」登记为 open question（不重复堆叠，更新熵与利害）
+static func _open_question(observer: Dictionary, se: Dictionary, interp: Dictionary, stakes: float, tick: int) -> void:
+	var qs: Array = observer.get("open_questions", [])
+	var about := str(se["counterpart_id"])
+	for q in qs:
+		if str(q.get("about", "")) == about and str(q.get("kind", "")) == "why_refused":
+			q["entropy"] = Interpretation.entropy(interp)
+			q["stakes"] = stakes
+			q["tick"] = tick
+			return
+	qs.append({"about": about, "kind": "why_refused", "entropy": Interpretation.entropy(interp),
+		"stakes": stakes, "tick": tick, "expires": tick + 120})
+	observer["open_questions"] = qs
 
 static func _retrieve_memories(observer: Dictionary, counterpart: String, type: String) -> Array:
 	var mems: Array = observer.get("memories", [])

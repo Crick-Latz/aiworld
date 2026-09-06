@@ -33,9 +33,12 @@ static func evaluate_food_request(target: Dictionary, proposer: Dictionary, trus
 	if tom != null:
 		reliable = tom.belief_about(proposer_id, "reliable")
 
-	# 一阶心智：看得见的苦处才打动人
-	var proposer_hunger := clampf(float(proposer.get("needs", {}).get("hunger", 0)) / 1000.0, 0.0, 1.0)
-	var visible_need := proposer_hunger * empathy
+	# P1.6 感知门：决策者只感知得到「我以为他多饿」（ToM hungry 感知槽）。
+	# 他真实饿到什么程度是隐状态——看见≠看懂，开口求助过才是强信号。
+	var perceived_hunger := 0.0
+	if tom != null:
+		perceived_hunger = maxf(0.0, tom.belief_about(proposer_id, "hungry"))
+	var visible_need := perceived_hunger * empathy
 
 	# 规范三层：personal（我该分享）+ injunctive（大家会谴责自私）
 	var norms: Dictionary = target.get("norms", {})
