@@ -49,6 +49,7 @@ static func build(observer: Dictionary, event: Dictionary, relationships) -> Dic
 			"believed_generous": believed_generous,
 			"trust_toward_counterpart": trust_toward,
 			"own_hunger": clampf(float(observer.get("needs", {}).get("hunger", 0)) / 1000.0, 0.0, 1.0),
+				"own_thirst": clampf(float(observer.get("needs", {}).get("thirst", 0)) / 1000.0, 0.0, 1.0),
 			"personal_sharing": float(personal.get("sharing", 0.5)),
 			"descriptive_sharing": float(norms.get("descriptive", {}).get("sharing", 0.5)),
 			"text": str(event.get("text", "")),

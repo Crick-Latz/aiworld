@@ -276,20 +276,26 @@ static func _epistemic_actions(p: PersonalityProfile, actor: Dictionary, world: 
 		return out  # 务实的人不在乎为什么——不确定是可忍受的
 	var conflict: float = p.effective_trait("conflict_avoidance", actor.get("needs", {}))
 	var sociability: float = p.effective_trait("sociability", actor.get("needs", {}))
-	var q0: Dictionary = qs[0]
-	var about := str(q0.get("about", ""))
+	var q0: Dictionary = {}
+	var about := ""
+	for q in qs:  # 找第一个「对方还在视野里」的问题——人走了就先搁置，不死磕
+		var ab := str(q.get("about", ""))
+		for o in visible:
+			if str(o.get("id", "")) == ab:
+				q0 = q
+				about = ab
+				break
+		if about != "":
+			break
+	if about == "":
+		return out
 	var stakes: float = float(q0.get("stakes", 0.5))
 	var entropy: float = float(q0.get("entropy", 0.5))
-	var about_visible := false
 	var other_visible := ""
 	for o in visible:
 		var oid := str(o.get("id", ""))
-		if oid == about:
-			about_visible = true
-		elif oid != str(actor.get("id", "")):
+		if oid != about and oid != str(actor.get("id", "")):
 			other_visible = oid
-	if not about_visible:
-		return out
 	# 直问：信息量最大，但当面质询有社交风险
 	var express: float = p.effective_trait("expressiveness", actor.get("needs", {}))
 	var u_ask: float = drive * (0.65 + express * 0.25) * stakes * (0.5 + entropy * 0.5) - conflict * 0.25

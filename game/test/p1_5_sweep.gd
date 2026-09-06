@@ -41,6 +41,9 @@ func _run() -> void:
 	var t0 := Time.get_ticks_msec()
 	var motifs := {
 		"requests": 0, "accepted": 0, "refused": 0, "shared": 0,
+		"water_requests": 0, "water_accepted": 0, "water_refused": 0,
+		"tool_requests": 0, "tool_accepted": 0, "tool_refused": 0,
+		"promises_made": 0, "promises_kept": 0, "promises_broken": 0,
 		"reciprocity": 0,        # A 帮 B 后 B 帮 A
 		"avoidance_after_refusal": 0,  # 被拒后 100 tick 内回避拒绝者
 		"belief_revision": 0,    # 反思推翻记恨（"错怪"）
@@ -54,6 +57,8 @@ func _run() -> void:
 	var negative_bond_seeds := 0
 	var descriptive_spread_max := 0.0
 	var stories := []
+	var brier_sum_all := 0.0
+	var brier_n_all := 0
 	for s in range(1, SEED_COUNT + 1):
 		var sim := IslandSimulation.new(mq, 20000 + s, configs)
 		for i in TICKS:
@@ -66,14 +71,28 @@ func _run() -> void:
 			if t == "food_request_accepted":
 				motifs["accepted"] += 1
 				helped["%s->%s" % [str(e["actor_id"]), str(e.get("proposer_id", ""))]] = int(e["tick"])
+			elif t == "water_request_accepted":
+				motifs["water_accepted"] += 1
+				helped["%s->%s" % [str(e["actor_id"]), str(e.get("proposer_id", ""))]] = int(e["tick"])
+			elif t == "tool_request_accepted":
+				motifs["tool_accepted"] += 1
+				helped["%s->%s" % [str(e["actor_id"]), str(e.get("proposer_id", ""))]] = int(e["tick"])
 			elif t == "shared_food":
 				motifs["shared"] += 1
 				helped["%s->%s" % [str(e["actor_id"]), str(e.get("to_id", ""))]] = int(e["tick"])
 			elif t == "food_requested":
 				motifs["requests"] += 1
+			elif t == "water_requested":
+				motifs["water_requests"] += 1
+			elif t == "tool_requested":
+				motifs["tool_requests"] += 1
 			elif t == "food_request_refused":
 				motifs["refused"] += 1
 				refused_at["%s->%s" % [str(e.get("proposer_id", "")), str(e["actor_id"])]] = int(e["tick"])
+			elif t == "water_request_refused":
+				motifs["water_refused"] += 1
+			elif t == "tool_request_refused":
+				motifs["tool_refused"] += 1
 			elif t == "kept_distance":
 				motifs["kept_distance"] += 1
 				var key := "%s->%s" % [str(e["actor_id"]), str(e.get("avoid_of", ""))]
@@ -81,13 +100,22 @@ func _run() -> void:
 					motifs["avoidance_after_refusal"] += 1
 			elif t == "socialized":
 				motifs["socialized"] += 1
-			elif ["ask_reason", "observing_person", "ask_third_party", "reason_asked", "asked_about"].has(t):
-				var key2 = {"ask_reason": "ask_reason", "observing_person": "observe_person", "ask_third_party": "ask_third_party", "reason_asked": "ask_reason", "asked_about": "ask_third_party"}[t]
-				motifs[key2] += 1
+			elif t == "ask_reason" or t == "reason_asked":
+				motifs["ask_reason"] += 1
+			elif t == "observing_person":
+				motifs["observe_person"] += 1
+			elif t == "asked_about" or t == "third_party_claimed":
+				motifs["ask_third_party"] += 1
 			elif t == "reason_claimed":
 				motifs["reason_claimed"] += 1
 			elif t == "reason_deflected":
 				motifs["reason_deflected"] += 1
+			elif t == "promise_made":
+				motifs["promises_made"] += 1
+			elif t == "promise_kept":
+				motifs["promises_kept"] += 1
+			elif t == "promise_broken":
+				motifs["promises_broken"] += 1
 			elif t == "reflected" and str(e.get("text", "")).find("错怪") != -1:
 				motifs["belief_revision"] += 1
 		# 互惠：双向帮助
@@ -96,21 +124,28 @@ func _run() -> void:
 			if parts.size() == 2 and helped.has("%s->%s" % [parts[1], parts[0]]):
 				motifs["reciprocity"] += 1
 				break  # 每种子最多记一次
-		# 认知内部
+		# 认知内部（校准/声明/预测学习）
 		var any_learning := false
 		var any_grudge := false
+		var brier_sum := 0.0
+		var brier_n := 0
 		for id in sim.actors:
 			var a: Dictionary = sim.actors[id]
 			for g in a.get("grudges", {}):
 				any_grudge = true
 			if not (a.get("tom") as TheoryOfMind).prediction_errors.is_empty():
 				any_learning = true
+			for cal in a.get("calibration", []):
+				brier_sum += float(cal.get("brier", 0.0))
+				brier_n += 1
 			for m in a.get("memories", []):
 				var interp: Dictionary = m.get("interpretation", {})
 				if not interp.is_empty():
 					interp_diversity[str(interp.get("dominant", ""))] = true
 		if any_learning: seeds_with_prediction_learning += 1
 		if any_grudge: motifs["grudge_formed"] += 1
+		brier_sum_all += brier_sum
+		brier_n_all += brier_n
 		# 关系两极
 		var snap: Dictionary = sim.relationships.snapshot()
 		var edge_min := 0
@@ -133,6 +168,7 @@ func _run() -> void:
 	print("MOTIFS %s" % str(motifs))
 	print("INTERP_DIVERSITY %s (n=%d)" % [str(interp_diversity.keys()), interp_diversity.size()])
 	print("LEARNING seeds_with_prediction_learning=%d/%d" % [seeds_with_prediction_learning, SEED_COUNT])
+	print("CALIBRATION brier_mean=%.3f samples=%d" % [brier_sum_all / maxf(float(brier_n_all), 1.0), brier_n_all])
 	print("BONDS positive_seeds=%d negative_seeds=%d descriptive_spread_max=%.2f" % [
 		positive_bond_seeds, negative_bond_seeds, descriptive_spread_max])
 	_finished = true

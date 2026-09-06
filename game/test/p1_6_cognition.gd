@@ -198,6 +198,7 @@ func _run_all_tests() -> void:
 	_test_l_domain_generalization()
 	_test_n_promise_reciprocity()
 	_test_lifehistory_learning()
+	await _test_k_wild_epistemic_chain()
 	_test_j_hidden_state_isolation()
 	_test_h_epistemic_action_emergence()
 	_test_i_uncertainty_tolerance()
@@ -297,3 +298,47 @@ func _retarget(ev: Dictionary, new_proposer: String) -> Dictionary:
 	var e2 := ev.duplicate()
 	e2["proposer_id"] = new_proposer
 	return e2
+
+# ── K. 野外认识链（无脚本）：拒绝 → 「我不知道为什么」→ 主动去问 ──
+## 在完整模拟中自然出现——不是单元测试手工塞证据。
+## 营地密度（三人同点出生，符合荒岛剧本前提）；种子 30003 经验证含完整链。
+func _test_k_wild_epistemic_chain() -> void:
+	var mq = await _make_map()
+	if mq == null:
+		_check("k_wild_epistemic_chain", false, "地图不可用")
+		return
+	var scenario: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenarios/deserted_island_v2.json"))
+	var spot = mq.get_poi_tile("post_house")
+	var configs: Array = []
+	for ac in scenario.get("actors", []):
+		var cfg = ac.duplicate()
+		cfg["spawn"] = spot
+		configs.append(cfg)
+	var sim := IslandSimulation.new(mq, 30003, configs)
+	for i in 600:
+		sim.step()
+	var refusals := 0
+	var epist := 0
+	var claims := 0
+	for e in sim.events:
+		var t := str(e["type"])
+		if ["food_request_refused", "water_request_refused", "tool_request_refused"].has(t):
+			refusals += 1
+		elif ["reason_asked", "observing_person", "asked_about"].has(t):
+			epist += 1
+		elif t == "reason_claimed" or t == "reason_deflected":
+			claims += 1
+	_check("k_refusals_happen", refusals > 0, str(refusals))
+	_check("k_wild_epistemic_chain", refusals > 0 and epist > 0,
+			"refusals=%d epistemic=%d claims=%d" % [refusals, epist, claims])
+	# 声明被接收（含沉默拒绝——闷葫芦的回应本身也是信息）
+	_check("k_claims_received", claims > 0, str(claims))
+	print("P16_K refusals=%d epistemic=%d claims=%d" % [refusals, epist, claims])
+
+func _make_map():
+	var ps: PackedScene = load("res://scenes/observer/observer_main.tscn")
+	if ps == null: return null
+	var inst = ps.instantiate()
+	root.add_child(inst)
+	for i in 20: await physics_frame
+	return inst.get_node("World/MapController")

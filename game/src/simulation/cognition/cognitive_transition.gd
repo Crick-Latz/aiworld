@@ -86,7 +86,8 @@ static func process(observer: Dictionary, event: Dictionary, ctx: Dictionary) ->
 
 	# P1.6 认识问题：解释不确定度高 + 事关重大 → 角色意识到「我不知道为什么」
 	if not interp.is_empty() and Interpretation.entropy(interp) > 0.72:
-		var stakes := clampf(float(se["context"]["own_hunger"]) * 0.6 + 0.35, 0.0, 1.0)
+		var own_pain := maxf(float(se["context"].get("own_hunger", 0.0)), float(se["context"].get("own_thirst", 0.0)))
+		var stakes := clampf(own_pain * 0.6 + 0.35, 0.0, 1.0)
 		if stakes > 0.45:
 			_open_question(observer, se, interp, stakes, tick)
 

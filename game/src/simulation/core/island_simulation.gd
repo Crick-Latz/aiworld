@@ -923,6 +923,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"others_all": others_all,
 		"norms": a.get("norms", {}),
 		"my_obligations": a.get("my_obligations", []),
+			"open_questions": a.get("open_questions", []),  # P1.6: 未解之惑进决策视野——不然永远没人去问
 		"social_stance": a.get("social_stance", {}),
 		"grudges": a.get("grudges", {}),
 	}

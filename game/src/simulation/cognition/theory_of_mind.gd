@@ -123,3 +123,22 @@ func decay(before_tick: int, fade_days: int) -> void:
 				m[key]["value"] = float(m[key]["value"]) * fade_rate
 				if absf(float(m[key]["value"])) < 0.02:
 					m[key]["value"] = 0.0
+## 指定他人的信念摘要（常用键）
+func model_of(other_id: String) -> Dictionary:
+	var out := {"has_food": belief_about(other_id, "has_food"), "generous": belief_about(other_id, "generous"),
+		"reliable": belief_about(other_id, "reliable"), "last_updated": -1}
+	if _models.has(other_id):
+		out["last_updated"] = int(_models[other_id]["last_updated"])
+	return out
+
+## 全量快照（schema-free：任意属性键都导出）
+func snapshot() -> Dictionary:
+	var out := {}
+	for other_id in _models:
+		var entry: Dictionary = {}
+		for key in _models[other_id]:
+			if key == "last_updated" or not (_models[other_id][key] is Dictionary):
+				continue
+			entry[key] = belief_about(other_id, key)
+		out[other_id] = entry
+	return out
