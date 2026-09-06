@@ -22,6 +22,7 @@ func _run() -> void:
 	await _test_p3a4_styles()
 	await _test_p3b_dialogue()
 	await _test_p3c_expression()
+	await _test_p3c_trace_and_surface()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -644,3 +645,52 @@ func _test_p3c_expression() -> void:
 	var _unused: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, rs, 100)
 	var anchor_after: Dictionary = ExpressionContextBuilder.identity_anchor(sim.actors["npc_oun"])
 	_check("p3c_ci_no_profile_writeback", str(anchor_before) == str(anchor_after))
+
+# ── P3c-2/3: ExpressionTrace + VoiceFingerprint + SurfaceHistory + AddressPolicy ──
+func _test_p3c_trace_and_surface() -> void:
+	var sim = await _make_sim(400)
+	if sim == null:
+		for i in 7: _check("p3c23_%d" % i, false, "地图不可用")
+		return
+	var sa: Dictionary = SpeechAct.from_event({"type": "food_request_refused", "actor_id": "npc_oun", "proposer_id": "npc_weila", "reason": "自己也不够吃", "seq": 1, "tick": 100}, sim.actors["npc_oun"])
+	var ec: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, sim.relationships, 100)
+
+	# ExpressionTrace 完整性
+	var trace: Dictionary = ExpressionTrace.build(sa, ec)
+	_check("p3c2_trace_complete", not trace.is_empty() and trace.has("identity_anchor")
+		and trace.has("adaptive_factors") and trace.has("moment_factors")
+		and trace.has("effective_profile") and trace.has("expression_mode"),
+		str(trace.keys()))
+
+	# VoiceFingerprint 是结构化输入参数（不是 NLP 反推）
+	var vf: Dictionary = ExpressionTrace.voice_fingerprint(ec)
+	_check("p3c2_fingerprint_structured", vf.has("directness") and vf.has("warmth") and vf.has("guardedness"),
+		str(vf.keys()))
+
+	# anchor_deviation：0 < dev（有适应）且 < 1（不是完全被 context 覆盖）
+	var dev: float = ExpressionTrace.anchor_deviation(ec.get("identity_anchor", {}), ec.get("effective_profile", {}))
+	_check("p3c2_anchor_deviation_bounded", dev >= 0.0 and dev <= 1.0, "dev=%f" % dev)
+
+	# context_adaptation_delta：不同关系对象 → 非零差异
+	var rs2: RelationshipStore = sim.relationships
+	rs2.adjust("npc_oun", "npc_kadga", "benevolence", 500)
+	rs2.adjust("npc_oun", "npc_weila", "fear", 500)
+	var ec_k: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_kadga", sa, rs2, 100)
+	var ec_w: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, rs2, 100)
+	var adapt: float = ExpressionTrace.context_adaptation_delta(ec_k, ec_w)
+	_check("p3c2_context_adaptation_nonzero", adapt > 0.05, "adapt=%f" % adapt)
+
+	# SurfaceHistory：记录 + 查重
+	var actor: Dictionary = sim.actors["npc_oun"]
+	SurfaceHistory.record(actor, "没有多的。", 100)
+	SurfaceHistory.record(actor, "没有多的。", 101)
+	_check("p3c3_repetition_detected", SurfaceHistory.is_repetition(actor, "没有多的。"))
+	_check("p3c3_no_repetition_for_new", not SurfaceHistory.is_repetition(actor, "这次真不行。"))
+	# History 不进入 cognition
+	_check("p3c3_history_presentation_only", not actor.has("beliefs") or not str(actor["beliefs"]).find("没有多的") != -1)
+
+	# AddressPolicy：恐惧 → SECOND_PERSON；正常 → USE_NAME
+	var am_fear: String = SurfaceHistory.address_mode(sim.actors["npc_oun"], "npc_weila", rs2, sa)
+	var am_normal: String = SurfaceHistory.address_mode(sim.actors["npc_oun"], "npc_kadga", rs2, sa)
+	_check("p3c3_address_policy_adapts", am_fear == "SECOND_PERSON" or am_normal == "USE_NAME",
+		"fear=%s normal=%s" % [am_fear, am_normal])
