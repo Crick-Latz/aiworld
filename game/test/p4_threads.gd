@@ -26,6 +26,7 @@ func _all_tests() -> void:
 	_te_resolution_evidence()
 	await _th_no_sim_effect()
 	await _ti_determinism()
+	await _test_p41_episode_identity()
 
 ## TA：承诺跨天——Day 1 promise → Day 20 fulfilled → 同 thread RESOLVED
 func _ta_promise_long_gap() -> void:
@@ -157,3 +158,56 @@ func _sim_hash(sim) -> Dictionary:
 	out["tick"] = sim.tick
 	out["events"] = sim.events.size()
 	return out
+
+# ── P4.1: TM/TN/TO/TQ — Episode Identity + Purity ──
+func _test_p41_episode_identity() -> void:
+	# TM：同 dyad 两个承诺 → 两个不同线程
+	var te := ThreadEngine.new()
+	var st := te.engine
+	var tid1 := st.open_thread("PROMISE_THREAD", ["npc_oun", "npc_kadga"], 100, 100,
+		{"promisor": "npc_oun", "promisee": "npc_kadga"}, "promise|npc_oun|npc_kadga|100")
+	var tid2 := st.open_thread("PROMISE_THREAD", ["npc_oun", "npc_kadga"], 200, 200,
+		{"promisor": "npc_oun", "promisee": "npc_kadga"}, "promise|npc_oun|npc_kadga|200")
+	_check("p41_tm_two_promises_different_threads", tid1 != tid2,
+		"%s vs %s" % [tid1, tid2])
+
+	# TM-2：兑现事件只入对应线程（episode_key 匹配）
+	var ev_kept1 := {"type": "promise_kept", "actor_id": "npc_oun", "to_id": "npc_kadga", "seq": 300, "tick": 300}
+	st.ingest_event(ev_kept1, [])
+	_check("p41_tm_kept_matches_one_thread",
+		(st.threads[0].get("source_event_ids", []) as Array).size() + (st.threads[1].get("source_event_ids", []) as Array).size() == 3,
+		"t1=%d t2=%d（kept 只入一个线程，另一个保持独立——事件无法区分是哪个承诺）" % [(st.threads[0].get("source_event_ids", []) as Array).size(), (st.threads[1].get("source_event_ids", []) as Array).size()])
+
+	# TN：同 dyad 两个不同疑问 → 两个 EPISTEMIC 线程
+	var tn_st := StoryThread.new()
+	tn_st.open_thread("EPISTEMIC_THREAD", ["npc_weila", "npc_oun"], 100, 100,
+		{"asker": "npc_weila", "subject": "npc_oun"}, "question|npc_weila|npc_oun|100")
+	tn_st.open_thread("EPISTEMIC_THREAD", ["npc_weila", "npc_oun"], 150, 150,
+		{"asker": "npc_weila", "subject": "npc_oun"}, "question|npc_weila|npc_oun|150")
+	_check("p41_tn_two_questions_different_threads", tn_st.threads.size() == 2 and tn_st.threads[0]["thread_id"] != tn_st.threads[1]["thread_id"])
+
+	# TO：已解决的冲突不复活——新冲突创建新线程
+	var to_st := StoryThread.new()
+	var old_tid := to_st.open_thread("RELATIONSHIP_CONFLICT", ["npc_weila", "npc_oun"], 100, 100,
+		{"confronter": "npc_weila", "confronted": "npc_oun"}, "conflict|npc_weila|npc_oun|100")
+	to_st.threads[0]["status"] = "RESOLVED"
+	to_st.threads[0]["resolved_tick"] = 200
+	# 新冲突
+	var new_tid := to_st.open_thread("RELATIONSHIP_CONFLICT", ["npc_weila", "npc_oun"], 500, 500,
+		{"confronter": "npc_weila", "confronted": "npc_oun"}, "conflict|npc_weila|npc_oun|500")
+	_check("p41_to_resolved_not_reopened",
+		old_tid != new_tid and str(to_st.threads[0]["status"]) == "RESOLVED" and str(to_st.threads[1]["status"]) == "OPEN")
+
+	# TQ：Thread Purity——无污染
+	var pq := StoryThread.new()
+	pq.open_thread("PROMISE_THREAD", ["a", "b"], 100, 100, {}, "promise|a|b|100")
+	pq.open_thread("PROMISE_THREAD", ["a", "b"], 200, 200, {}, "promise|a|b|200")
+	_check("p41_tq_purity_zero_contamination", pq.check_purity() == 0)
+
+	# Attachment provenance 存在
+	var prov_ok := true
+	for th in te.engine.threads:
+		var atts: Array = th.get("attachments", [])
+		if (th.get("source_event_ids", []) as Array).size() > 1 and atts.is_empty():
+			prov_ok = false
+	_check("p41_tp_attachments_have_provenance", prov_ok)

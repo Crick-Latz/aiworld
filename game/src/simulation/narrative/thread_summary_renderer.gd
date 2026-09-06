@@ -52,11 +52,11 @@ static func render_summary(thread_ir: Dictionary, event_texts: Dictionary) -> St
 			elif status == "RESOLVED":
 				return "%s对%s的承诺最终没能守住。" % [who, other]
 			elif status == "DORMANT":
-				return "%s欠%s的一份人情，已经 %d 天没人提起了。" % [who, other, duration]
+				return "%s对%s的承诺暂时没有新的进展。" % [who, other]
 			return "%s对%s的承诺还在进行中。" % [who, other]
 		"EPISTEMIC_THREAD":
 			if status == "RESOLVED":
-				return "%s对%s的疑问，经过 %d 天终于有了答案。" % [who, other, duration]
+				return "%s对此形成了新的判断。" % who  # Belief revised ≠ Truth discovered
 			elif status == "DORMANT":
 				return "%s心中的一个疑问渐渐沉寂了，但并未消散。" % who
 			return "%s还在试图弄清楚关于%s的一件事。" % [who, other]
@@ -65,9 +65,13 @@ static func render_summary(thread_ir: Dictionary, event_texts: Dictionary) -> St
 				return "%s与%s的冲突终于平息了。" % [who, other]
 			return "%s与%s之间的紧张关系仍在持续。" % [who, other]
 		"RECIPROCITY_THREAD":
-			return "%s与%s之间形成了互助的默契。" % [who, other]
+			if status == "RESOLVED":
+				return "%s回报了%s此前的帮助。" % [who, other]
+			elif status == "DORMANT":
+				return "此前的互助关系暂时没有新的进展。"
+			return "%s与%s之间出现了一次可能延续的互助。" % [who, other]
 		"INSTITUTION_CONFLICT":
-			return "围绕营地规则，一场关于公平与遵守的较量已经持续了 %d 天。" % duration
+			return "围绕营地规则的争议持续了 %d 天。" % duration
 		"AUTHORITY_THREAD":
 			return "%s在群体中的影响力正在发生变化。" % who
 		"RELOCATION_THREAD":

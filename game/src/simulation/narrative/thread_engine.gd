@@ -42,7 +42,8 @@ func _try_seed(event_type: String, e: Dictionary, sim) -> void:
 		"promise_made":
 			if actor != "" and to_id != "":
 				engine.open_thread("PROMISE_THREAD", [actor, to_id], seq, tick,
-					{"promisor": actor, "promisee": to_id})
+					{"promisor": actor, "promisee": to_id},
+					"promise|%s|%s|%d" % [actor, to_id, seq])
 		"food_request_refused", "water_request_refused", "tool_request_refused":
 			# EPISTEMIC_THREAD：被拒者有 open_question 时
 			var proposer := str(e.get("proposer_id", ""))
@@ -59,19 +60,23 @@ func _try_seed(event_type: String, e: Dictionary, sim) -> void:
 			var proposer := str(e.get("proposer_id", ""))
 			if actor != "" and proposer != "":
 				engine.open_thread("RECIPROCITY_THREAD", [actor, proposer], seq, tick,
-					{"helper": actor, "receiver": proposer})
+					{"helper": actor, "receiver": proposer},
+					"reciprocity|%s|%s|%d" % [actor, proposer, seq])
 		"shared_food":
 			if actor != "" and to_id != "":
 				engine.open_thread("RECIPROCITY_THREAD", [actor, to_id], seq, tick,
-					{"helper": actor, "receiver": to_id})
+					{"helper": actor, "receiver": to_id},
+					"reciprocity|%s|%s|%d" % [actor, to_id, seq])
 		"confronted_violation":
 			if actor != "" and to_id != "":
 				engine.open_thread("RELATIONSHIP_CONFLICT", [actor, to_id], seq, tick,
-					{"confronter": actor, "confronted": to_id})
+					{"confronter": actor, "confronted": to_id},
+					"conflict|%s|%s|%d" % [actor, to_id, seq])
 		"storage_withheld":
 			if actor != "":
 				engine.open_thread("INSTITUTION_CONFLICT", [actor], seq, tick,
-					{"violator": actor, "rule_id": str(e.get("rule_id", ""))})
+					{"violator": actor, "rule_id": str(e.get("rule_id", ""))},
+					"institution|%s" % str(e.get("rule_id", "")))
 		"rule_supported":
 			if actor != "":
 				engine.open_thread("AUTHORITY_THREAD", [actor], seq, tick,

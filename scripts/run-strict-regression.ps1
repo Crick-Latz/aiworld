@@ -29,7 +29,7 @@ $suites = @(
     @{ Name = "story_causal"; Script = "res://test/story_causal.gd"; Expected = 15 },
     @{ Name = "story_dynamic"; Script = "res://test/story_dynamic.gd"; Expected = 11 },
     @{ Name = "story_save"; Script = "res://test/story_save.gd"; Expected = 6 },
-    @{ Name = "ai_mock"; Script = "res://test/ai_mock.gd"; Expected = 10 },
+    @{ Name = "ai_mock"; Script = "res://test/ai_mock.gd"; Expected = 16 },
     @{ Name = "island_sim"; Script = "res://test/island_sim.gd"; Expected = 8 },
     @{ Name = "p0_cognition"; Script = "res://test/p0_cognition.gd"; Expected = 9 },
     @{ Name = "p1_social"; Script = "res://test/p1_social.gd"; Expected = 33 },

@@ -25,14 +25,15 @@ var threads: Array = []
 var _next_id := 0
 
 ## ── Thread 创建（只从结构化 ThreadSeed，GPT 第 62-63 条）──
-func open_thread(thread_type: String, participants: Array, seed_event_seq: int, seed_tick: int, identity: Dictionary) -> String:
+func open_thread(thread_type: String, participants: Array, seed_event_seq: int, seed_tick: int, identity: Dictionary, episode_key: String = "") -> String:
 	var tid := "TH_%03d" % _next_id
 	_next_id += 1
 	threads.append({
 		"thread_id": tid,
 		"thread_type": thread_type,
 		"participants": participants,
-		"identity": identity,  # 结构 ID（promise_id/institution_id/question_id/dyad）——不是关键词
+		"identity": identity,
+		"episode_key": episode_key,  # P4.1: 唯一 episode ID（不是 dyad！同 dyad 可有多个独立 episode）
 		"opened_tick": seed_tick,
 		"last_activity_tick": seed_tick,
 		"resolved_tick": -1,
@@ -59,14 +60,27 @@ func ingest_event(e: Dictionary, causal_edges: Array) -> void:
 	var actor := str(e.get("actor_id", ""))
 	var to_id := str(e.get("to_id", str(e.get("proposer_id", ""))))
 
-	# Tier 1：显式 ID 匹配
+	# P4.1 Tier 1：episode_key 匹配（每个承诺/疑问/冲突是独立 episode——不是 dyad！）
 	for th in threads:
 		if _is_resolved_or_superseded(th):
 			continue
+		var th_ep := str(th.get("episode_key", ""))
+		if th_ep != "" and _episode_match(th_ep, e):
+			_add_node(th, seq, tick)
+			_check_resolution(th, e)
+			_record_attachment(th, seq, "TIER_1_EXPLICIT_ID")
+			return
+	# P4.1 legacy Tier 1：dyad fallback（仅对无 episode_key 的线程）
+	for th in threads:
+		if _is_resolved_or_superseded(th):
+			continue
+		if str(th.get("episode_key", "")) != "":
+			continue  # 有 episode_key 的线程不用 dyad 匹配
 		if _tier1_match(th, e):
 			_add_node(th, seq, tick)
 			_check_resolution(th, e)
-			return  # 一个事件只入一个线程（防 merge）
+			_record_attachment(th, seq, "TIER_1_DYAD_FALLBACK")
+			return
 
 	# Tier 2：因果边匹配
 	for edge in causal_edges:
@@ -269,3 +283,63 @@ func stats() -> Dictionary:
 			"DORMANT": s["dormant"] += 1
 			"RESOLVED": s["resolved"] += 1
 	return s
+
+## P4.1: episode_key 匹配（事件 → 线程的唯一标识——不是 dyad）
+func _episode_match(episode_key: String, e: Dictionary) -> bool:
+	var parts := episode_key.split("|")
+	if parts.size() < 2:
+		return false
+	var kind := parts[0]
+	var actor := str(e.get("actor_id", ""))
+	var to_id := str(e.get("to_id", str(e.get("proposer_id", ""))))
+	match kind:
+		"promise":
+			if parts.size() >= 3:
+				return actor == parts[1] and to_id == parts[2] and str(e.get("type", "")) in ["promise_kept", "promise_broken", "remind_promise"]
+		"question":
+			if parts.size() >= 3:
+				return actor == parts[1] and to_id == parts[2] and str(e.get("type", "")) in ["reason_asked", "reason_claimed", "reason_deflected", "observing_person", "reflected", "foraged_empty", "fished_empty"]
+		"institution":
+			return str(e.get("rule_id", "")) == parts[1]
+		"reciprocity":
+			if parts.size() >= 3:
+				return (actor == parts[1] and to_id == parts[2]) or (actor == parts[2] and to_id == parts[1])
+		"conflict":
+			if parts.size() >= 3:
+				return (actor == parts[1] or to_id == parts[1]) and str(e.get("type", "")) in ["confronted_violation", "kept_distance", "relocated"]
+	return false
+
+## P4.1: 记录 attachment provenance（每个节点为什么被加入这个线程）
+func _record_attachment(th: Dictionary, node_seq: int, tier: String) -> void:
+	var att: Array = th.get("attachments", [])
+	att.append({"node": node_seq, "tier": tier, "tick": int(th.get("last_activity_tick", 0))})
+	th["attachments"] = att
+
+## P4.1: Thread Purity——同一线程不得包含多个独立 episode
+func check_purity() -> int:
+	var contaminated := 0
+	for th in threads:
+		var tt := str(th.get("thread_type", ""))
+		if tt in ["PROMISE_THREAD", "EPISTEMIC_THREAD", "RECIPROCITY_THREAD"]:
+			var key := str(th.get("episode_key", ""))
+			var seeds := 0
+			for n in th.get("opening_nodes", []):
+				seeds += 1
+			if seeds > 1:
+				contaminated += 1
+	return contaminated
+
+## P4.1: 统计 attachment tier 分布
+func attachment_stats() -> Dictionary:
+	var out := {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
+	for th in threads:
+		for att in th.get("attachments", []):
+			out["total"] += 1
+			match str(att.get("tier", "")):
+				"TIER_1_EXPLICIT_ID", "TIER_1_DYAD_FALLBACK":
+					out["tier1"] += 1
+				"TIER_2_CAUSAL_EDGE":
+					out["tier2"] += 1
+				"TIER_3_SEMANTIC":
+					out["tier3"] += 1
+	return out
