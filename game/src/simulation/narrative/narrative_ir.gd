@@ -279,7 +279,9 @@ static func build_ir(sim, perspective: String, focus_actor: String, limit: int) 
 		if trace_id != "" and not trace_refs.has(trace_id):
 			trace_refs.append(trace_id)
 	# P3a-2: 确定性 Claim 提取（同一视角——CHARACTER 只含该角色可见事件的主张）
-	var claims: Array = NarrativeClaim.extract(visible_events, perspective, focus_actor)
+	# P3a-2.1：actors（心理 trace 提取）+ edges（批准因果边）传入
+	var graph_edges: Array = graph.get("edges", []) if typeof(graph.get("edges", null)) == TYPE_ARRAY else []
+	var claims: Array = NarrativeClaim.extract(visible_events, perspective, focus_actor, actors, graph_edges)
 	var claim_index := {}
 	for c in claims:
 		claim_index[str(c.get("claim_id", ""))] = c

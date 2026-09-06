@@ -18,13 +18,15 @@ extends RefCounted
 ## CAUSAL_LINK 类主张只有存在结构化因果边时才允许（时间相邻≠因果）。
 
 const TYPES := ["WORLD_EVENT", "BELIEF", "EMOTION", "INTENTION",
-	"RELATIONSHIP_CHANGE", "INSTITUTION_STATE", "CAUSAL_LINK", "UNCERTAINTY"]
+	"RELATIONSHIP_CHANGE", "INSTITUTION_STATE", "CAUSAL_LINK", "UNCERTAINTY",
+	"SPEECH_ACT",  # P3a-2.1：说了 X ≠ 相信 X（sincerity 永远 UNKNOWN）
+	"INTERPRETATION", "DECISION_REASON"]
 
 var _claims: Array = []
 var _next_id := 0
 
 func _add(type: String, subject: String, predicate: String, object, status: String,
-		event_ids: Array, trace_ids: Array = []) -> String:
+		event_ids: Array, trace_ids: Array = [], confidence: float = 1.0) -> String:
 	var cid := "C%d" % _next_id
 	_next_id += 1
 	_claims.append({
@@ -36,6 +38,7 @@ func _add(type: String, subject: String, predicate: String, object, status: Stri
 		"epistemic_status": status,
 		"source_event_ids": event_ids,
 		"source_trace_ids": trace_ids,
+		"confidence": confidence,  # P3a-2.1：低于 0.6 只能写"怀疑"，高于 0.8 才能写"几乎认定"
 		"beat_id": "",
 	})
 	return cid
@@ -52,7 +55,7 @@ func all() -> Array:
 ## ── 确定性提取：从可见事件生成主张 ──
 ## perspective 决定 truth level：OBJECTIVE 视角全是 OBJECTIVE；
 ## CHARACTER 视角对他人行为是 PERCEIVED，对自己记忆里的信念是 BELIEVED。
-static func extract(events: Array, perspective: String, focus_actor: String = "") -> Array:
+static func extract(events: Array, perspective: String, focus_actor: String = "", actors: Dictionary = {}, edges: Array = []) -> Array:
 	var nc := NarrativeClaim.new()
 	for e in events:
 		var seq: Array = [int(e.get("seq", 0))]
@@ -84,12 +87,19 @@ static func extract(events: Array, perspective: String, focus_actor: String = ""
 				nc._add("INSTITUTION_STATE", actor, "RULE_ADOPTED",
 					{"object": str(e.get("object", ""))}, status, seq)
 			"storage_withheld":
-				nc._add("WORLD_EVENT", actor, "WITHHELD_CONTRIBUTION",
+				nc._add("WORLD_EVENT", actor, "VIOLATED",
 					{"rule_id": str(e.get("rule_id", ""))}, status, seq,
 					[str(e.get("trace_id", ""))] if str(e.get("trace_id", "")) != "" else [])
-			"storage_contributed", "storage_partial_comply":
-				nc._add("WORLD_EVENT", actor, "CONTRIBUTED",
-					{"amount": int(e.get("amount", 0)), "required": int(e.get("required", 0))},
+			"storage_contributed":
+				nc._add("WORLD_EVENT", actor, "COMPLIED", {"rule_id": str(e.get("rule_id", "")),
+					"required": int(e.get("required", 0)), "actual": int(e.get("amount", 0)), "ratio": 1.0},
+					status, seq, [str(e.get("trace_id", ""))] if str(e.get("trace_id", "")) != "" else [])
+			"storage_partial_comply":
+				# P3a-2.1 修 2：部分遵守是一等语义——绝不压回"CONTRIBUTED"让 LLM 写成"履行了规则"
+				var req2: int = maxi(1, int(e.get("required", 1)))
+				nc._add("WORLD_EVENT", actor, "PARTIALLY_COMPLIED", {"rule_id": str(e.get("rule_id", "")),
+					"required": int(e.get("required", 0)), "actual": int(e.get("amount", 0)),
+					"ratio": clampf(float(e.get("amount", 0)) / float(req2), 0.0, 1.0)},
 					status, seq, [str(e.get("trace_id", ""))] if str(e.get("trace_id", "")) != "" else [])
 			"confronted_violation":
 				nc._add("WORLD_EVENT", actor, "CONFRONTED", {"target": to_id}, status, seq)
@@ -98,8 +108,13 @@ static func extract(events: Array, perspective: String, focus_actor: String = ""
 			"reason_asked":
 				nc._add("INTENTION", actor, "SOUGHT_REASON", {"from": to_id}, status, seq)
 			"reason_claimed":
-				nc._add("BELIEF", actor, "STATED", {"claim": str(e.get("claim", ""))},
-					"PERCEIVED" if actor != focus_actor else "BELIEVED", seq)
+				# P3a-2.1 修 1（truth-level bug）：说了 X ≠ 相信 X（Claim ≠ Speaker Belief）。
+				# 世界事实只是"欧恩表达了这个结构化声明"； sincerity 永远 UNKNOWN。
+				# OBJECTIVE 视角 → OBJECTIVE（之前误标 PERCEIVED）。
+				# 只有说话者确有 belief 证据时，才由 trace 提取层另行生成 BELIEF_STATE。
+				nc._add("SPEECH_ACT", actor, "STATED",
+					{"proposition": str(e.get("claim", "")), "sincerity": "UNKNOWN"},
+					"OBJECTIVE" if perspective == "OBJECTIVE" else "PERCEIVED", seq)
 			"reflected":
 				var txt := str(e.get("text", ""))
 				if txt.find("错怪") != -1:
@@ -111,9 +126,48 @@ static func extract(events: Array, perspective: String, focus_actor: String = ""
 				nc._add("WORLD_EVENT", actor, "INJURED", {}, status, seq)
 			"weather_storm":
 				nc._add("WORLD_EVENT", "", "STORM", {}, "OBJECTIVE", seq)
-	# CAUSAL_LINK 主张：只从已验证的结构化因果边生成（NJ 的实现基础——
-	# 调用方传入 edges，这里只转成 Claim，绝不自己推断因果）
+	# P3a-2.1：Trace 心理 Claims（确定性；LLM 永不能创建）
+	# 内部状态只在 CHARACTER/RETROSPECTIVE 视角使用（OBJECTIVE 默认不用，第 9 条）
+	if perspective != "OBJECTIVE" and actors.has(focus_actor) and focus_actor != "":
+		nc._extract_psych(actors[focus_actor])
+	# P3a-2.1：DECISION_FACTOR 从 institution trace（所有视角——决策因素是行为原因，非隐秘内心）
+	for aid in actors:
+		nc._extract_decision_factors(actors[aid])
+	# P3a-2.1：CAUSAL_LINK 只从已批准结构边（绝不自己建边；CONTRIBUTED_TO 而非 CAUSED）
+	for edge in edges:
+		var esrc := str(edge.get("source", ""))
+		if ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage"].has(esrc):
+			var rel: String = {"FULFILLS": "FULFILLED", "VIOLATES": "VIOLATED", "ESTABLISHES": "ESTABLISHED",
+				"CAUSE": "CONTRIBUTED_TO", "RESPONDS_TO": "TRIGGERED", "CHANGES_RELATIONSHIP": "CONTRIBUTED_TO"}.get(str(edge.get("relation", "")), "CONTRIBUTED_TO")
+			nc._add("CAUSAL_LINK", "", rel, {"from": edge.get("from", ""), "to": edge.get("to", "")},
+				"INFERRED", [], [], 0.9)  # 结构边 → 高置信但仍是 INFERRED（非直接观察）
 	return nc.all()
+
+## 心理状态提取：记忆里的解释分布 → INTERPRETATION（带 confidence）；反思 → BELIEF_REVISION
+func _extract_psych(actor: Dictionary) -> void:
+	for m in actor.get("memories", []):
+		var interp: Dictionary = m.get("interpretation", {})
+		if interp.is_empty():
+			continue
+		var dom := str(interp.get("dominant", ""))
+		if dom == "":
+			continue
+		# 主导解释的权重 = confidence（解释竞争的真实分布，不是拍脑袋）
+		var conf := 0.5
+		for c in interp.get("candidates", []):
+			if str(c.get("id", "")) == dom:
+				conf = float(c.get("weight", 0.5))
+		var subj := str(actor.get("id", ""))
+		var cp := str(m.get("counterpart_id", ""))
+		_add("INTERPRETATION", subj, "INTERPRETED_MOTIVE", {"actor": cp, "motive": dom},
+			"INFERRED", [int(m.get("seq", -1))] if int(m.get("seq", -1)) >= 0 else [], [], conf)
+	# 情绪：最近一次认知转移的情绪变化（只有最近的可提取——诚实局限）
+	var lt: Dictionary = actor.get("last_transition", {})
+	for em_key in lt.get("emotion_changes", {}):
+		var em_val: float = float(lt["emotion_changes"][em_key])
+		if absf(em_val) > 0.05:
+			_add("EMOTION", str(actor.get("id", "")), "FELT_" + str(em_key).to_upper(),
+				{"intensity": em_val}, "BELIEVED", [])
 
 ## 从 claim_ids 派生 source ids（LLM 未来只能给 claim_ids；底层 ids 由系统推导）
 static func derive_sources(claims: Array, claim_ids: Array) -> Dictionary:
@@ -128,3 +182,25 @@ static func derive_sources(claims: Array, claim_ids: Array) -> Dictionary:
 				if str(t) != "" and not trace_ids.has(str(t)):
 					trace_ids.append(str(t))
 	return {"event_ids": event_ids, "trace_ids": trace_ids}
+
+## 决策因素：从 institution trace 生成（只提取实际参与评分的变量；CONTRIBUTED_TO 而非 CAUSED）
+func _extract_decision_factors(actor: Dictionary) -> void:
+	var tr: Dictionary = actor.get("last_institution_trace", {})
+	if tr.is_empty():
+		return
+	var subj := str(actor.get("id", ""))
+	var mode := str(tr.get("mode", ""))
+	var tid: Array = [str(tr.get("trace_id", ""))] if str(tr.get("trace_id", "")) != "" else []
+	# 只提取 trace 里明确记录的决策变量（不猜测未记录的因素）
+	var leg: float = float(tr.get("legitimacy", -1))
+	if leg >= 0 and leg < 0.35 and (mode == "VIOLATE" or mode == "PARTIAL"):
+		_add("DECISION_REASON", subj, "LOW_LEGITIMACY_FACTOR", {"action": mode, "legitimacy": leg},
+			"INFERRED", [], tid, 0.8)
+	var det: float = float(tr.get("detection", -1))
+	if det >= 0 and det < 0.3 and mode == "VIOLATE":
+		_add("DECISION_REASON", subj, "LOW_DETECTION_FACTOR", {"action": mode, "detection": det},
+			"INFERRED", [], tid, 0.8)
+	var rec: float = float(tr.get("recognition", -1))
+	if rec >= 0.5:
+		_add("DECISION_REASON", subj, "RECOGNIZED_RULE", {"action": mode, "recognition": rec},
+			"INFERRED", [], tid, 0.9)

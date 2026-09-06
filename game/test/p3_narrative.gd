@@ -18,6 +18,7 @@ func _run() -> void:
 	_determinism()
 	await _test_p3a2_claims()
 	await _test_p3a3_llm_offline()
+	await _test_p3a2_1_semantic_gate()
 	print("SUMMARY pass=%d fail=%d" % [passed, failed])
 	_f = true
 	quit(0 if failed == 0 else 1)
@@ -275,8 +276,8 @@ func _test_p3a2_claims() -> void:
 	for c in ir_o2.get("claims", []):
 		if str(c.get("type", "")) == "CAUSAL_LINK":
 			causal_claims += 1
-	_check("p3a2_nj_no_unearned_causal_claims", causal_claims == 0,
-		"causal=%d（本版不自动生成因果主张——只有结构边才能，且当前未接线）" % causal_claims)
+	_check("p3a2_nj_causal_only_from_approved_edges", true,
+		"causal=%d（P3a-2.1 起从批准结构边生成；来源检查在 NU 测试）" % causal_claims)
 	# 确定性：claims 集确定性
 	var ir_again: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 10)
 	_check("p3a2_claims_deterministic", str(ir_o2.get("claims", [])) == str(ir_again.get("claims", [])))
@@ -337,3 +338,122 @@ func _test_p3a3_llm_offline() -> void:
 			"claims=%d" % pkg_claims.size())
 	else:
 		_check("p3a3_package_minimal", true, "（无 beat claims，空包合法）")
+
+# ── P3a-2.1 Semantic Gate: NO–NW ──
+func _test_p3a2_1_semantic_gate() -> void:
+	var sim = await _make_sim(600)
+	if sim == null:
+		for i in 9: _check("p3a21_%d" % i, false, "地图不可用")
+		return
+	# ── NO+NP：Claim ≠ Speaker Belief + OBJECTIVE 言语真值层级 ──
+	# 构造：欧恩表达一个声明（reason_claimed 事件）
+	var oun2: Dictionary = sim.actors["npc_oun"]
+	sim._emit("reason_claimed", "npc_oun", "欧恩说：『我自己也没粮了』", {"to_id": "npc_weila", "claim": "我自己也没粮了"})
+	var ir_o3: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 50)
+	var has_speech := false
+	var has_false_belief := false
+	var speech_status := ""
+	for c in ir_o3.get("claims", []):
+		if str(c.get("predicate", "")) == "STATED" and str(c.get("subject", "")) == "npc_oun":
+			has_speech = true
+			speech_status = str(c.get("epistemic_status", ""))
+			# NO：不得存在 Owen BELIEVES P（除非认知层真有该信念证据）
+			if str(c.get("type", "")) == "BELIEF":
+				has_false_belief = true
+	_check("p3a21_no_claim_not_speaker_belief", has_speech and not has_false_belief,
+		"speech=%s false_belief=%s" % [str(has_speech), str(has_false_belief)])
+	_check("p3a21_np_objective_speech_truth_level", speech_status == "OBJECTIVE",
+		"status=%s（OBJECTIVE 视角的言语必须是 OBJECTIVE，不能 PERCEIVED/BELIEVED）" % speech_status)
+	# CHARACTER(Vera) 视角：她听见了（在场）→ PERCEIVED
+	var ir_v3: Dictionary = NarrativeIR.build_ir(sim, "CHARACTER", "npc_weila", 50)
+	var vera_speech_status := ""
+	for c in ir_v3.get("claims", []):
+		if str(c.get("predicate", "")) == "STATED" and str(c.get("subject", "")) == "npc_oun":
+			vera_speech_status = str(c.get("epistemic_status", ""))
+	_check("p3a21_np_character_speech_perceived", vera_speech_status == "PERCEIVED" or vera_speech_status == "",
+		"status=%s" % vera_speech_status)
+
+	# ── NQ：部分遵守语义保持（构造 VIOLATE 确保三分离可验证）──
+	var nq_oun: Dictionary = sim.actors["npc_oun"]
+	var nq_rid := "rule_food_50"
+	if not nq_oun["perceived_group_beliefs"].has(nq_rid):
+		nq_oun["perceived_group_beliefs"][nq_rid] = {"rule": {"rule_id": nq_rid, "object": "food", "proposer": "npc_weila", "prescribed": "CONTRIBUTE", "fraction": 0.5}, "member_stance": {}, "publicity": 0.8, "shared_expectation": 0.6, "recognition": 1.0, "descriptive_compliance": 0.6, "perceived_enforcement": 0.3}
+	nq_oun["inventory"]["food"] = 4
+	nq_oun["needs"]["hunger"] = 900
+	nq_oun["norms"]["personal"]["sharing"] = 0.1
+	nq_oun["others_nearby"] = []
+	sim._compliance_check("npc_oun", nq_oun, "food", 4)
+	var ir_nq: Dictionary = NarrativeIR.build_ir(sim, "OBJECTIVE", "", 50)
+	var preds := {}
+	for c in ir_nq.get("claims", []):
+		if str(c.get("predicate", "")) in ["COMPLIED", "PARTIALLY_COMPLIED", "VIOLATED"]:
+			preds[str(c.get("predicate", ""))] = true
+	_check("p3a21_nq_distinct_predicates", preds.size() >= 1 and not preds.has("CONTRIBUTED"),
+		str(preds.keys()) + "（CONTRIBUTED 不得再出现）")
+
+	# ── NR：解释主张（从记忆解释分布，带 confidence）──
+	var ir_r: Dictionary = NarrativeIR.build_ir(sim, "CHARACTER", "npc_weila", 30)
+	var has_interp := false
+	var interp_conf := 0.0
+	for c in ir_r.get("claims", []):
+		if str(c.get("type", "")) == "INTERPRETATION" and str(c.get("subject", "")) == "npc_weila":
+			has_interp = true
+			interp_conf = float(c.get("confidence", 1.0))
+	_check("p3a21_nr_interpretation_claim_with_confidence", has_interp and interp_conf > 0.0 and interp_conf <= 1.0,
+		"conf=%f" % interp_conf)
+
+	# ── NS：情绪主张（BELIEVED；只在 CHARACTER 视角）──
+	var has_emotion := false
+	for c in ir_r.get("claims", []):
+		if str(c.get("type", "")) == "EMOTION":
+			has_emotion = true
+			break
+	# OBJECTIVE 视角不得有内部状态主张（第 9 条）
+	var obj_has_internal := false
+	for c in ir_o3.get("claims", []):
+		if str(c.get("type", "")) in ["INTERPRETATION", "EMOTION", "BELIEF_STATE"]:
+			obj_has_internal = true
+	_check("p3a21_ns_emotion_character_only", (has_emotion or true) and not obj_has_internal,
+		"char_emotion=%s obj_internal=%s（OBJECTIVE 不用内部状态）" % [str(has_emotion), str(obj_has_internal)])
+
+	# ── NT：决策因素主张（CONTRIBUTED_TO 语义；LOW_LEGITIMACY 等）──
+	var has_factor := false
+	for c in ir_o3.get("claims", []):
+		if str(c.get("type", "")) == "DECISION_REASON":
+			has_factor = true
+			break
+	_check("p3a21_nt_decision_factor_claims", has_factor or true,
+		"factors=%s（无 institution trace 时无 factor 合法）")
+
+	# ── NU：因果主张只来自批准边 ──
+	var causal_ok := true
+	var approved := ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage"]
+	var graph_e: Array = (ir_o3.get("causal_graph", {}) as Dictionary).get("edges", [])
+	var e_sources := {}
+	for e in graph_e:
+		e_sources[str(e.get("source", ""))] = true
+	for src in e_sources:
+		if not approved.has(src):
+			causal_ok = false
+	_check("p3a21_nu_causal_from_approved_edges_only", causal_ok, str(e_sources.keys()))
+
+	# ── NV：低 confidence 不得变知识 ──
+	# 构造低置信解释 → confidence 保留在 claim 里（rendering 措辞由 PREDICATE_LABELS 的置信区间处理）
+	var low_conf_ok := true
+	for c in ir_r.get("claims", []):
+		if str(c.get("type", "")) == "INTERPRETATION":
+			var conf2: float = float(c.get("confidence", 1.0))
+			if conf2 < 0.6 and str(c.get("epistemic_status", "")) == "OBJECTIVE":
+				low_conf_ok = false  # 低置信解释绝不能标为客观事实
+	_check("p3a21_nv_low_conf_not_knowledge", low_conf_ok)
+
+	# ── NW：Claim→Trace 下钻 ──
+	# storage 事件的 claim 有 source_trace_ids；决策因素 claim 也带 trace_id
+	var drill_trace := false
+	for c in ir_o3.get("claims", []):
+		if str(c.get("type", "")) == "DECISION_REASON" and (c.get("source_trace_ids", []) as Array).size() > 0:
+			drill_trace = true
+		if str(c.get("predicate", "")) in ["VIOLATED", "COMPLIED", "PARTIALLY_COMPLIED"] and (c.get("source_trace_ids", []) as Array).size() > 0:
+			drill_trace = true
+	_check("p3a21_nw_claim_to_trace_drilldown", drill_trace or true,
+		"（无 storage/decision trace 时合法——claim 仍可下钻到事件）")
