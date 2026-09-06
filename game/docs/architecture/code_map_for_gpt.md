@@ -104,3 +104,49 @@
 ## P3a-3 新增（2026-09-06）
 
 - `narrative/llm_narrative_renderer.gd`：最小权限真实 LLM Renderer。输入=claim package（beat 选中的主张 + epistemic_status，无 EventLog/WorldState/事件原文）；输出契约=`{sentences:[{text, claim_ids}]}`——解析层校验 claim_ids ⊆ IR（幻觉 id 剔除整句），底层 ids 由 derive_sources 系统派生。Prompt 硬约束（不是 Story Generator/禁新事实动机情绪对话因果/认识层级保持/BELIEVED 只能写"某人认为"）。配置门控：`config/ai.local.json` 或 `AIWORD_LLM_BASE_URL/AIWORD_LLM_API_KEY` 环境变量——未配置返回 null 走 Template fallback（零网络默认）。Observer 已接线（配置存在才启用 LLM）。
+
+---
+
+# P3 全阶段代码索引（2026-09-06 最终版）
+
+## 叙事层完整结构（simulation/narrative/，13 文件）
+
+```
+narrative/
+├── narrative_ir.gd                 # IR 构建：因果图/beat/三视角/claims
+├── narrative_claim.gd              # 原子主张：事件映射 + 心理Claims + CAUSAL_LINK
+├── narrative_renderer.gd           # 统一渲染契约（所有实现经 Validator）
+├── template_narrative_renderer.gd  # 确定性模板（claim-first + 三风格 + 置信度措辞）
+├── llm_narrative_renderer.gd       # 真实 LLM（最小权限：claim package → {text, claim_ids}）
+├── mock_narrative_renderer.gd      # 七种故障注入
+├── narrative_output_validator.gd   # 六项验证（ids⊆IR/claim覆盖/来源一致/无编造）
+├── speech_act.gd                   # 结构化言语行为（16 种 + 三层分离）
+├── template_dialogue_renderer.gd   # 台词模板（ExpressionContext 措辞调制）
+├── dialogue_validator.gd           # 立场反转/承诺/威胁检测
+├── expression_context.gd           # L/M/S 三时间尺度 + FAST/SLOW
+├── expression_trace.gd             # 表达留痕 + 声音指纹 + 防回归指标
+└── surface_history.gd              # 表面历史 + 称呼策略（presentation-only）
+```
+
+## 认知层（simulation/，冻结，33 文件）
+
+```
+cognition/     # 11 文件：transition/subjective_event/interpretation/claim/
+               #   personality_dynamics/theory_of_mind/reflection/appraisal/
+               #   belief_store/goal_manager/intention_manager
+decision/      # 4 文件：action_registry/decision_engine/action_forecaster/utility_curves
+social/        # 3 文件：resource_spec/relationship_store/social_system
+ecology/       # 1 文件：place_belief
+institution/   # 4 文件：convention/rule_discourse/compliance/authority
+character/     # 2 文件：personality_profile/life_history
+behavior/      # 2 文件：agent_brain/needs_system
+core/          # 2 文件：island_simulation/simulation_core
+```
+
+## 测试（22 套件，549 项全绿）
+
+| 关键验收套件 | 数量 | 覆盖 |
+|---|---|---|
+| p2_institution.gd | 44 | 制度全链 + 集成测试 + Freeze Gate |
+| p3_narrative.gd | 78 | P3a+b+c 全部（含 NH-NN/DB-DH/CA-CJ） |
+| p1_5/1_6/1_7 | 61 | 认知/认识/生态验收 |
