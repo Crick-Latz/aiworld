@@ -16,7 +16,8 @@ var chronicles: Array = []  # P2: 每日编年史（模拟自己写日记，P3 �
 var world := {}  # 环境状态（资源/天气/火/庇护所）
 var relationships := RelationshipStore.new()
 var obligations: Array = []
-var _encounters := {}   # P1.7c: dyad -> {co_presence, interactions, voluntary}  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
+var _encounters := {}
+var institutions: Array = []  # P2c-1: InstitutionRecord（客观层）   # P1.7c: dyad -> {co_presence, interactions, voluntary}  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
 var map_query
 
 var _seq := 0
@@ -345,6 +346,8 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_seek_person(id, a, action, new_events)
 		"relocate":
 			_do_relocate(id, a, action, new_events)
+		"propose_rule":
+			_do_propose_rule(id, a, action, new_events)
 		"keep_distance":
 			_do_keep_distance(id, a, action, new_events)
 		"gather_wood":
@@ -549,6 +552,51 @@ func _do_relocate(id: String, a: Dictionary, action: Dictionary, ev: Array) -> v
 	var target: Vector2i = action.get("target", a["tile"])
 	a["base"] = target
 	_emit("relocated", id, "%s 搬到了新住处" % a["display_name"], {"pos": str(target)})
+
+## P2b 规则提议执行：公共讨论（PublicEvent）→ 各人独立表态 → InstitutionRecord
+## 规则建立只记录客观事实"被正式建立过"；每个 NPC 的认知仍走 PerceivedGroupBelief
+func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var object_id := str(action.get("object", "food"))
+	var fraction: float = float(action.get("fraction", 0.5))
+	var rule := RuleDiscourse.build_rule(id, object_id, fraction)
+	var audience: Array = []
+	for other_id in actors:
+		if other_id != id and _is_nearby(a["tile"], actors[other_id]["tile"]):
+			audience.append(other_id)
+	if audience.is_empty():
+		return  # 没有公众就没有公共性
+	var rule_text := "每次找到%s，拿出 %d%% 放到公共储备" % [ResourceSpec.spec(object_id)["verb"], int(fraction * 100)]
+	_emit("rule_proposed", id, "%s 提出：『%s』" % [a["display_name"], rule_text],
+			{"object": object_id, "rule": rule, "audience": audience.duplicate()})
+	# 提议者自我表态（公开）
+	RuleDiscourse.self_stance(a, rule, 1, audience.size() + 1, tick)
+	var public_supports := 0
+	# 每个在场者独立评估并公开表态（含反提案）——绝不同步修改信念
+	for other_id in audience:
+		var w: Dictionary = actors[other_id]
+		var stance_eval: Dictionary = RuleDiscourse.evaluate_proposal(w, rule, relationships)
+		RuleDiscourse.self_stance(w, rule, int(stance_eval["stance"]), audience.size() + 1, tick)
+		var st := int(stance_eval["stance"])
+		if st > 0:
+			public_supports += 1
+			_emit("rule_supported", other_id, "%s 公开表示同意" % w["display_name"], {"rule": rule, "object": object_id})
+		elif st < 0:
+			_emit("rule_opposed", other_id, "%s 说：『%s，这个比例太高了』" % [w["display_name"], str(stance_eval["reason"])], {"rule": rule, "object": object_id})
+		else:
+			_emit("rule_abstained", other_id, "%s 沉默不语" % w["display_name"], {"rule": rule, "object": object_id})
+	# 所有目击者（含旁观）更新对群体立场的感知
+	for wid in actors:
+		if wid == id:
+			continue
+		if _is_nearby(a["tile"], actors[wid]["tile"]):
+			RuleDiscourse.witness_stance(actors[wid], rule, id, 1, audience.size() + 1, tick)
+			for other_id2 in audience:
+				var st2 := 1 if str(actors[other_id2].get("last_rule_stance", "1")) == "1" else -1
+				RuleDiscourse.witness_stance(actors[wid], rule, other_id2, st2, audience.size() + 1, tick)
+	# InstitutionRecord：客观事实——规则被公开提议且获得足够公开支持
+	if public_supports >= 2:
+		institutions.append({"rule": rule, "created_tick": tick, "supports": public_supports, "status": "active"})
+		_emit("institution_established", id, "『%s』成了营地的正式约定" % rule_text, {"rule": rule, "object": object_id})
 
 ## 债务辅助（视图供给）
 func _obligations_of(debtor: String) -> Array:
@@ -967,6 +1015,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"norms": a.get("norms", {}),
 		"my_obligations": a.get("my_obligations", []),
 			"open_questions": a.get("open_questions", []),
+			"institutional_goals": a.get("institutional_goals", []),
 			"place_beliefs": a.get("place_beliefs", PlaceBelief.new()),
 			"base": a.get("base", a["tile"]),
 			"_relationships_hint": relationships,
@@ -1044,6 +1093,18 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		if id != actor_id and actors.has(actor_id):
 			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
+		# P2a: 目击行为 → 我的局部规律观察（约定涌现，非全局统计）
+		var sem11: Dictionary = ResourceSpec.semantics_of(e)
+		if sem11.has("act") and id != actor_id:
+			if (str(sem11["act"]) == "GIVE" and str(sem11.get("response", "")) == "DONE") or (str(sem11["act"]) == "REQUEST" and str(sem11.get("response", "")) == "ACCEPT"):
+				ConventionSystem.observe(a, "GIVE:" + str(sem11.get("object", "food")), true, tick)
+			elif str(sem11["act"]) == "REQUEST" and str(sem11.get("response", "")) == "REFUSE":
+				ConventionSystem.observe(a, "GIVE:" + str(sem11.get("object", "food")), false, tick)
+				# 协调摩擦 → 制度目标（我们需要个规矩）
+				if str(e.get("proposer_id", "")) == id and ConventionSystem.should_seek_rule(a, str(sem11.get("object", "food")), 0.6):
+					var goals9: Array = a.get("institutional_goals", [])
+					goals9.append({"object": str(sem11.get("object", "food")), "kind": "we_need_a_rule", "tick": tick})
+					a["institutional_goals"] = goals9
 	return int(e["seq"])
 
 ## 远离目标方向的可行走格（回避用）

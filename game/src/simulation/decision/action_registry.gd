@@ -38,6 +38,8 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a11 != null: actions.append(a11)
 	for a13 in _request(p, needs, actor, world):
 		actions.append(a13)
+	var a22 = _propose_rule(actor, world)
+	if a22 != null: actions.append(a22)
 	var a20 = _seek_person(p, actor)
 	if a20 != null: actions.append(a20)
 	var a21 = _settle(p, actor, world)
@@ -318,6 +320,20 @@ static func _epistemic_actions(p: PersonalityProfile, actor: Dictionary, world: 
 			out.append({"action": "ask_third_party", "target": null, "target_actor": other_visible,
 				"about_actor": about, "question_kind": str(q0.get("kind", "")), "utility": u_third, "desc": "找人间接打听", "duration": 1})
 	return out
+
+## P2b 规则提议：制度目标存在 + 有听众 → 提议结构化规则（自然语言只是 Renderer）
+static func _propose_rule(actor: Dictionary, world: Dictionary):
+	if not RuleDiscourse.can_propose(actor, world):
+		return null
+	var goals: Array = actor.get("institutional_goals", [])
+	var g0: Dictionary = goals[0]
+	var object_id := str(g0.get("object", "food"))
+	# 提议比例来自我的个人规范（我认同多少就提议多少——人性如此）
+	var my_pref: float = float(actor.get("norms", {}).get("personal", {}).get("sharing", 0.5))
+	var fraction: float = clampf(0.25 + my_pref * 0.5, 0.2, 0.6)
+	var u: float = 0.3 + my_pref * 0.3  # 制度目标的效用：解决协调摩擦
+	return {"action": "propose_rule", "target": null, "object": object_id, "fraction": fraction,
+			"utility": u, "desc": "提议立个规矩", "duration": 2}
 
 ## P1.7b 主动寻人：认识问题悬而未决而人不在视野 → 走向他最后已知的位置（跨空间认识行动）；
 ## 亏欠未还/亲近之人久未见 → 也去找。目的地是我【记忆里的】位置——人可能已经走了（扑空是真实的）。
