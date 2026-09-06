@@ -22,3 +22,4 @@ node_modules/
 .env
 config/runtime.local.json
 game/config/runtime.local.json
+game/config/ai.local.json
