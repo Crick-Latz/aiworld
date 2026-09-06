@@ -278,13 +278,29 @@ static func build_ir(sim, perspective: String, focus_actor: String, limit: int) 
 		var trace_id := str(e.get("trace_id", ""))
 		if trace_id != "" and not trace_refs.has(trace_id):
 			trace_refs.append(trace_id)
+	# P3a-2: 确定性 Claim 提取（同一视角——CHARACTER 只含该角色可见事件的主张）
+	var claims: Array = NarrativeClaim.extract(visible_events, perspective, focus_actor)
+	var claim_index := {}
+	for c in claims:
+		claim_index[str(c.get("claim_id", ""))] = c
+	# beat 关联：beat 的 source_event_ids 对应的 claims 挂 beat_id
 	var beat_refs: Array = []
 	for beat in beats:
 		beat_refs.append(str(beat.get("beat_id", "")))
+	for b in beats:
+		var b_claims: Array = []
+		for c in claims:
+			for sid in b.get("source_event_ids", []):
+				if (c.get("source_event_ids", []) as Array).has(int(sid)):
+					b_claims.append(str(c.get("claim_id", "")))
+					break
+		b["claim_ids"] = b_claims
+		for cid in b_claims:
+			if claim_index.has(cid):
+				claim_index[cid]["beat_id"] = str(b.get("beat_id", ""))
 	var result := {"ok": true, "code": "OK", "message": "", "schema_version": SCHEMA_VERSION,
-		"perspective": perspective, "focus_actor": focus_actor,
 		"window": {"start": 0, "end": int(sim.tick)}, "causal_graph": graph,
-		"selected_beats": beats, "known_facts": known_facts,
+		"selected_beats": beats, "claims": claims, "known_facts": known_facts,
 		"subjective_facts": subjective_facts, "forbidden_inferences": forbidden,
 		"source_refs": {"event_ids": event_refs, "trace_ids": trace_refs, "beat_ids": beat_refs}}
 	result["ir_hash"] = _sha256(JSON.stringify(_canonicalize(result)))

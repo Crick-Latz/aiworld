@@ -57,6 +57,28 @@ static func validate(output, ir: Dictionary) -> Dictionary:
 	for a in o.get("mentioned_actors", []):  # renderer 若显式声明提到的 actor
 		if not known_actors.has(str(a)):
 			return {"ok": false, "code": "E_ACTOR_UNKNOWN", "message": "输出了 IR 之外的 actor: %s" % str(a)}
+	# P3a-2: claim 层验证
+	var ir_claims: Dictionary = {}
+	for c in ir.get("claims", []):
+		ir_claims[str(c.get("claim_id", ""))] = c
+	var out_sentences: Array = o.get("sentences", o.get("paragraphs", []))
+	if not out_sentences.is_empty():
+		for sn in out_sentences:
+			if typeof(sn) != TYPE_DICTIONARY: continue
+			var kind := str(sn.get("kind", "CONTENT"))
+			var s_cids: Array = sn.get("claim_ids", [])
+			# NH：CONTENT 句必须有 claim；HEADER/EMPTY_DAY/STYLE_ONLY 豁免
+			if kind == "CONTENT" and s_cids.is_empty() and (ir.get("claims", []) as Array).size() > 0:
+				return {"ok": false, "code": "E_SENTENCE_UNCLAIMED", "message": "内容句没有 claim 支撑"}
+			for cid in s_cids:
+				if not ir_claims.has(str(cid)):
+					return {"ok": false, "code": "E_CLAIM_UNKNOWN", "message": "claim_id 不在 IR: %s" % str(cid)}
+			# NL：句子的 source ids 必须能从其 claims 派生（一致性）
+			if kind == "CONTENT" and not s_cids.is_empty():
+				var deriv: Dictionary = NarrativeClaim.derive_sources(ir.get("claims", []), s_cids)
+				for ev in sn.get("source_event_ids", []):
+					if not (deriv["event_ids"] as Array).has(int(ev)):
+						return {"ok": false, "code": "E_SOURCE_MISMATCH", "message": "句子引用了与其 claims 无关的事件 %s" % str(ev)}
 	# 5. 禁止编造对话：IR 无 speech 字段 → 输出文本不得含直引号对话（「」或 “” 包裹的引语）
 	if not _ir_has_speech(ir) and _has_quoted_speech(text):
 		return {"ok": false, "code": "E_DIALOGUE_FABRICATED", "message": "IR 无 speech content，输出不得包含引号对话"}

@@ -63,6 +63,27 @@ func render(model: Dictionary) -> void:
 		tick_label.text += "\n" + world_facts
 	var events: Array = model.get("recent_events", [])
 	var lines: Array = []
+	# P3a-2: 句子级编年史（可下钻——每句下方直接展开 claims 与事件来源）
+	var n_sentences: Array = model.get("narrative_sentences", [])
+	if not n_sentences.is_empty():
+		var n_lines: Array = []
+		for sn in n_sentences:
+			n_lines.append(str(sn.get("text", "")))
+			if str(sn.get("kind", "")) == "CONTENT":
+				var ev_str: Array = []
+				for ev in sn.get("source_event_ids", []):
+					ev_str.append("E%d" % int(ev))
+				var cid_str: Array = []
+				for cid in sn.get("claim_ids", []):
+					cid_str.append(str(cid))
+				n_lines.append("    [color=#8899aa]%s │ %s[/color]" % ["、".join(cid_str), " ".join(ev_str)])
+		var chronicle_hdr: String = str(model.get("chronicle_text", ""))
+		if chronicle_hdr != "":
+			n_lines.append(chronicle_hdr)
+		events_label.clear()
+		events_label.append_text("
+".join(n_lines))
+		return  # 句子模式：不再混排原始事件流（下钻信息已在句下）
 	var chronicle: String = str(model.get("chronicle_text", ""))
 	if chronicle != "":
 		lines.append(chronicle)

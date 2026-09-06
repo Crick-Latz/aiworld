@@ -432,6 +432,12 @@ func _refresh_hud() -> void:
 		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
 			recent.append(all[i])
 		model["recent_events"] = recent
+		# P3a-2: 句子级编年史（claim-first）+ 证据面板数据
+		if island_sim != null:
+			var n_ir: Dictionary = NarrativeIR.build_ir(island_sim, "OBJECTIVE", "", 6)
+			var n_out: Dictionary = NarrativeRenderer.render({"render": func(ir, st, la, ln): return TemplateNarrativeRenderer.render(ir, st, la, ln)}, n_ir)
+			model["narrative_sentences"] = n_out.get("sentences", [])
+			model["narrative_ir_claims"] = n_ir.get("claims", [])
 		# P2: 编年史——最近两天的日记（金色，与原始事件流区分）
 		var chron_lines: Array = []
 		var chronicles: Array = island_sim.chronicles

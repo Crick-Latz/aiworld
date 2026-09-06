@@ -18,60 +18,90 @@ const BEAT_LABELS := {
 	"REQUEST_CONFLICT": "求助风波",
 }
 
+## P3a-2 claim-first 渲染：每句 = 一组已验证的原子主张（sentence contract）
 static func render(ir: Dictionary, _style: String = "chronicle", language: String = "zh", length: int = 3) -> Dictionary:
 	if not bool(ir.get("ok", false)):
 		return _reject("E_IR_INVALID", "IR 无效")
-	var lines: Array = []
-	var beat_ids: Array = []
-	var event_ids: Array = []
-	var trace_ids: Array = []
-	# 头行：视角标记（CHARACTER/RETROSPECTIVE 明确时间层级）
+	var sentences: Array = []
+	var beats: Array = ir.get("selected_beats", [])
+	var claims: Array = ir.get("claims", [])
+	var claim_by_id := {}
+	for c in claims:
+		claim_by_id[str(c.get("claim_id", ""))] = c
+	# 头行（HEADER：允许零 claim）
 	var perspective := str(ir.get("perspective", "OBJECTIVE"))
 	var focus := str(ir.get("focus_actor", ""))
-	if perspective == "OBJECTIVE":
-		lines.append("【营地记事】")
-	elif perspective == "CHARACTER":
-		lines.append("【%s 的所见所感】" % _actor_name(ir, focus))
-	else:
-		lines.append("【%s 的回望】" % _actor_name(ir, focus))
-	# 主体：每个 beat 一句话，全部从 source_event_ids 回溯原文
-	var beats: Array = ir.get("selected_beats", [])
+	var header := "【营地记事】"
+	if perspective == "CHARACTER":
+		header = "【%s 的所见所感】" % focus
+	elif perspective == "RETROSPECTIVE":
+		header = "【%s 的回望】" % focus
+	sentences.append({"sentence_id": "S0", "kind": "HEADER", "text": header, "claim_ids": [], "beat_ids": [], "source_event_ids": [], "source_trace_ids": []})
 	var used := 0
+	var sid_n := 1
 	for beat in beats:
 		if used >= maxi(1, length):
 			break
 		var bid := str(beat.get("beat_id", ""))
-		var btype := str(beat.get("type", ""))
-		var src_events: Array = beat.get("source_event_ids", [])
-		if bid == "":
+		var cids: Array = beat.get("claim_ids", [])
+		if bid == "" or cids.is_empty():
 			continue
-			if src_events.is_empty():
-				# 无源事件但 beat 有效：计入 ids，文本省略（省略而非补全）
-				beat_ids.append(bid)
-				continue
-		var label := str(BEAT_LABELS.get(btype, btype))
-		var quote := _first_event_text(ir, int(src_events[0]))
-		if quote == "":
-			beat_ids.append(bid)
+		var label := str(BEAT_LABELS.get(str(beat.get("type", "")), str(beat.get("type", ""))))
+		# 句子文本由 claims 确定性合成（不是自由发挥）
+		var c0: Dictionary = claim_by_id.get(str(cids[0]), {})
+		if c0.is_empty():
 			continue
+		var subj := str(c0.get("subject", ""))
+		var pred := str(c0.get("predicate", ""))
+		var text := "%s——%s %s" % [label, subj, PREDICATE_LABELS.get(pred, pred)]
 		if perspective == "RETROSPECTIVE" and int(beat.get("start_tick", 0)) > 0:
-			lines.append("第 %d 天·%s——%s" % [_day_of(int(beat.get("start_tick", 0))), label, quote])
-		else:
-			lines.append("%s——%s" % [label, quote])
-		beat_ids.append(bid)
-		for s in src_events:
-			event_ids.append(int(s))
-		var t: Array = beat.get("source_trace_ids", [])
-		for tid in t:
-			trace_ids.append(str(tid))
+			text = "第 %d 天·%s——%s %s" % [int(beat.get("start_tick", 0)) / 24 + 1, label, subj, PREDICATE_LABELS.get(pred, pred)]
+		# 来源：从 claim_ids 系统派生（NL：LLM 未来只给 claim_ids，ids 由系统推导）
+		var derived: Dictionary = NarrativeClaim.derive_sources(claims, cids)
+		sentences.append({"sentence_id": "S%d" % sid_n, "kind": "CONTENT", "text": text,
+			"claim_ids": cids.duplicate(), "beat_ids": [bid],
+			"source_event_ids": derived["event_ids"], "source_trace_ids": derived["trace_ids"]})
+		sid_n += 1
 		used += 1
-	# IR 不足以支持任何叙述 → 明确说"没有值得记的事"，而不是编造
 	if used == 0:
-		lines.append("这一天没有什么值得记下的事。" if language == "zh" else "Nothing noteworthy.")
-	return {"ok": true, "text": "\n".join(lines), "beat_ids": beat_ids,
-		"source_event_ids": event_ids, "source_trace_ids": trace_ids,
-		"renderer": "template", "schema_version": "narrative-output-1.0"}
+		sentences.append({"sentence_id": "S%d" % sid_n, "kind": "EMPTY_DAY", "text": "这一天没有什么值得记下的事。" if language == "zh" else "Nothing noteworthy.", "claim_ids": [], "beat_ids": [], "source_event_ids": [], "source_trace_ids": []})
+	var full_text: Array = []
+	for sn in sentences:
+		full_text.append(str(sn.get("text", "")))
+	return {"ok": true, "text": "
+".join(full_text), "sentences": sentences,
+		"beat_ids": _collect(sentences, "beat_ids"), "source_event_ids": _collect(sentences, "source_event_ids"),
+		"source_trace_ids": _collect(sentences, "source_trace_ids"),
+		"renderer": "template", "schema_version": "narrative-output-1.1"}
 
+static func _collect(sentences: Array, field: String) -> Array:
+	var out: Array = []
+	for sn in sentences:
+		for v in sn.get(field, []):
+			if not out.has(v):
+				out.append(v)
+	return out
+
+const PREDICATE_LABELS := {
+	"REFUSED_REQUEST": "拒绝了求助",
+	"GRANTED_REQUEST": "答应了求助",
+	"GAVE_RESOURCE": "分出了食物",
+	"PROMISED": "许下了承诺",
+	"KEPT_PROMISE": "兑现了承诺",
+	"BROKE_PROMISE": "违背了承诺",
+	"PROPOSED_RULE": "提议了新规矩",
+	"RULE_ADOPTED": "让规矩立了起来",
+	"WITHHELD_CONTRIBUTION": "没有按约交公",
+	"CONTRIBUTED": "交了公粮",
+	"CONFRONTED": "当面对质",
+	"RELOCATED": "搬了家",
+	"SOUGHT_REASON": "去问了缘由",
+	"STATED": "说了什么",
+	"REVISED_BELIEF": "重新审视了自己的判断",
+	"REFLECTED": "想了很久",
+	"INJURED": "受了伤",
+	"STORM": "暴风雨来了",
+}
 static func _actor_name(ir: Dictionary, actor_id: String) -> String:
 	# IR 不携带 names 表时退回 id（不读取 sim——renderer 只见 IR）
 	return actor_id
