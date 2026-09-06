@@ -1,7 +1,7 @@
 # 代码位置索引（供 GPT 评审）
 
 仓库：`D:\Project_AI\aiword` ｜ 模拟层代码共 33 个 GDScript 文件、约 5000 行（不含测试/场景/文档）
-所有路径相对 `game/`。测试 12 套 373 项全绿。
+所有路径相对 `game/`。FG-R1 严格门禁为 16 套 471 项全绿；权威记录见 `docs/validation/freeze_gate_r1_report_for_gpt.md`。
 
 ---
 
@@ -69,9 +69,12 @@
 | `test/p1_5_cognition.gd`（24） | **A-G**：同事件异解释（愤怒 0.40 vs 0.00）/异人格归因/信念修正（记恨推翻）/预测误差收敛/规范分离/富裕世界正向纽带/反事实社会 |
 | `test/p1_6_cognition.gd`（27） | **H/I/J/K/M + L/N/LifeHistory**：认识行动涌现/三人三策略分化/隐状态隔离/野外认识链（种子 30003）/声明≠事实/认知层零资源分支 grep/承诺互惠/经历改变学习 |
 | `test/p1_7_ecology.gd`（10） | **O/P/Q/R/S**：关系塑空间/资源压过厌恶/跨空间寻人/亏欠吸引记恨排斥但依赖可压过 |
-| `test/p2_institution.gd`（20） | **T/V/U/W/X/Y/Z/AA/AB/AC/AD**：约定先于规则/**Publicness 核心假设**/感知分歧/规则≠遵守/隐藏违规/制度学习/合法性-恐惧分离/修订/涌现角色（三源身份）/背书建权威/提案者违规权威崩塌 |
+| `test/p2_institution.gd`（44） | **T/V/U/W/X/Y/Z/AA/AB/AC/AD + AJ–AM + NA–NF**：约定先于规则/**Publicness 核心假设**/感知分歧/规则≠遵守/隐藏违规/制度学习/合法性-恐惧分离/修订/涌现角色/非食物制度/Trace/Claim/反提案/Narrative IR 基础门禁 |
+| `test/narrative_ir.gd`（24） | FG-R1 独立契约：类型化节点、端点完整、无自环、显式因果、禁止时间邻近与文本关键词推断、三视角隔离、稳定 beat/source/hash、畸形输入拒绝 |
 | `test/p1_5_sweep.gd` / `p2_wild_sweep.gd` | 200 种子 motif 扫描（认识行动/承诺/校准 Brier）／30 种子×900 tick 制度生命周期（**5 种结局 motif + 完整链 2/30**） |
 | `test/run_all.gd`（199）等 | WP-02~04 单元/地图/玩家/存档/AI mock |
+
+严格入口：`scripts/run-strict-regression.ps1`（16 套、471 项；非零退出码、FAIL、SCRIPT ERROR、引擎 ERROR、SUMMARY 缺失或断言数漂移均失败）。
 
 ## 八、文档（审计与报告链）
 

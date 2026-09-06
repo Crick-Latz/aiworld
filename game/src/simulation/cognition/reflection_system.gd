@@ -24,6 +24,7 @@ static func reflect(actor: Dictionary, tick: int) -> Dictionary:
 	var dyn := PersonalityDynamics.dynamics(actor.get("personality", null),
 		actor.get("sensitivities", {}), actor.get("norms", {}))
 	var insights: Array = []
+	var insight_records: Array = []
 	var grudges: Dictionary = actor.get("grudges", {})
 
 	# 1-2. 聚合解释证据（记忆内 + 记忆后的新证据）
@@ -33,8 +34,12 @@ static func reflect(actor: Dictionary, tick: int) -> Dictionary:
 		if counterpart == "" or counterpart == me:
 			continue
 		if not frames.has(counterpart):
-			frames[counterpart] = {"hostile": 0.0, "warm": 0.0, "scarcity": 0.0, "refusals": 0, "helps": 0}
+			frames[counterpart] = {"hostile": 0.0, "warm": 0.0, "scarcity": 0.0,
+				"refusals": 0, "helps": 0, "source_event_ids": []}
 		var f: Dictionary = frames[counterpart]
+		var source_seq := int(m.get("seq", 0))
+		if m.has("seq") and source_seq >= 0 and not (f["source_event_ids"] as Array).has(source_seq):
+			(f["source_event_ids"] as Array).append(source_seq)
 		var interp: Dictionary = m.get("interpretation", {})
 		var type := str(m.get("type", ""))
 		if type == "food_request_refused":
@@ -71,7 +76,10 @@ static func reflect(actor: Dictionary, tick: int) -> Dictionary:
 				tom.add_evidence(oid, "reliable", -1.0, 0.15 * float(dyn["betrayal_learning_rate"]), -1, tick)
 			if bs != null:
 				bs.update_confidence("%s 不肯帮我" % name_of.call(oid), 0.75, 0.4)
-			insights.append("想来想去，%s 那些拒绝不是没有原因的——他就是没把我当同伴" % name_of.call(oid))
+			var grudge_text := "想来想去，%s 那些拒绝不是没有原因的——他就是没把我当同伴" % name_of.call(oid)
+			insights.append(grudge_text)
+			insight_records.append({"text": grudge_text, "kind": "grudge_formed", "about_id": oid,
+				"source_event_ids": (f["source_event_ids"] as Array).duplicate()})
 		elif scarcity_score > hostile_score and grudges.has(oid) and str(grudges[oid].get("frame", "")) == "hostile":
 			# 匮乏证据反超 → 推翻记恨（信念修正！）
 			grudges.erase(oid)
@@ -80,14 +88,20 @@ static func reflect(actor: Dictionary, tick: int) -> Dictionary:
 				tom.weaken(oid, "reliable", 0.3)
 			if bs != null:
 				bs.update_confidence("%s 不肯帮我" % name_of.call(oid), 0.15, 0.6)
-			insights.append("回想起来，%s 那几天好像真的什么都没打到……我也许错怪了他" % name_of.call(oid))
+			var revision_text := "回想起来，%s 那几天好像真的什么都没打到……我也许错怪了他" % name_of.call(oid)
+			insights.append(revision_text)
+			insight_records.append({"text": revision_text, "kind": "belief_revision", "about_id": oid,
+				"source_event_ids": (f["source_event_ids"] as Array).duplicate()})
 		elif warm_score > 0.8 and not grudges.has(oid):
 			# 温暖主导 → 感念 + 亲近
 			if tom != null:
 				tom.add_evidence(oid, "generous", 1.0, 0.2 * float(dyn["positive_learning_rate"]), -1, tick)
 			if bs != null:
 				bs.update_confidence("%s 靠得住" % name_of.call(oid), 0.8, 0.4)
-			insights.append("这几天多亏了%s，他是真的把我当同伴" % name_of.call(oid))
+			var warm_text := "这几天多亏了%s，他是真的把我当同伴" % name_of.call(oid)
+			insights.append(warm_text)
+			insight_records.append({"text": warm_text, "kind": "warm_reappraisal", "about_id": oid,
+				"source_event_ids": (f["source_event_ids"] as Array).duplicate()})
 
 	actor["grudges"] = grudges
 
@@ -96,13 +110,19 @@ static func reflect(actor: Dictionary, tick: int) -> Dictionary:
 	var desc: Dictionary = norms.get("descriptive", {})
 	var ds: float = float(desc.get("sharing", 0.5))
 	if ds < 0.25:
-		insights.append("这座岛上没人在乎别人死活……谁都只顾自己")
+		var norm_text_low := "这座岛上没人在乎别人死活……谁都只顾自己"
+		insights.append(norm_text_low)
+		insight_records.append({"text": norm_text_low, "kind": "norm_reflection", "about_id": "", "source_event_ids": []})
 	elif ds > 0.75:
-		insights.append("这里的人愿意互相搭把手，跟以前船上不一样")
+		var norm_text_high := "这里的人愿意互相搭把手，跟以前船上不一样"
+		insights.append(norm_text_high)
+		insight_records.append({"text": norm_text_high, "kind": "norm_reflection", "about_id": "", "source_event_ids": []})
 	# 5. 个人规范：只有高 reactance 的人在目睹自私风气后反而更坚持分享
 	var personal: Dictionary = norms.get("personal", {})
 	if ds < 0.3 and float(dyn["norm_reactance"]) > 0.7:
 		personal["sharing"] = clampf(float(personal.get("sharing", 0.5)) + 0.02, 0.0, 1.0)
-		insights.append("正因为这里的人都这么自私，我才更觉得同伴之间就该互相分享")
+		var reactance_text := "正因为这里的人都这么自私，我才更觉得同伴之间就该互相分享"
+		insights.append(reactance_text)
+		insight_records.append({"text": reactance_text, "kind": "norm_reactance", "about_id": "", "source_event_ids": []})
 
-	return {"insights": insights, "frames": frames}
+	return {"insights": insights, "insight_records": insight_records, "frames": frames}

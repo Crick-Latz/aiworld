@@ -9,9 +9,9 @@ extends RefCounted
 
 ## 规则价值映射（第 5 条）：规则语义 → 相关个人价值。语义通用，零专属函数。
 const RULE_VALUE_MAPPING := {
-	"CONTRIBUTE": ["sharing", "self_reliance"],   # 贡献类：分享 vs 自立
-	"OBEY": ["self_reliance", "reciprocity"],     # 服从协调类
-	"DISCLOSE": ["reciprocity"],                  # 信息披露类
+	"CONTRIBUTE": {"sharing": 1.0, "reciprocity": 0.5, "self_reliance": -0.7},
+	"OBEY": {"self_reliance": 0.3, "reciprocity": 0.4},
+	"DISCLOSE": {"reciprocity": 0.8, "self_reliance": -0.2},
 }
 
 ## PerceivedInstitution 正式结构（第 2 条）：各字段独立演化，绝不联动同步
@@ -79,9 +79,9 @@ static func legitimacy_of(actor: Dictionary, rid: String, object_id: String) -> 
 	var alignment := 0.0
 	var wsum := 0.0
 	for v in values:
-		alignment += float(personal.get(v, 0.5)) * float(values[v])
+		alignment += (float(personal.get(v, 0.5)) - 0.5) * float(values[v])
 		wsum += absf(float(values[v]))
-	var base := clampf(alignment / maxf(wsum, 0.1) * 0.5 + 0.5, 0.0, 1.0)  # 带符号：自立高→共享规则合法性降
+	var base := clampf(0.5 + alignment / maxf(wsum, 0.1), 0.0, 1.0)  # 中性价值=0.5；带符号：自立高→共享规则合法性降
 	var proposer_trust: float = 0.0
 	if actor.has("_relationships_hint") and actor["_relationships_hint"] != null:
 		proposer_trust = clampf(float(actor["_relationships_hint"].composite_trust(str(actor.get("id", "")), str(rule.get("proposer", "")))) / 600.0, -0.5, 0.5)

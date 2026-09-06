@@ -161,7 +161,15 @@ func _init_actors(actor_configs: Array) -> void:
 			"grudges": {},          # P1.5: 已形成的记恨（可被新证据推翻）
 			"last_transition": {},  # P1.5: 最近一次认知转移摘要（DecisionTrace 用）
 			"last_decision_trace": {},
+			"last_institution_trace": {},
 			"memories": [],
+			"open_questions": [],
+			"observing": {},
+			"claims_received": [],
+			"institutional_goals": [],
+			"observed_regularities": {},
+			"conventions": [],
+			"perceived_group_beliefs": {},
 		}
 	# P1: 反思系统需要把 id 翻译成名字（信念是人话，不是 id）
 	var display_names := {}
@@ -229,8 +237,17 @@ func step() -> Array:
 					goals5.append({"object": str(pgb5[rid5]["rule"].get("object", "food")), "kind": "amend", "fraction": 0.25, "tick": tick})
 					actors[id]["institutional_goals"] = goals5
 			var result: Dictionary = ReflectionSystem.reflect(actors[id], tick)
-			for insight in result.get("insights", []):
-				_emit("reflected", id, "%s" % str(insight), {})
+			var insight_records: Array = result.get("insight_records", [])
+			if insight_records.is_empty():
+				for insight in result.get("insights", []):
+					_emit("reflected", id, "%s" % str(insight), {})
+			else:
+				for record in insight_records:
+					_emit("reflected", id, str(record.get("text", "")), {
+						"reflection_kind": str(record.get("kind", "reflection")),
+						"about_id": str(record.get("about_id", "")),
+						"source_event_ids": (record.get("source_event_ids", []) as Array).duplicate(),
+					})
 	# P1.6: 认识问题过期（人不会永远纠结；observing 到期清理）
 	for id in actors:
 		var qs2: Array = actors[id].get("open_questions", [])
@@ -539,12 +556,13 @@ func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> vo
 				{"proposer_id": id, "object": object_id})
 		# 承诺被接受 → 债务台账（P1.6 #20）
 		if bool(action.get("offers_promise", false)):
+			var promise_seq := _emit("promise_made", id, "%s 说：『这份情我记下，以后报答』" % a["display_name"],
+					{"to_id": target_id, "object": object_id})
 			obligations.append({"debtor": id, "creditor": target_id, "object": object_id,
-					"made_tick": tick, "due_tick": tick + 96, "repaid": false})
+					"made_tick": tick, "due_tick": tick + 96, "repaid": false,
+					"promise_event_seq": promise_seq})
 			a["my_obligations"] = _obligations_of(id)
 			target["owed_to_me"] = _owed_to(target_id)
-			_emit("promise_made", id, "%s 说：『这份情我记下，以后报答』" % a["display_name"],
-					{"to_id": target_id, "object": object_id})
 	else:
 		_emit(ev_prefix + "_request_refused", target_id,
 				"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
@@ -581,7 +599,7 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 	if audience.is_empty():
 		return  # 没有公众就没有公共性
 	var rule_text := "每次找到%s，拿出 %d%% 放到公共储备" % [ResourceSpec.spec(object_id)["verb"], int(fraction * 100)]
-	_emit("rule_proposed", id, "%s 提出：『%s』" % [a["display_name"], rule_text],
+	var proposal_seq := _emit("rule_proposed", id, "%s 提出：『%s』" % [a["display_name"], rule_text],
 			{"object": object_id, "rule": rule, "audience": audience.duplicate()})
 	# 提议者自我表态（公开）
 	RuleDiscourse.self_stance(a, rule, 1, audience.size() + 1, tick)
@@ -615,7 +633,7 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 				inst["rule"]["fraction"] = fraction
 				inst["revised_tick"] = tick
 				break
-		_emit("rule_revised", id, "%s 的修订提议通过：比例改为 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction})
+		_emit("rule_revised", id, "%s 的修订提议通过：比例改为 %d%%" % [a["display_name"], int(fraction * 100)], {"object": object_id, "fraction": fraction, "rule": rule, "source_event_ids": [proposal_seq]})
 	# InstitutionRecord（P2.1.1 去重：同 object 已有活制度不重复建立——修 729/629 膨胀）
 	if adopted and goal_kind != "amend" and goal_kind != "counter_propose":
 		var already := false
@@ -625,22 +643,13 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 				break
 		if not already:
 				institutions.append({"rule": rule, "created_tick": tick, "supports": public_supports, "status": "active"})
-				_emit("institution_established", id, "『%s』成了营地的正式约定" % rule_text, {"rule": rule, "object": object_id})
+				_emit("institution_established", id, "『%s』成了营地的正式约定" % rule_text, {"rule": rule, "object": object_id, "source_event_ids": [proposal_seq]})
 		# P2.1.1 目标生命周期：制度建立 → 目标终结，不再重复开会（修 goal 不消费）
 		var goals_left: Array = []
 		for g9 in a.get("institutional_goals", []):
 			if str(g9.get("object", "")) != object_id:
 				goals_left.append(g9)
 		a["institutional_goals"] = goals_left
-## P1.7b 迁居执行：设新基地（熟悉度从零累积——搬家有真实成本）
-## P2b 规则提议执行：公共讨论（PublicEvent）→ 各人独立表态 → InstitutionRecord
-## 规则建立只记录客观事实"被正式建立过"；每个 NPC 的认知仍走 PerceivedGroupBelief
-	for wid in actors:
-		if wid == id:
-			continue
-		if _is_nearby(a["tile"], actors[wid]["tile"]):
-			RuleDiscourse.witness_stance(actors[wid], rule, id, 1, audience.size() + 1, tick)
-
 ## 债务辅助（视图供给）
 func _obligations_of(debtor: String) -> Array:
 	var out: Array = []
@@ -667,14 +676,17 @@ func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void
 		return  # 人不在——下次再说
 	a["inventory"][object_id] = int(a["inventory"][object_id]) - 1
 	actors[creditor]["inventory"][object_id] = int(actors[creditor]["inventory"].get(object_id, 0)) + 1
+	var promise_event_seq := -1
 	for ob in obligations:
 		if str(ob["debtor"]) == id and str(ob["creditor"]) == creditor and str(ob["object"]) == object_id and not bool(ob["repaid"]):
 			ob["repaid"] = true
+			promise_event_seq = int(ob.get("promise_event_seq", 0))
 			break
 	a["my_obligations"] = _obligations_of(id)
 	actors[creditor]["owed_to_me"] = _owed_to(creditor)
 	_emit("promise_kept", id, "%s 把%s还给了 %s——他兑现了承诺" % [a["display_name"], str(spec["verb"]), actors[creditor]["display_name"]],
-			{"to_id": creditor, "object": object_id})
+			{"to_id": creditor, "object": object_id,
+			"source_event_ids": [promise_event_seq] if promise_event_seq >= 0 else []})
 
 ## 承诺到期检查：违约 → 可靠性崩（无人在场也生效——不守信迟早传开）
 func _check_overdue_promises() -> void:
@@ -684,7 +696,8 @@ func _check_overdue_promises() -> void:
 			if actors.has(str(ob["debtor"])):
 				actors[str(ob["debtor"])]["my_obligations"] = _obligations_of(str(ob["debtor"]))
 			_emit("promise_broken", str(ob["debtor"]), "%s 没能兑现他的承诺" % actors[str(ob["debtor"])]["display_name"],
-					{"to_id": str(ob["creditor"]), "object": str(ob["object"])})
+					{"to_id": str(ob["creditor"]), "object": str(ob["object"]),
+					"source_event_ids": [int(ob.get("promise_event_seq", -1))] if int(ob.get("promise_event_seq", -1)) >= 0 else []})
 
 ## 预测误差学习：解决到期的社会预测——预测 vs 实际观察 → 修正响应模型
 func _resolve_predictions() -> void:
@@ -800,7 +813,8 @@ func _do_ask_reason(id: String, a: Dictionary, action: Dictionary, ev: Array) ->
 	if not actors.has(about):
 		return
 	var target: Dictionary = actors[about]
-	_emit("reason_asked", id, "%s 问 %s：那天为什么不帮我？" % [a["display_name"], target["display_name"]], {"to_id": about})
+	var asked_seq := _emit("reason_asked", id, "%s 问 %s：那天为什么不帮我？" % [a["display_name"], target["display_name"]],
+			{"to_id": about, "source_event_ids": (action.get("source_event_ids", []) as Array).duplicate()})
 	# 回应：本人陈述（第一版诚实——说自己的真实主要原因；说谎是 Phase 2）
 	var claim_prop := {}
 	if int(target["inventory"].get("food", 0)) < 2:
@@ -810,20 +824,24 @@ func _do_ask_reason(id: String, a: Dictionary, action: Dictionary, ev: Array) ->
 	var express: float = float(target["personality"].traits.get("expressiveness", 0.5))
 	if express < 0.25:
 		# 闷葫芦：问不出话——但这本身也是信息（他不愿说）
-		_emit("reason_deflected", about, "%s 沉默了一会儿，什么也没说" % target["display_name"], {"to_id": id})
+		_emit("reason_deflected", about, "%s 沉默了一会儿，什么也没说" % target["display_name"],
+				{"to_id": id, "source_event_ids": [asked_seq]})
 		_close_question(id, about)
 		return
 	var claim := Claim.build(about, claim_prop, tick)
 	Claim.listen(a, claim, relationships)
-	_emit("reason_claimed", about, "%s 说：『%s』" % [target["display_name"], claim_prop["label"]], {"to_id": id, "claim": claim_prop["label"]})
+	_emit("reason_claimed", about, "%s 说：『%s』" % [target["display_name"], claim_prop["label"]],
+			{"to_id": id, "claim": claim_prop["label"], "source_event_ids": [asked_seq]})
 	_close_question(id, about)
 
 func _do_observe_person(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var about := str(action.get("target_actor", ""))
 	if not actors.has(about):
 		return
-	a["observing"] = {"about": about, "until": tick + 12}  # 注意力增益在 CognitiveTransition
-	_emit("observing_person", id, "%s 开始不动声色地留意 %s" % [a["display_name"], actors[about]["display_name"]], {"to_id": about})
+	a["observing"] = {"about": about, "until": tick + 12,
+		"source_event_ids": (action.get("source_event_ids", []) as Array).duplicate()}  # 注意力增益在 CognitiveTransition
+	_emit("observing_person", id, "%s 开始不动声色地留意 %s" % [a["display_name"], actors[about]["display_name"]],
+			{"to_id": about, "source_event_ids": (action.get("source_event_ids", []) as Array).duplicate()})
 	# 观察不立即关问题：证据随目击累积，问题由证据自行解决或过期
 
 func _do_ask_third_party(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
@@ -832,17 +850,20 @@ func _do_ask_third_party(id: String, a: Dictionary, action: Dictionary, ev: Arra
 	if not actors.has(third) or not actors.has(about):
 		return
 	var third_a: Dictionary = actors[third]
-	_emit("asked_about", id, "%s 悄悄问 %s：最近见过 %s 拿到吃的吗？" % [a["display_name"], third_a["display_name"], actors[about]["display_name"]], {"to_id": third, "about": about})
+	var question_sources: Array = (action.get("source_event_ids", []) as Array).duplicate()
+	var asked_seq := _emit("asked_about", id, "%s 悄悄问 %s：最近见过 %s 拿到吃的吗？" % [a["display_name"], third_a["display_name"], actors[about]["display_name"]],
+			{"to_id": third, "about": about, "source_event_ids": question_sources})
 	# 第三人转述的是【他自己的感知】（ToM 信念），不是真相
 	var their_belief: float = third_a["tom"].raw_belief(about, "has_food")
 	if absf(their_belief) < 0.1:
-		_emit("third_party_unknown", third, "%s 摇头：没太注意过" % third_a["display_name"], {"to_id": id})
+		_emit("third_party_unknown", third, "%s 摇头：没太注意过" % third_a["display_name"], {"to_id": id, "source_event_ids": [asked_seq]})
 		return
 	var claim_prop := {"subject": about, "predicate": "has_food", "value": their_belief,
 		"label": "我见过他最近空手而归" if their_belief < 0.0 else "我见他搞到过吃的"}
 	var claim := Claim.build(third, claim_prop, tick)
 	Claim.listen(a, claim, relationships)
-	_emit("third_party_claimed", third, "%s 说：『%s』" % [third_a["display_name"], claim_prop["label"]], {"to_id": id, "about": about})
+	_emit("third_party_claimed", third, "%s 说：『%s』" % [third_a["display_name"], claim_prop["label"]],
+			{"to_id": id, "about": about, "source_event_ids": [asked_seq]})
 	_close_question(id, about)
 
 func _close_question(id: String, about: String) -> void:

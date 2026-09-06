@@ -49,9 +49,16 @@ func _run_all_tests() -> void:
 				"esc_resumes_sim", "rebuild_single_set", "hud_fixture_render", "hud_isolation_from_sim"]:
 			_check(n, false, "观察场景不可加载")
 		return
+	var had_mode := OS.has_environment("AIW_MODE")
+	var previous_mode := OS.get_environment("AIW_MODE")
+	OS.set_environment("AIW_MODE", "wander")
 	_inst = ps.instantiate()
 	root.add_child(_inst)
 	await _steps(20)
+	if had_mode:
+		OS.set_environment("AIW_MODE", previous_mode)
+	else:
+		OS.unset_environment("AIW_MODE")
 
 	var sim: SimulationCore = _inst.get_simulation()
 	_check("observer_boots_three_npcs",

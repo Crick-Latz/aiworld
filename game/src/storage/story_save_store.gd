@@ -247,7 +247,9 @@ func _verify_generation(gen_dir: String) -> Dictionary:
 func _sha256(text: String) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
-	ctx.update(text.to_utf8_buffer())
+	var bytes := text.to_utf8_buffer()
+	if not bytes.is_empty():
+		ctx.update(bytes)
 	return ctx.finish().hex_encode()
 
 func _read_or_placeholder(path: String) -> String:

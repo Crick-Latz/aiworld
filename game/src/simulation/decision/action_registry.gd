@@ -307,18 +307,22 @@ static func _epistemic_actions(p: PersonalityProfile, actor: Dictionary, world: 
 	var u_ask: float = drive * (0.65 + express * 0.25) * stakes * (0.5 + entropy * 0.5) - conflict * 0.25
 	if u_ask > 0.08:
 		out.append({"action": "ask_reason", "target": null, "target_actor": about,
-			"question_kind": str(q0.get("kind", "")), "utility": u_ask, "desc": "问个明白", "duration": 1})
+			"question_kind": str(q0.get("kind", "")), "source_event_ids": (q0.get("source_event_ids", []) as Array).duplicate(),
+			"utility": u_ask, "desc": "问个明白", "duration": 1})
 	# 暗中观察：信息量中等、慢，但几乎零风险（多疑/谨慎者的首选）
 	var u_watch: float = drive * 0.45 * stakes * (0.5 + entropy * 0.5) - conflict * 0.02
 	if u_watch > 0.08:
 		out.append({"action": "observe_person", "target": null, "target_actor": about,
-			"question_kind": str(q0.get("kind", "")), "utility": u_watch, "desc": "留意他的一举一动", "duration": 4})
+			"question_kind": str(q0.get("kind", "")), "source_event_ids": (q0.get("source_event_ids", []) as Array).duplicate(),
+			"utility": u_watch, "desc": "留意他的一举一动", "duration": 4})
 	# 问第三人：信息量中上，风险低，但需要有人在（圆融者首选）
 	if other_visible != "":
 		var u_third: float = drive * 0.45 * stakes * (0.5 + entropy * 0.5) - conflict * 0.08 + sociability * 0.12
 		if u_third > 0.08:
 			out.append({"action": "ask_third_party", "target": null, "target_actor": other_visible,
-				"about_actor": about, "question_kind": str(q0.get("kind", "")), "utility": u_third, "desc": "找人间接打听", "duration": 1})
+				"about_actor": about, "question_kind": str(q0.get("kind", "")),
+				"source_event_ids": (q0.get("source_event_ids", []) as Array).duplicate(),
+				"utility": u_third, "desc": "找人间接打听", "duration": 1})
 	return out
 
 ## P2b 规则提议：制度目标存在 + 有听众 → 提议结构化规则（自然语言只是 Renderer）

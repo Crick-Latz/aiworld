@@ -384,9 +384,11 @@ static func _open_question(observer: Dictionary, se: Dictionary, interp: Diction
 			q["entropy"] = Interpretation.entropy(interp)
 			q["stakes"] = stakes
 			q["tick"] = tick
+			q["source_event_ids"] = [int(se.get("seq", 0))]
 			return
 	qs.append({"about": about, "kind": "why_refused", "entropy": Interpretation.entropy(interp),
-		"stakes": stakes, "tick": tick, "expires": tick + 120})
+		"stakes": stakes, "tick": tick, "expires": tick + 120,
+		"source_event_ids": [int(se.get("seq", 0))]})
 	observer["open_questions"] = qs
 
 static func _retrieve_memories(observer: Dictionary, counterpart: String, type: String) -> Array:

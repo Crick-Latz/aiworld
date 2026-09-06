@@ -1,4 +1,6 @@
-# Final Freeze Gate 完工报告（供 GPT 评审）+ 代码变更全文
+# Final Freeze Gate 原始报告（已由 FG-R1 复核报告取代）
+
+> 历史说明：本文件记录了 `af3b9be` 当时的自报结果。后续独立复核发现 false-green、运行时错误、Narrative IR 视角泄漏及存档空断言。当前权威结论请阅读 `freeze_gate_r1_report_for_gpt.md`；不要再单独引用本文件的 375 项结论。
 
 日期：2026-09-06 ｜ 提交：`af3b9be FREEZE GATE COMPLETE`
 回归：**375 项全绿**（12 套件，制度套件 44/44）

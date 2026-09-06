@@ -46,12 +46,17 @@ const ISLAND_SCENARIO := "res://data/scenarios/deserted_island.json"
 var island_sim: IslandSimulation = null
 
 func _ready() -> void:
-	story_mode = OS.get_environment("AIW_MODE") != "wander"
+	var requested_mode := OS.get_environment("AIW_MODE")
+	story_mode = requested_mode != "wander"
 	hud.pause_requested.connect(_toggle_pause)
 	hud.speed_requested.connect(_set_speed)
 	hud.save_requested.connect(_do_save)
 	hud.scenario_requested.connect(switch_scenario)
-	_boot_island()
+	# 默认进入当前认知岛模拟；旧巡航/灯塔故事只在显式测试或演示模式启动。
+	if requested_mode == "wander" or requested_mode == "story":
+		_boot()
+	else:
+		_boot_island()
 
 func _boot() -> void:
 	_warning = ""

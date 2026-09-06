@@ -1,7 +1,7 @@
 extends SceneTree
 ## OBS-04 存档/恢复/重放验收测试。
 ## 运行：tools/Godot_v4.7.2-stable_win64_console.exe --headless --path game --script res://test/story_save.gd
-## 覆盖：保存/加载往返、确定性续跑（A 连续 vs B 中途保存+重载）、
+## 覆盖：保存/加载往返、checkpoint 状态重载、
 ## 故障注入（写后删 state / 截断 events / 无 COMMITTED / 指针损坏 → 回退上一有效代际）。
 
 var passed := 0
@@ -68,17 +68,14 @@ func _run_all_tests() -> void:
 		and bool(load_r["state"].get("lighthouse_lit", false)) == sim.lighthouse_lit,
 		"ok=%s tick=%s/%d" % [load_r.get("ok"), str(load_r.get("state", {}).get("tick", "?")), sim.tick])
 
-	# —— 2. 确定性续跑：A 连续到 200；B 保存@100 → 新实例重载 → 继续到 200 ——
-	var a := _make()
-	for i in 200:
-		a.step()
+	# —— 2. checkpoint 重载：本测试不夸大为“恢复后继续模拟”等价 ——
 	var sm2 := StorySaveStore.new(root)
 	var b := _make()
 	for i in 100:
 		b.step()
 	sm2.save_timeline(b, "", "bh")
 	var loaded: Dictionary = sm2.load_latest()
-	_check("deterministic_resume",
+	_check("checkpoint_state_reloads",
 		loaded.ok and loaded.has("state") and int(loaded["state"].get("tick", -1)) == 100
 		, "load tick=%s" % str(loaded.get("state", {}).get("tick", "?")))
 
@@ -101,8 +98,8 @@ func _run_all_tests() -> void:
 	var r4: Dictionary = sm4.save_timeline(e4, "", "eh")
 	sm4.truncate_file(r4["dir"], "events.jsonl")
 	var lr4: Dictionary = sm4.load_latest()
-	_check("truncated_events_rejected", not lr4.ok or lr4.get("code", "") != "" or true,
-		"代码执行到此处即验证了哈希校验（详细在 load 返回码）")
+	_check("truncated_events_rejected", not lr4.ok or int(lr4.get("state", {}).get("tick", -1)) != 60,
+		"ok=%s tick=%s" % [str(lr4.get("ok", false)), str(lr4.get("state", {}).get("tick", -1))])
 
 	# —— 5. 回退上一有效代际 ——
 	var sm5 := StorySaveStore.new(root)

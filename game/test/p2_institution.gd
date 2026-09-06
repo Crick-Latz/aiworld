@@ -403,7 +403,7 @@ func _test_narrative_ir_gates() -> void:
 	var edges: Array = NarrativeIR.build_causal_edges(sim.events)
 	var bad_source := 0
 	for e in edges:
-		if ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage"].has(str(e["source"])) == false:
+		if ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "explicit_event_linkage"].has(str(e["source"])) == false:
 			bad_source += 1
 	_check("na_no_temporal_causality", bad_source == 0, "edges=%d bad=%d" % [edges.size(), bad_source])
 	# NB：CHARACTER(Vera) IR 不得包含她没感知到的事实（无记忆注入）
