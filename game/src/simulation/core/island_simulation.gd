@@ -754,7 +754,10 @@ func _compliance_check(id: String, a: Dictionary, object_id: String, amount: int
 		_emit("storage_withheld", id, "%s 找到了%s，但没有按约定交公" % [a["display_name"], ResourceSpec.spec(object_id)["verb"]],
 				{"object": object_id, "mode": mode, "rule_id": str(dec.get("rule_id", ""))})
 		# 违规者自己也知道刚才有谁在场（检测估计的事后校验）
-	AuthoritySystem.self_identity(a, "acquire_" + object_id)
+		AuthoritySystem.self_identity(a, "acquire_" + object_id)
+		# DecisionTrace v5：制度决策全程留痕（P3a 的唯一信息源）
+		a["last_institution_trace"] = {"tick": tick, "rule_id": str(dec.get("rule_id", "")), "mode": mode,
+			"contribute": contribute, "detected_estimate": ComplianceSystem.estimate_detection(a)}
 
 func _do_eat(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("food", 0)) < 1:
@@ -1157,11 +1160,19 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 				var rule_d: Dictionary = a["perceived_group_beliefs"][rid_prop].get("rule", {})
 				if str(rule_d.get("proposer", "")) == str(actor_id):
 					AuthoritySystem.authority_violation(a, str(actor_id), int(e.get("seq", 0)), tick)
+		# P2.1: 目击公共提案/表态 → 我知道这条规则存在（recognition，≠期待大家守）
+		if str(e.get("type", "")) == "rule_proposed" and e.has("rule"):
+			var prule: Dictionary = e.get("rule", {})
+			var prid := str(prule.get("rule_id", ""))
+			if not a.get("perceived_group_beliefs", {}).has(prid):
+				a["perceived_group_beliefs"][prid] = {"rule": prule, "member_stance": {}, "publicity": 0.0, "shared_expectation": 0.0, "recognition": 1.0}
+			else:
+				a["perceived_group_beliefs"][prid]["recognition"] = 1.0
 		# P2e: 目击能力行为 → 领域权威证据（涌现角色）
 		AuthoritySystem.observe_competence(a, str(e.get("type", "")), str(actor_id), int(e.get("seq", 0)), tick)
 		# P2e-4: 公开支持 → 提案者协调权威
 		if str(e.get("type", "")) == "rule_supported":
-			AuthoritySystem.public_endorsement(a, str(e.get("actor_id", "")), "coordination", int(e.get("seq", 0)), tick)
+			AuthoritySystem.public_endorsement(a, str(e.get("actor_id", "")), int(e.get("seq", 0)), tick)
 			# P2a: 目击行为 → 我的局部规律观察（约定涌现，非全局统计）
 		var sem11: Dictionary = ResourceSpec.semantics_of(e)
 		if sem11.has("act") and id != actor_id:

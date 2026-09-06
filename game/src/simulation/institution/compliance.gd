@@ -1,37 +1,62 @@
 class_name ComplianceSystem
 extends RefCounted
-## P2c/d 遵守·违规·检测·执行·合法性（Institutional Cognition 第三四层）
-##
-## 核心原则（GPT 第十六/二十二条）：
-##   禁止 rule_exists → obey_bonus。行为路径必须是：
-##   我信规则存在 → 我信他人期望我遵守 → 我估计被抓概率 → 我估计处罚
-##   → 我评合法性 → 我评个人得失 → 我决定
-##   执行是公共品：大家都知道有人违规但没人管，必须能自然发生。
-##   违规可隐藏：世界知道 ≠ 人人知道（感知门天然支持——事件只被附近者目击）。
+## P2c/d 合规系统（P2.1 加固版）：
+## 六项独立输入——我认识规则 / 我信大家期待 / 我信大家实际会守 / 检测概率 /
+## 执行概率(给定被发现) / 制裁严重度 / 合法性 / 个人得失。
+## 禁止 shared_expectation 同时承担 recognition 与 expectation 双职责（P2.1 第 1 条）。
+## 制裁期望 = P(detected) × P(enforced|detected) × ExpectedSeverity（第 4 条）。
+## 执行学习 = 预测误差比例更新（第 6 条），不是固定 ±。
 
-## 获取资源时的合规决策。返回 {mode: COMPLY/PARTIAL/VIOLATE, contribute: int}
-## mode 由 认知链 决定，绝无 rule_exists 直通。
+## 规则价值映射（第 5 条）：规则语义 → 相关个人价值。语义通用，零专属函数。
+const RULE_VALUE_MAPPING := {
+	"CONTRIBUTE": ["sharing", "self_reliance"],   # 贡献类：分享 vs 自立
+	"OBEY": ["self_reliance", "reciprocity"],     # 服从协调类
+	"DISCLOSE": ["reciprocity"],                  # 信息披露类
+}
+
+## PerceivedInstitution 正式结构（第 2 条）：各字段独立演化，绝不联动同步
+static func perceived_institution(actor: Dictionary, rid: String) -> Dictionary:
+	var pgb: Dictionary = actor.get("perceived_group_beliefs", {})
+	if not pgb.has(rid):
+		return {}
+	var b: Dictionary = pgb[rid]
+	# 缺省字段补全（结构升级兼容）
+	if not b.has("recognition"):
+		b["recognition"] = 0.5          # 我知道这条规则存在（≠期待大家守）
+	if not b.has("descriptive_compliance"):
+		b["descriptive_compliance"] = 0.5  # 我信大家实际会守（≠应该守）
+	if not b.has("sanction_severity"):
+		b["sanction_severity"] = 0.4    # 被罚有多痛
+	return b
+
+## 我知道的、对此资源有效的规则：只看 recognition（第 1 条修复）
+static func active_rule_id(actor: Dictionary, object_id: String) -> String:
+	for rid in actor.get("perceived_group_beliefs", {}):
+		var b := perceived_institution(actor, str(rid))
+		if str(b["rule"].get("object", "")) == object_id and float(b["recognition"]) > 0.5:
+			return str(rid)
+	return ""
+
+## 合规决策：六项独立输入链
 static func decide_on_acquisition(actor: Dictionary, object_id: String, amount: int) -> Dictionary:
 	var rid := active_rule_id(actor, object_id)
 	if rid == "":
-		return {"mode": "NONE", "contribute": 0}  # 我不知道有任何规则（认知里没有）
-	var b: Dictionary = actor["perceived_group_beliefs"][rid]
+		return {"mode": "NONE", "contribute": 0}
+	var b := perceived_institution(actor, rid)
 	var rule: Dictionary = b["rule"]
 	var fraction: float = float(rule.get("fraction", 0.5))
 	var need: float = clampf(float(actor.get("needs", {}).get(str(ResourceSpec.spec(object_id)["need"]), 0)) / 1000.0, 0.0, 1.0)
-	# 认知链（十六条件路径的压缩实现，各项独立可溯）：
-	var belief_exists: float = float(b.get("shared_expectation", 0.0))       # 我信"我们都认同"
-	var legitimacy: float = legitimacy_of(actor, rid, object_id)              # 我认不认同
-	var detection := estimate_detection(actor)                                # 我估被抓概率
-	var enforcement: float = float(b.get("perceived_enforcement", 0.5))       # 我估会被罚
-	var sanction_risk := detection * enforcement * 0.6
-	# 遵守意愿 = 认同 + 社会期望 + 制裁风险 − 生存压力（饿到极限的人什么都做得出来）
-	var comply_will := legitimacy * 0.4 + belief_exists * 0.3 + sanction_risk - need * 0.5
-	var mode := "COMPLY"
-	if comply_will < 0.0:
-		mode = "VIOLATE"
-	elif comply_will < 0.25:
-		mode = "PARTIAL"
+	# 独立输入：
+	var shared_exp: float = float(b.get("shared_expectation", 0.0))     # 我信"我们都认同"
+	var desc_compliance: float = float(b.get("descriptive_compliance", 0.5))  # 我信大家实际会守
+	var detection := estimate_detection(actor)
+	var enforced_given: float = float(b.get("perceived_enforcement", 0.5))
+	var severity: float = float(b.get("sanction_severity", 0.4))
+	var legitimacy := legitimacy_of(actor, rid, object_id)
+	# 制裁期望成本（三因子分离，第 4 条）
+	var sanction_cost := detection * enforced_given * severity
+	var comply_will := legitimacy * 0.3 + shared_exp * 0.2 + desc_compliance * 0.2 + sanction_cost - need * 0.5
+	var mode := "COMPLY" if comply_will >= 0.25 else ("PARTIAL" if comply_will >= 0.0 else "VIOLATE")
 	var contribute := 0
 	if mode == "COMPLY":
 		contribute = maxi(1, int(round(float(amount) * fraction)))
@@ -39,71 +64,65 @@ static func decide_on_acquisition(actor: Dictionary, object_id: String, amount: 
 		contribute = maxi(0, int(round(float(amount) * fraction * 0.4)))
 	return {"mode": mode, "contribute": contribute, "rule_id": rid}
 
-## 检测估计：附近有人（我感知到的）→ 高；独处 → 低（隐藏违规的来源）
 static func estimate_detection(actor: Dictionary) -> float:
 	var nearby: Array = actor.get("others_nearby", [])
 	return clampf(0.15 + float(nearby.size()) * 0.3, 0.0, 0.95)
 
-## 合法性（每人每规则独立）：个人价值对齐 + 提案者信任 − 负担
+## 合法性（语义通用，第 5 条）：按规则 prescribed 动作查价值映射
 static func legitimacy_of(actor: Dictionary, rid: String, object_id: String) -> float:
-	var b: Dictionary = actor.get("perceived_group_beliefs", {}).get(rid, {})
+	var b := perceived_institution(actor, rid)
 	if b.is_empty():
 		return 0.0
-	var personal: float = float(actor.get("norms", {}).get("personal", {}).get("sharing", 0.5))
-	var base := clampf(personal * 0.8 + 0.1, 0.0, 1.0)
-	# 提案者关系（讨厌提案者→合法性降，GPT 第二十五条件）
+	var rule: Dictionary = b["rule"]
+	var values: Array = RULE_VALUE_MAPPING.get(str(rule.get("prescribed", "CONTRIBUTE")), ["sharing"])
+	var personal: Dictionary = actor.get("norms", {}).get("personal", {})
+	var sum := 0.0
+	for v in values:
+		sum += float(personal.get(v, 0.5))
+	var base := clampf(sum / maxf(float(values.size()), 1.0) * 0.8 + 0.1, 0.0, 1.0)
 	var proposer_trust: float = 0.0
 	if actor.has("_relationships_hint") and actor["_relationships_hint"] != null:
-		proposer_trust = clampf(float(actor["_relationships_hint"].composite_trust(str(actor.get("id", "")), str(b["rule"].get("proposer", "")))) / 600.0, -0.5, 0.5)
+		proposer_trust = clampf(float(actor["_relationships_hint"].composite_trust(str(actor.get("id", "")), str(rule.get("proposer", "")))) / 600.0, -0.5, 0.5)
 	return clampf(base + proposer_trust, 0.0, 1.0)
 
-## 我知道的、对此资源有效的规则（认知里没有 = 不存在，测试 V 的延续）
-static func active_rule_id(actor: Dictionary, object_id: String) -> String:
-	for rid in actor.get("perceived_group_beliefs", {}):
-		var b: Dictionary = actor["perceived_group_beliefs"][rid]
-		if str(b["rule"].get("object", "")) == object_id and float(b.get("shared_expectation", 0.0)) > 0.35:
-			return str(rid)
-	return ""
-
-## ── P2d 目击违规后的反应：执行是公共品（管不管都有成本）──
-## 返回 {reaction: CONFRONT/IGNORE, reason}——由人格与关系决定
+## 执行反应（公共品困境不变）
 static func react_to_violation(observer: Dictionary, violator_id: String, rid: String) -> Dictionary:
 	var p: PersonalityProfile = observer.get("personality", null)
 	if p == null:
 		return {"reaction": "IGNORE", "reason": ""}
-	var b: Dictionary = observer.get("perceived_group_beliefs", {}).get(rid, {})
+	var b := perceived_institution(observer, rid)
 	var legitimacy: float = float(b.get("legitimacy", legitimacy_of(observer, rid, str(b.get("rule", {}).get("object", "food")))))
-	b["legitimacy"] = legitimacy  # 缓存
+	b["legitimacy"] = legitimacy
 	var conflict_avoid := p.effective_trait("conflict_avoidance", observer.get("needs", {}))
 	var courage := p.effective_trait("action_bias", observer.get("needs", {}))
-	# 面子成本 vs 公共品收益：怕冲突者更可能沉默（"大家都知道但没人管"）
 	var confront_will := legitimacy * 0.6 + courage * 0.3 - conflict_avoid * 0.5
-	# 关系折扣：不愿当众指责亲近之人
 	var bene: int = 0
 	if observer.has("_relationships_hint") and observer["_relationships_hint"] != null:
 		bene = observer["_relationships_hint"].get_dim(str(observer.get("id", "")), violator_id, "benevolence")
 	confront_will -= clampf(float(bene) / 1000.0, 0.0, 0.5) * 0.3
 	return {"reaction": "CONFRONT" if confront_will > 0.25 else "IGNORE", "reason": ""}
 
-## ── P2d-3 PerceivedEnforcement 学习（测试 Y）：违规→被罚？→ 期望更新 ──
+## 执行学习（第 6 条）：预测误差比例更新——预测 0.8 实际 0 的修正远大于预测 0.2
 static func learn_enforcement(actor: Dictionary, rid: String, sanctioned: bool, tick: int) -> void:
 	var pgb: Dictionary = actor.get("perceived_group_beliefs", {})
 	if not pgb.has(rid):
 		return
-	var b: Dictionary = pgb[rid]
-	var cur: float = float(b.get("perceived_enforcement", 0.5))
-	b["perceived_enforcement"] = clampf(cur + (0.25 if sanctioned else -0.12), 0.05, 1.0)
+	var b := perceived_institution(actor, rid)
+	var predicted: float = float(b.get("perceived_enforcement", 0.5))
+	var actual := 1.0 if sanctioned else 0.0
+	var error := actual - predicted
+	var rate := clampf(0.3 + absf(error) * 0.3, 0.1, 0.7)  # 误差越大学得越快
+	b["perceived_enforcement"] = clampf(predicted + rate * error, 0.05, 1.0)
 	b["last_enforcement_tick"] = tick
+	# 描述性遵守期望也学习（大家实际守不守，独立于应不应该）
+	var pred_c: float = float(b.get("descriptive_compliance", 0.5))
+	b["descriptive_compliance"] = clampf(pred_c + 0.2 * error * 0.5, 0.05, 1.0)
 
-## ── P2d-5 修订触发（测试 AA）：违规多 + 合法性低 → 修规则目标 ──
 static func should_amend(actor: Dictionary, rid: String) -> bool:
-	var b: Dictionary = actor.get("perceived_group_beliefs", {}).get(rid, {})
+	var b := perceived_institution(actor, rid)
 	if b.is_empty():
 		return false
-	var enforcement: float = float(b.get("perceived_enforcement", 0.5))
-	var legitimacy: float = float(b.get("legitimacy", 0.5))
-	return enforcement < 0.35 and legitimacy < 0.5
+	return float(b.get("perceived_enforcement", 0.5)) < 0.35 and float(b.get("legitimacy", 0.5)) < 0.5
 
-## 违规对目击者的认知冲击（经既有管线：可靠度证据 + 敌意倾向）
 static func violation_evidence_weight(observer_dyn: Dictionary) -> float:
 	return clampf(0.3 + float(observer_dyn.get("betrayal_learning_rate", 0.4)) * 0.3, 0.0, 0.8)

@@ -40,6 +40,7 @@ static func witness_stance(actor: Dictionary, rule: Dictionary, speaker: String,
 			"member_stance": {},       # 我以为每个人的立场
 			"publicity": 0.0,          # 我以为多少人知道这场讨论
 			"shared_expectation": 0.0, # 我以为"我们都认同"的程度
+				"recognition": 1.0,       # 我知道这条规则存在（P2.1 与期待分离）
 			"last_tick": -1,
 		}
 	var b: Dictionary = pgb[rid]

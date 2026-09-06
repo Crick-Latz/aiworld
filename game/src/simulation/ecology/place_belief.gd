@@ -91,7 +91,13 @@ static func evaluate_place(actor: Dictionary, place: Dictionary, people_there: A
 	if not (actor.get("open_questions", []) as Array).is_empty() and people_there.size() > 0:
 		info_v += 0.15
 
-	# 熟悉感 + 路程成本
+	# P2.1 第 11 条：制度压力 → 地点不适（低合法性规则+人多监督的营地让违规者难受）
+	for prid in actor.get("perceived_group_beliefs", {}):
+		var pb: Dictionary = actor["perceived_group_beliefs"][prid]
+		if float(pb.get("recognition", 0.0)) > 0.5:
+			var leg: float = 1.0 - float(pb.get("legitimacy", ComplianceSystem.legitimacy_of(actor, str(prid), str(pb.get("rule", {}).get("object", "food")))))
+			discomfort += leg * 0.25 * maxf(0.0, float(people_there.size()) - 1.0) * 0.15
+		# 熟悉感 + 路程成本
 	var familiarity: float = float(place.get("familiarity", 0.0))
 	var my_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
 	var dist := absi(my_tile.x - place["tile"].x) + absi(my_tile.y - place["tile"].y)
