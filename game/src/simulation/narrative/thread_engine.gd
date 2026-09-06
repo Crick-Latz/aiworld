@@ -55,7 +55,8 @@ func _try_seed(event_type: String, e: Dictionary, sim) -> void:
 						break
 				if has_question:
 					engine.open_thread("EPISTEMIC_THREAD", [proposer, actor], seq, tick,
-						{"asker": proposer, "subject": actor})
+						{"asker": proposer, "subject": actor},
+						"question|%s|%s|%d" % [proposer, actor, seq])
 		"food_request_accepted", "water_request_accepted", "tool_request_accepted":
 			var proposer := str(e.get("proposer_id", ""))
 			if actor != "" and proposer != "":
@@ -78,13 +79,19 @@ func _try_seed(event_type: String, e: Dictionary, sim) -> void:
 					{"violator": actor, "rule_id": str(e.get("rule_id", ""))},
 					"institution|%s" % str(e.get("rule_id", "")))
 		"rule_supported":
+			# P4.1: 不再每次支持都创建线程（pilot 显示 3088 条过多）
+			pass
+		"institution_established":
+			# P4.1: authority 由制度建立一次性播种（带 episode_key）
 			if actor != "":
 				engine.open_thread("AUTHORITY_THREAD", [actor], seq, tick,
-					{"supporter": actor})
+					{"supporter": actor},
+					"authority|%s|%s" % [actor, str(e.get("object", ""))])
 		"relocated":
 			if actor != "":
 				engine.open_thread("RELOCATION_THREAD", [actor], seq, tick,
-					{"mover": actor})
+					{"mover": actor},
+					"relocation|%s|%d" % [actor, seq])
 
 ## ThreadIR（第 39 条）：给 Renderer/Observer 的结构化摘要
 func build_thread_ir(sim, thread: Dictionary) -> Dictionary:
