@@ -6,11 +6,12 @@ extends SceneTree
 
 var _f := false
 func _initialize() -> void: pass
+var _s := false
 func _process(_d: float) -> bool:
-	if not _f:
-		_f = true
-		await _run()
-	return true
+	if not _s:
+		_s = true
+		_run()
+	return _f
 
 func _run() -> void:
 	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
