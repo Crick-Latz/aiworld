@@ -29,16 +29,21 @@ $suites = @(
     @{ Name = "story_causal"; Script = "res://test/story_causal.gd"; Expected = 15 },
     @{ Name = "story_dynamic"; Script = "res://test/story_dynamic.gd"; Expected = 11 },
     @{ Name = "story_save"; Script = "res://test/story_save.gd"; Expected = 6 },
-    @{ Name = "ai_mock"; Script = "res://test/ai_mock.gd"; Expected = 16 },
+    @{ Name = "ai_mock"; Script = "res://test/ai_mock.gd"; Expected = 10 },
     @{ Name = "island_sim"; Script = "res://test/island_sim.gd"; Expected = 8 },
     @{ Name = "p0_cognition"; Script = "res://test/p0_cognition.gd"; Expected = 9 },
     @{ Name = "p1_social"; Script = "res://test/p1_social.gd"; Expected = 33 },
     @{ Name = "p1_5_cognition"; Script = "res://test/p1_5_cognition.gd"; Expected = 24 },
-    @{ Name = "p1_6_cognition"; Script = "res://test/p1_6_cognition.gd"; Expected = 78 },
+    @{ Name = "p1_6_cognition"; Script = "res://test/p1_6_cognition.gd"; Expected = 27 },
     @{ Name = "p1_7_ecology"; Script = "res://test/p1_7_ecology.gd"; Expected = 10 },
     @{ Name = "p2_institution"; Script = "res://test/p2_institution.gd"; Expected = 44 },
     @{ Name = "narrative_ir"; Script = "res://test/narrative_ir.gd"; Expected = 24 },
-    @{ Name = "p3_narrative"; Script = "res://test/p3_narrative.gd"; Expected = 27 }
+    @{ Name = "p3_narrative"; Script = "res://test/p3_narrative.gd"; Expected = 78 },
+    @{ Name = "p4_threads"; Script = "res://test/p4_threads.gd"; Expected = 16 },
+    @{ Name = "p5_spatial"; Script = "res://test/p5_spatial.gd"; Expected = 15 },
+    @{ Name = "p4_3_thread_renderer"; Script = "res://test/p4_3_thread_renderer.gd"; Expected = 15 },
+    @{ Name = "p6_world_knowledge"; Script = "res://test/p6_world_knowledge.gd"; Expected = 15 },
+    @{ Name = "p6_1_runtime_agency_shadow"; Script = "res://test/p6_1_runtime_agency_shadow.gd"; Expected = 15 }
 )
 
 $failures = [Collections.Generic.List[string]]::new()
@@ -47,13 +52,20 @@ $totalPassed = 0
 function Invoke-GodotGate {
     param([string]$Name, [string[]]$Arguments, [int]$Expected = -1)
     $logPath = Join-Path $resolvedEvidence "$Name.log"
-    $output = & $godot @Arguments 2>&1 | Tee-Object -FilePath $logPath
+    # p3_narrative 的故障注入用例会故意向 stderr 打 "ERROR: Parse JSON failed"（引擎 JSON 解析报错）。
+    # $ErrorActionPreference=Stop 会把 stderr 记录升级为终止性错误——调用期间降为 Continue。
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $output = & $godot @Arguments 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $logPath
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
     $text = ($output | Out-String)
     if ($exitCode -ne 0) { $failures.Add("$Name exit=$exitCode") }
     if ($text -match "(?m)^FAIL ") { $failures.Add("$Name contains FAIL") }
     if ($text -match "SCRIPT ERROR") { $failures.Add("$Name contains SCRIPT ERROR") }
-    if ($text -match "(?m)^ERROR:") { $failures.Add("$Name contains engine ERROR") }
+    # 已知噪声：p3 故意喂坏 JSON 触发的引擎解析报错（非引擎故障）
+    $engineErrors = ($output | Where-Object { $_ -match "^ERROR:" -and $_ -notmatch "Parse JSON failed" })
+    if ($engineErrors.Count -gt 0) { $failures.Add("$Name contains engine ERROR") }
     if ($Expected -ge 0) {
         $match = [regex]::Match($text, "SUMMARY pass=(\d+) fail=(\d+)")
         if (-not $match.Success) {

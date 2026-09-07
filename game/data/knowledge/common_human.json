@@ -1,0 +1,290 @@
+{
+  "pack_id": "common_human",
+  "facts": [
+    {
+      "id": "kf_water_drinks",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "WATER"
+      ],
+      "relation": "PROVIDES",
+      "object": "THIRST_RELIEF",
+      "statement": "水可以解渴"
+    },
+    {
+      "id": "kf_plant_food",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "BERRY",
+        "EDIBLE_PLANT",
+        "FRUIT"
+      ],
+      "relation": "PROVIDES",
+      "object": "FOOD",
+      "statement": "可食植物提供食物"
+    },
+    {
+      "id": "kf_animal_meat",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "ANIMAL",
+        "EDIBLE_ANIMAL",
+        "FISH"
+      ],
+      "relation": "PROVIDES",
+      "object": "FOOD",
+      "statement": "动物肉可以吃"
+    },
+    {
+      "id": "kf_fire_burns",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "FIRE"
+      ],
+      "relation": "DANGEROUS",
+      "object": "BURN",
+      "statement": "火会烧伤"
+    },
+    {
+      "id": "kf_sharp_cuts",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "SHARP_STONE",
+        "KNIFE",
+        "SHELL"
+      ],
+      "relation": "ENABLES",
+      "object": "CUT",
+      "statement": "锋利之物能切割"
+    },
+    {
+      "id": "kf_predator_danger",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "PREDATOR"
+      ],
+      "relation": "DANGEROUS",
+      "object": "INJURY",
+      "statement": "猛兽危险"
+    },
+    {
+      "id": "kf_wood_burns",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "WOOD"
+      ],
+      "relation": "PROVIDES",
+      "object": "FUEL",
+      "statement": "木头可以燃烧"
+    },
+    {
+      "id": "kf_wood_floats",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "WOOD"
+      ],
+      "relation": "PROVIDES",
+      "object": "BUOYANCY",
+      "statement": "木头能浮在水上"
+    },
+    {
+      "id": "kf_shelter_protects",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "SHELTER"
+      ],
+      "relation": "PROVIDES",
+      "object": "EXPOSURE_RELIEF",
+      "statement": "遮蔽能挡风雨"
+    },
+    {
+      "id": "kf_gun_threatens",
+      "layer": "COMMON_HUMAN",
+      "subject_tags": [
+        "GUN"
+      ],
+      "relation": "ENABLES",
+      "object": "THREATEN",
+      "statement": "枪可以伤人（知识 ≠ 持有）"
+    }
+  ],
+  "affordances": [
+    {
+      "id": "berry_patch_food",
+      "subject_tags": [
+        "BERRY",
+        "EDIBLE_PLANT",
+        "FRUIT"
+      ],
+      "affordance": "FORAGE",
+      "produces": [
+        "FOOD"
+      ],
+      "provides_capabilities": [],
+      "requirements": [],
+      "risks": [],
+      "knowledge_required": [
+        "kf_plant_food"
+      ],
+      "estimated_effort": 1
+    },
+    {
+      "id": "spring_water",
+      "subject_tags": [
+        "SPRING",
+        "WATER_SOURCE"
+      ],
+      "affordance": "DRINK",
+      "produces": [
+        "WATER"
+      ],
+      "provides_capabilities": [],
+      "requirements": [],
+      "risks": [],
+      "knowledge_required": [
+        "kf_water_drinks"
+      ],
+      "estimated_effort": 0.5
+    },
+    {
+      "id": "animal_food_raw",
+      "subject_tags": [
+        "EDIBLE_ANIMAL",
+        "ANIMAL"
+      ],
+      "affordance": "HUNT",
+      "produces": [
+        "FOOD"
+      ],
+      "provides_capabilities": [],
+      "requirements": [
+        "HUNT_MEDIUM"
+      ],
+      "risks": [
+        "INJURY"
+      ],
+      "knowledge_required": [
+        "kf_animal_meat"
+      ],
+      "estimated_effort": 3
+    },
+    {
+      "id": "fish_food",
+      "subject_tags": [
+        "FISH"
+      ],
+      "affordance": "FISHING",
+      "produces": [
+        "FOOD"
+      ],
+      "provides_capabilities": [],
+      "requirements": [
+        "FISH"
+      ],
+      "risks": [],
+      "knowledge_required": [
+        "kf_animal_meat"
+      ],
+      "estimated_effort": 2
+    },
+    {
+      "id": "sharp_stone_cut",
+      "subject_tags": [
+        "SHARP_STONE"
+      ],
+      "affordance": "CUTTING",
+      "produces": [],
+      "provides_capabilities": [
+        "CUT",
+        "PIERCE"
+      ],
+      "requirements": [],
+      "risks": [
+        "CUT_HAND"
+      ],
+      "knowledge_required": [
+        "kf_sharp_cuts"
+      ],
+      "estimated_effort": 0.2
+    },
+    {
+      "id": "wood_fuel",
+      "subject_tags": [
+        "WOOD"
+      ],
+      "affordance": "FUEL_SOURCE",
+      "produces": [
+        "HEAT_SOURCE"
+      ],
+      "provides_capabilities": [],
+      "requirements": [
+        "LIGHT"
+      ],
+      "risks": [
+        "FIRE"
+      ],
+      "knowledge_required": [
+        "kf_wood_burns"
+      ],
+      "estimated_effort": 0.5
+    },
+    {
+      "id": "wood_structure",
+      "subject_tags": [
+        "WOOD"
+      ],
+      "affordance": "STRUCTURAL_MATERIAL_ONLY",
+      "produces": [],
+      "provides_capabilities": [],
+      "requirements": [],
+      "risks": [],
+      "knowledge_required": [],
+      "estimated_effort": 0.5
+    },
+    {
+      "id": "fire_heat",
+      "subject_tags": [
+        "FIRE"
+      ],
+      "affordance": "WARMTH",
+      "produces": [
+        "HEAT_SOURCE"
+      ],
+      "provides_capabilities": [
+        "COOK"
+      ],
+      "requirements": [
+        "LIGHT"
+      ],
+      "risks": [
+        "SPREAD"
+      ],
+      "knowledge_required": [
+        "kf_fire_burns"
+      ],
+      "estimated_effort": 0.5
+    },
+    {
+      "id": "gun_threaten",
+      "subject_tags": [
+        "GUN"
+      ],
+      "affordance": "WEAPON",
+      "produces": [
+        "SAFETY"
+      ],
+      "provides_capabilities": [
+        "THREATEN",
+        "HUNT_MEDIUM"
+      ],
+      "requirements": [],
+      "risks": [
+        "LETHAL"
+      ],
+      "knowledge_required": [
+        "kf_gun_threatens"
+      ],
+      "estimated_effort": 0.2
+    }
+  ]
+}

@@ -398,6 +398,10 @@ func _test_narrative_ir_gates() -> void:
 		sim.actors["npc_weila"]["institutional_goals"] = [{"object": "food", "kind": "we_need_a_rule", "tick": sim.tick}]
 		sim.actors["npc_kadga"]["norms"]["personal"]["sharing"] = 0.85
 		sim.actors["npc_oun"]["norms"]["personal"]["sharing"] = 0.85
+		# P5：主观导航下三人已散开——公共讨论需要共同在场，注入前先聚拢（测试专用脚本）
+		var gather: Vector2i = sim.actors["npc_weila"]["tile"]
+		sim.actors["npc_kadga"]["tile"] = gather
+		sim.actors["npc_oun"]["tile"] = gather
 		sim._do_propose_rule("npc_weila", sim.actors["npc_weila"], {"object": "food", "fraction": 0.5, "goal_kind": "we_need_a_rule"}, [])
 	# NA：因果边禁止纯时间推测——所有边必须有结构 source
 	var edges: Array = NarrativeIR.build_causal_edges(sim.events)

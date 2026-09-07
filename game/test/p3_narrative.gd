@@ -34,7 +34,7 @@ func _check(n: String, c: bool, d: String = "") -> void:
 
 ## ── P3-NA grounding + P3-ND fallback + P3-NE malformed + P3-NF no-new-dialogue ──
 func _contract_and_fallback() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 14: _check("p3_contract_%d" % i, false, "地图不可用")
 		return
@@ -89,7 +89,7 @@ func _contract_and_fallback() -> void:
 
 ## ── P3-NB perspective isolation + P3-NC retrospective ──
 func _perspectives() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 6: _check("p3_perspective_%d" % i, false, "地图不可用")
 		return
@@ -142,7 +142,7 @@ func _perspectives() -> void:
 
 ## ── P3-NG determinism ──
 func _determinism() -> void:
-	var sim = await _make_sim(400)
+	var sim = await _make_sim(2000)
 	if sim == null:
 		_check("p3_ng_deterministic", false, "地图不可用")
 		return
@@ -170,14 +170,14 @@ func _make_sim(ticks: int):
 		var cfg = ac.duplicate()
 		cfg["spawn"] = spot
 		configs.append(cfg)
-	var sim := IslandSimulation.new(mq, 43001, configs)
+	var sim := IslandSimulation.new(mq, 43009, configs)
 	for i in ticks:
 		sim.step()
 	return sim
 
 # ── P3a-2: NH–NN（Atomic Claims + Drill-down）──
 func _test_p3a2_claims() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 8: _check("p3a2_%d" % i, false, "地图不可用")
 		return
@@ -289,7 +289,7 @@ func _test_p3a2_claims() -> void:
 
 # ── P3a-3: LLM Renderer 离线安全 + 契约解析 ──
 func _test_p3a3_llm_offline() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 6: _check("p3a3_%d" % i, false, "地图不可用")
 		return
@@ -346,7 +346,7 @@ func _test_p3a3_llm_offline() -> void:
 
 # ── P3a-2.1 Semantic Gate: NO–NW ──
 func _test_p3a2_1_semantic_gate() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 9: _check("p3a21_%d" % i, false, "地图不可用")
 		return
@@ -432,7 +432,7 @@ func _test_p3a2_1_semantic_gate() -> void:
 
 	# ── NU：因果主张只来自批准边 ──
 	var causal_ok := true
-	var approved := ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage"]
+	var approved := ["promise_linkage", "institution_linkage", "trace_linkage", "epistemic_linkage", "spatial_linkage", "explicit_event_linkage"]
 	var graph_e: Array = (ir_o3.get("causal_graph", {}) as Dictionary).get("edges", [])
 	var e_sources := {}
 	for e in graph_e:
@@ -465,7 +465,7 @@ func _test_p3a2_1_semantic_gate() -> void:
 
 # ── P3a-4: NX 风格不变式 + NY 压缩 ──
 func _test_p3a4_styles() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 4: _check("p3a4_%d" % i, false, "地图不可用")
 		return
@@ -502,7 +502,7 @@ func _test_p3a4_styles() -> void:
 
 # ── P3b: DB Text Invariance + DC-DD + DH Character Voice ──
 func _test_p3b_dialogue() -> void:
-	var sim = await _make_sim(600)
+	var sim = await _make_sim(2500)
 	if sim == null:
 		for i in 7: _check("p3b_%d" % i, false, "地图不可用")
 		return
@@ -581,7 +581,7 @@ func _world_hash(sim) -> Dictionary:
 
 # ── P3c: CA Identity Persistence / CB Context Adaptation / CC Long-term Continuity ──
 func _test_p3c_expression() -> void:
-	var sim = await _make_sim(400)
+	var sim = await _make_sim(2000)
 	if sim == null:
 		for i in 6: _check("p3c_%d" % i, false, "地图不可用")
 		return
@@ -620,8 +620,8 @@ func _test_p3c_expression() -> void:
 
 	# CB：Context Adaptation——同一人，同一行为，对不同关系对象不同语气
 	var rs: RelationshipStore = sim.relationships
-	rs.adjust("npc_oun", "npc_kadga", "benevolence", 500)   # 信任卡德加
-	rs.adjust("npc_oun", "npc_weila", "fear", 500)           # 害怕薇拉
+	rs.adjust("npc_oun", "npc_kadga", "benevolence", 900)   # 信任卡德加
+	rs.adjust("npc_oun", "npc_weila", "fear", 900)           # 害怕薇拉（P5：43006 真实关系史更厚，注入加强以保持对比语义）
 	var ec_kadga: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_kadga", sa, rs, 100)
 	var ec_weila: Dictionary = ExpressionContextBuilder.build(sim.actors["npc_oun"], "npc_weila", sa, rs, 100)
 	var warm_k: float = float(ec_kadga.get("effective_profile", {}).get("warmth", 0.5))
@@ -649,7 +649,7 @@ func _test_p3c_expression() -> void:
 
 # ── P3c-2/3: ExpressionTrace + VoiceFingerprint + SurfaceHistory + AddressPolicy ──
 func _test_p3c_trace_and_surface() -> void:
-	var sim = await _make_sim(400)
+	var sim = await _make_sim(2000)
 	if sim == null:
 		for i in 7: _check("p3c23_%d" % i, false, "地图不可用")
 		return
@@ -698,7 +698,7 @@ func _test_p3c_trace_and_surface() -> void:
 
 # ── P3c-5: CD/CE/CF/CG/CJ ──
 func _test_p3c_remaining() -> void:
-	var sim = await _make_sim(400)
+	var sim = await _make_sim(2000)
 	if sim == null:
 		for i in 6: _check("p3c5_%d" % i, false, "地图不可用")
 		return

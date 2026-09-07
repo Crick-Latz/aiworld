@@ -95,6 +95,7 @@ func ingest_event(e: Dictionary, causal_edges: Array) -> void:
 					if (th["source_event_ids"] as Array).has(from_seq):
 						_add_node(th, seq, tick)
 						_check_resolution(th, e)
+						_record_attachment(th, seq, "TIER_2_CAUSAL_EDGE")
 						return
 
 	# Tier 3：严格的语义+参与者 fallback（第 26 条：同参与者 + 兼容语义 + 关系链接）
@@ -102,6 +103,7 @@ func ingest_event(e: Dictionary, causal_edges: Array) -> void:
 	if tier3_thread != null:
 		_add_node(tier3_thread, seq, tick)
 		_check_resolution(tier3_thread, e)
+		_record_attachment(tier3_thread, seq, "TIER_3_SEMANTIC")
 
 func _tier1_match(th: Dictionary, e: Dictionary) -> bool:
 	var t := str(e.get("type", ""))
@@ -229,7 +231,11 @@ func _check_resolution(th: Dictionary, e: Dictionary) -> void:
 	elif tt == "EPISTEMIC_THREAD":
 		if t == "reflected":
 			var txt := str(e.get("text", ""))
-			if txt.find("错怪") != -1:
+			# P4.2：结构化判定优先（reflection_kind），文本"错怪"仅作旧事件回退——
+			# 解决依赖展示文本（Text Invariance 原则）
+			var kind := str(e.get("reflection_kind", ""))
+			var is_revision: bool = kind == "belief_revision" or (kind == "" and txt.find("错怪") != -1)
+			if is_revision:
 				th["status"] = "RESOLVED"
 				th["resolved_tick"] = int(e.get("tick", 0))
 				th["resolution"] = "BELIEF_REVISED"
@@ -258,8 +264,11 @@ func update_threads(current_tick: int) -> void:
 		if _is_resolved_or_superseded(th):
 			continue
 		var idle := current_tick - int(th.get("last_activity_tick", 0))
-		if idle > DORMANT_AFTER_TICKS and str(th.get("status", "")) == "ACTIVE":
+		# P4.2：OPEN 也随时间 DORMANT——从未有后续的线程不该永远悬置 OPEN
+		# （无人回答的疑问 5 日后沉睡，但 DORMANT ≠ RESOLVED：再被提起会唤醒）
+		if idle > DORMANT_AFTER_TICKS and str(th.get("status", "")) in ["ACTIVE", "OPEN"]:
 			th["status"] = "DORMANT"  # 第 6 条：时间过去 ≠ 问题解决
+			th["activity_score"] = 0.0
 			th["activity_score"] = 0.0
 
 func threads_for_actor(actor_id: String) -> Array:
@@ -295,15 +304,35 @@ func _episode_match(episode_key: String, e: Dictionary) -> bool:
 	match kind:
 		"promise":
 			if parts.size() >= 3:
-				return actor == parts[1] and to_id == parts[2] and str(e.get("type", "")) in ["promise_kept", "promise_broken", "remind_promise"]
+				if not (actor == parts[1] and to_id == parts[2] and str(e.get("type", "")) in ["promise_kept", "promise_broken", "remind_promise"]):
+					return false
+				# P4.2：episode 精确关联——事件自带 promise seq 链接时必须核对
+				# （同 dyad 双承诺反序兑现时，dyad 匹配会解决错误的 episode——Gate G）
+				if parts.size() >= 4:
+					var src_ids: Array = e.get("source_event_ids", [])
+					if not src_ids.is_empty():
+						return src_ids.has(int(parts[3]))
+				return true
+			return false
 		"question":
 			if parts.size() >= 3:
-				return actor == parts[1] and to_id == parts[2] and str(e.get("type", "")) in ["reason_asked", "reason_claimed", "reason_deflected", "observing_person", "reflected", "foraged_empty", "fished_empty"]
+				var qt := str(e.get("type", ""))
+				# P4.2：reflected 无 to_id——通过 about_id 关联主体（此前反思永远挂不上疑问线程）
+				if qt == "reflected":
+					return actor == parts[1] and str(e.get("about_id", "")) == parts[2]
+				return actor == parts[1] and to_id == parts[2] and qt in ["reason_asked", "reason_claimed", "reason_deflected", "observing_person", "foraged_empty", "fished_empty"]
+			return false
 		"institution":
 			return str(e.get("rule_id", "")) == parts[1]
 		"reciprocity":
-			if parts.size() >= 3:
-				return (actor == parts[1] and to_id == parts[2]) or (actor == parts[2] and to_id == parts[1])
+			# P4.2：类型过滤——reciprocity 只吸收帮助/回报事件。
+			# 此前无类型过滤 + 双向 dyad → 吸走 promise_kept/broken、reflected 等，
+			# 造成超级线程（Gate D）与 promise/epistemic 线程永不解决（Gate E/F）
+			# P4.2b：episode 身份——key 为 helper|receiver，只有【反向】事件（receiver
+			# 回报 helper）归入本弧；helper 再次同向帮助是新一笔（新 episode 线程）
+			if str(e.get("type", "")) in ["food_request_accepted", "water_request_accepted", "tool_request_accepted", "shared_food"]:
+				return actor == parts[2] and to_id == parts[1]
+			return false
 		"conflict":
 			if parts.size() >= 3:
 				return (actor == parts[1] or to_id == parts[1]) and str(e.get("type", "")) in ["confronted_violation", "kept_distance", "relocated"]

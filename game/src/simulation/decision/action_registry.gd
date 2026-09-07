@@ -14,13 +14,13 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	var inv: Dictionary = actor.get("inventory", {})
 	var pos: Vector2i = actor.get("tile", Vector2i.ZERO)
 
-	var a1 = _forage(p, needs, inv, pos, world)
+	var a1 = _forage(p, needs, inv, pos, world, actor)
 	if a1 != null: actions.append(a1)
-	var a2 = _drink(p, needs, pos, world)
+	var a2 = _drink(p, needs, pos, world, actor)
 	if a2 != null: actions.append(a2)
-	var a3 = _fish(p, needs, inv, pos, world)
+	var a3 = _fish(p, needs, inv, pos, world, actor)
 	if a3 != null: actions.append(a3)
-	var a4 = _shells(p, needs, pos, world)
+	var a4 = _shells(p, needs, pos, world, actor)
 	if a4 != null: actions.append(a4)
 	var a5 = _shelter(p, phys, inv, pos, world)
 	if a5 != null: actions.append(a5)
@@ -30,11 +30,11 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a7 != null: actions.append(a7)
 	var a8 = _explore(p, needs, pos, world, actor)
 	if a8 != null: actions.append(a8)
-	var a9 = _ruins(p, needs, pos, world)
+	var a9 = _ruins(p, needs, pos, world, actor)
 	if a9 != null: actions.append(a9)
 	var a10 = _socialize(p, needs, actor, world)
 	if a10 != null: actions.append(a10)
-	var a11 = _share(p, needs, inv, pos, world)
+	var a11 = _share(p, needs, inv, pos, world, actor)
 	if a11 != null: actions.append(a11)
 	for a13 in _request(p, needs, actor, world):
 		actions.append(a13)
@@ -48,9 +48,9 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a19 != null: actions.append(a19)
 	var a18 = _epistemic_actions(p, actor, world)
 	for ea in a18: actions.append(ea)
-	var a16 = _gather_wood(p, needs, inv, pos, world)
+	var a16 = _gather_wood(p, needs, inv, pos, world, actor)
 	if a16 != null: actions.append(a16)
-	var a17 = _sit_by_fire(p, needs, pos, world)
+	var a17 = _sit_by_fire(p, needs, pos, world, actor)
 	if a17 != null: actions.append(a17)
 	var a15 = _keep_distance(p, actor)
 	if a15 != null: actions.append(a15)
@@ -61,8 +61,17 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	actions.append(_wait())
 	return actions
 
-static func _forage(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
-	var bushes: Array = world.get("resources", {}).get("berry_bushes", [])
+## P5.1 SK（fail-closed）：决策只读自己见过的资源（actor.known_resources）。
+## 键缺失 = 不知道——绝不回退世界真值（missing knowledge ≠ omniscience）。
+## 测试 fixture 需要资源知识时必须显式传入 known_resources。
+static func _known_sources(actor: Dictionary, key: String) -> Array:
+	var kr: Dictionary = actor.get("known_resources", {})
+	if kr.has(key):
+		return kr[key]
+	return []
+
+static func _forage(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	var bushes: Array = _known_sources(actor, "berry_bushes")
 	if bushes.is_empty():
 		return null
 	var nearest: Vector2i = _nearest(pos, bushes)
@@ -73,8 +82,8 @@ static func _forage(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, p
 	var score := UtilityCurves.quadratic(hunger) * (0.6 + prag * 0.4) * _dp(pos, nearest)
 	return {"action": "forage_berries", "target": nearest, "utility": score, "desc": "去采浆果", "duration": 1}
 
-static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary):
-	var springs: Array = world.get("resources", {}).get("water_springs", [])
+static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	var springs: Array = _known_sources(actor, "water_springs")
 	if springs.is_empty():
 		return null
 	var nearest: Vector2i = _nearest(pos, springs)
@@ -84,10 +93,10 @@ static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, worl
 	var score := UtilityCurves.exponential(thirst, 6.0) * _dp(pos, nearest)
 	return {"action": "drink_water", "target": nearest, "utility": score, "desc": "去喝水", "duration": 1}
 
-static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
+static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	if int(inv.get("fish_spear", 0)) < 1:
 		return null
-	var spots: Array = world.get("resources", {}).get("fish_spots", [])
+	var spots: Array = _known_sources(actor, "fish_spots")
 	if spots.is_empty():
 		return null
 	var nearest: Vector2i = _nearest(pos, spots)
@@ -98,8 +107,8 @@ static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos
 	var score := UtilityCurves.quadratic(hunger) * (0.7 + action * 0.3) * _dp(pos, nearest)
 	return {"action": "fish", "target": nearest, "utility": score, "desc": "去捕鱼", "duration": 2}
 
-static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary):
-	var beaches: Array = world.get("resources", {}).get("shell_beaches", [])
+static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	var beaches: Array = _known_sources(actor, "shell_beaches")
 	if beaches.is_empty():
 		return null
 	var nearest: Vector2i = _nearest(pos, beaches)
@@ -107,7 +116,12 @@ static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, wor
 		return null
 	var curiosity := p.effective_trait("curiosity", needs)
 	var hunger := _n(needs.get("hunger", 0), 400, 800)
-	var score := (0.3 + curiosity * 0.4 + hunger * 0.12) * _dp(pos, nearest)
+	# P5：贝壳只能做工具——捡够就停（此前无上限，饿死也在捡第 272 个贝壳）
+	var shells_have := int(actor.get("inventory", {}).get("shells", 0)) + int(actor.get("inventory", {}).get("fish_spear", 0)) * 2
+	var saturation := clampf(1.0 - float(shells_have) * 0.15, 0.0, 1.0)
+	if saturation <= 0.0:
+		return null
+	var score := (0.3 + curiosity * 0.4 + hunger * 0.12) * _dp(pos, nearest) * saturation
 	return {"action": "gather_shells", "target": nearest, "utility": score, "desc": "去捡贝壳", "duration": 1}
 
 static func _shelter(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
@@ -145,20 +159,47 @@ static func _explore(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, wo
 	if fear > 0.7:
 		return null
 	var visited: Dictionary = actor.get("visited_tiles", {})
-	var target := _pick_unvisited(pos, visited)
+	# P5 绝望搜索（GPT 第 13 节 SEARCH_FOR_UNKNOWN）：急需且【我所知】没有来源时，
+	# 逼自己去远处未知区碰运气——只用自己的信念和需求，不读世界真值。
+	# 身边有人时压掉远行加成：开口求助是比瞎逛更近的活路（softmax 里让两者竞争）
+	var desperation := _desperation(needs, actor)
+	if not (actor.get("others_visible", []) as Array).is_empty():
+		desperation = 0.0
+	var target := _pick_unvisited(pos, visited, desperation > 0.0)
 	if target.x < 0:
 		return null
 	# 习惯化：走过的路不再新鲜——探索欲随已知区域扩大自然衰减
 	var novelty := 1.0 if not visited.has(str(target)) else 0.55
 	var score := (0.2 + curiosity * 0.6) * _dp(pos, target) * novelty
+	if desperation > 0.0:
+		score = maxf(score, desperation * 0.8)  # 饿/渴到极处，找来源压过闲逛的效用衰减
+		return {"action": "explore", "target": target, "utility": score, "desc": "出去找活路", "duration": 1}
 	return {"action": "explore", "target": target, "utility": score, "desc": "探索未知区域", "duration": 1}
 
-static func _ruins(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary):
-	var ruins: Array = world.get("resources", {}).get("ruins", [])
-	var unsearched: Array = []
-	for r in ruins:
-		if typeof(r) == TYPE_DICTIONARY and not bool(r.get("searched", false)):
-			if typeof(r.get("pos", null)) == TYPE_VECTOR2I:
+## 急迫度：饿/渴高 且 所知的可用来源为空（含自身库存）→ 0..1；否则 0
+static func _desperation(needs: Dictionary, actor: Dictionary) -> float:
+	var hunger := _n(needs.get("hunger", 0), 650, 950)
+	var thirst := _n(needs.get("thirst", 0), 650, 950)
+	var kr: Dictionary = actor.get("known_resources", {})
+	var inv: Dictionary = actor.get("inventory", {})
+	var food_known := int(kr.get("berry_bushes", []).size()) + int(kr.get("fish_spots", []).size()) + int(inv.get("food", 0))
+	var water_known := int(kr.get("water_springs", []).size()) + int(inv.get("water", 0))
+	var out := 0.0
+	if hunger > 0.05 and food_known == 0:
+		out = maxf(out, hunger)
+	if thirst > 0.05 and water_known == 0:
+		out = maxf(out, thirst)
+	return out
+
+static func _ruins(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	var unsearched: Array = _known_sources(actor, "ruins")
+	if unsearched.is_empty():
+		return null
+	# 遗留回退：世界 ruins 是字典数组——信念路径供给的已是 Vector2i 列表
+	for r in unsearched.duplicate():
+		if typeof(r) == TYPE_DICTIONARY:
+			unsearched.erase(r)
+			if not bool(r.get("searched", false)) and typeof(r.get("pos", null)) == TYPE_VECTOR2I:
 				unsearched.append(r["pos"])
 	if unsearched.is_empty():
 		return null
@@ -191,7 +232,7 @@ static func _socialize(p: PersonalityProfile, needs: Dictionary, actor: Dictiona
 		# 历史 bug：曾在此乘 0.3，但 someone_nearby 从未被设置——有人在场时社交被系统性压低
 	return {"action": "socialize", "target": target, "utility": score, "desc": "找人聊天", "duration": 2}
 
-static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
+static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	if int(inv.get("food", 0)) < 2:
 		return null
 	var altruism := p.effective_trait("altruism", needs)
@@ -199,7 +240,9 @@ static func _share(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, po
 	var hunger := _n(needs.get("hunger", 0), 300, 700)
 	var generosity := altruism * 0.6 + empathy * 0.4
 	var score := generosity * (1.0 - UtilityCurves.quadratic(hunger)) * 0.8
-	if world.get("someone_hungry_nearby", false):
+	# P5（跨角色感知泄漏修复）：只信【我】的 ToM 判断——"我看见有人像饿了"，
+	# 不再读全局聚合键（岛东的卡德加看见欧恩饿，不影响岛西的薇拉）
+	if actor.get("appears_hungry_nearby", world.get("someone_hungry_nearby", false)):
 		score *= 1.5
 	return {"action": "share_food", "target": pos, "utility": score, "desc": "分享食物", "duration": 1}
 
@@ -228,13 +271,23 @@ static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary
 
 		# 自己能解决就不求人（公共资源距离门：水泉 8 格内自己走过去）
 		if spec.has("self_source"):
-			var sources: Array = world.get("resources", {}).get(str(spec["self_source"]), world.get(str(spec["self_source"]), []))
+			# P5：自己"知道哪里有"才走自助——不知道水在哪，只能求人
+			var sources: Array = _known_sources(actor, str(spec["self_source"]))
 			if not sources.is_empty():
 				var nearest_src := _nearest(actor.get("tile", Vector2i.ZERO), sources)
 				if nearest_src.x >= 0 and absi(nearest_src.x - actor.get("tile", Vector2i.ZERO).x) + absi(nearest_src.y - actor.get("tile", Vector2i.ZERO).y) <= int(spec.get("self_serve_dist", 8)):
 					continue
 		var target_id := SocialSystem.pick_request_target(actor, visible, trust_of, str(spec["predicate"]))
 		if target_id == "":
+			continue
+		# P5 拒绝记忆：48 tick（约两天）内刚拒绝过我的人不再开口——窘迫是真实的
+		var now_tick := int(world.get("tick", 0))
+		var refused_recently := false
+		for r in actor.get("refusal_memory", []):
+			if str(r.get("by", "")) == target_id and int(r.get("tick", -999)) + 48 > now_tick:
+				refused_recently = true
+				break
+		if refused_recently:
 			continue
 		var target_tile := Vector2i(10, 10)
 		for o in visible:
@@ -380,7 +433,23 @@ static func _seek_person(p: PersonalityProfile, actor: Dictionary):
 				best_id = other_id
 				reason = "去找他"
 	if best_id == "":
-		return null
+		# P5 生存寻人：饿/渴到极处且【我所知】没有任何来源——人本身就是最后的活路
+		# （"也许薇拉有吃的"）。只去 last_seen 记忆位置——找不找得到是另一回事。
+		var desp := _desperation(actor.get("needs", {}), actor)
+		if desp <= 0.05:
+			return null
+		for other_id in actor.get("trust_of", {}):
+			if visible_ids.has(other_id):
+				continue
+			var ls2: Dictionary = tom.last_seen_of(other_id)
+			if ls2.is_empty():
+				continue
+			best_id = other_id
+			best_u = desp * 0.7
+			reason = "饿得发慌，去找人"
+			break
+		if best_id == "":
+			return null
 	var seen := tom.last_seen_of(best_id)
 	return {"action": "seek_person", "target": seen["tile"], "target_actor": best_id,
 			"utility": best_u, "desc": reason, "duration": 4}
@@ -422,10 +491,10 @@ static func _who_is_at(actor: Dictionary, place: Dictionary, world: Dictionary) 
 ## P1.5：保持距离。不是 fallback——回避是合法的人类行为。
 ## 敌意解释主导（social_stance 高）+ 怕冲突/恐惧 → 主动拉开与某人的距离。
 ## 取木：树是材料来源——有了木才能生火，有了火才有营地
-static func _gather_wood(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
+static func _gather_wood(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	if int(inv.get("wood", 0)) >= 2:
 		return null
-	var trees: Array = world.get("trees", [])
+	var trees: Array = _known_sources(actor, "trees")
 	if trees.is_empty():
 		return null
 	var nearest := _nearest(pos, trees)
@@ -436,8 +505,13 @@ static func _gather_wood(p: PersonalityProfile, needs: Dictionary, inv: Dictiona
 	return {"action": "gather_wood", "target": nearest, "utility": score, "desc": "去收集木头", "duration": 2}
 
 ## 火边休憩：篝火是营地的心脏——人会聚到火边，社交与分享在这里发生
-static func _sit_by_fire(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary):
-	var fires: Dictionary = world.get("fires", {})
+static func _sit_by_fire(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	# P5：只去【我见过】的火堆（火灭了信念仍可能滞留——重访才发现）。
+	# P5.1 SK：fail-closed——没有 known_resources 键就不去（绝不回退世界真值）
+	var kr: Dictionary = actor.get("known_resources", {})
+	if not kr.has("fires"):
+		return null
+	var fires: Dictionary = kr["fires"]
 	if fires.is_empty():
 		return null
 	var fire_tile := Vector2i(-1, -1)
@@ -513,9 +587,15 @@ static func _nearest(pos: Vector2i, resources: Array) -> Vector2i:
 				best = r
 	return best
 
-static func _pick_unvisited(pos: Vector2i, visited: Dictionary) -> Vector2i:
+static func _pick_unvisited(pos: Vector2i, visited: Dictionary, wide: bool = false) -> Vector2i:
 	var fallback := Vector2i(-1, -1)
-	for delta in [Vector2i(4, 0), Vector2i(-4, 0), Vector2i(0, 4), Vector2i(0, -4), Vector2i(3, 3), Vector2i(-3, -3)]:
+	var deltas: Array = [Vector2i(4, 0), Vector2i(-4, 0), Vector2i(0, 4), Vector2i(0, -4), Vector2i(3, 3), Vector2i(-3, -3)]
+	if wide:
+		# P5 绝望搜索：走得远——未知方向才可能有活路（仍只是自己的方向猜测，非真值）
+		deltas = [Vector2i(9, 0), Vector2i(-9, 0), Vector2i(0, 9), Vector2i(0, -9),
+			Vector2i(7, 7), Vector2i(-7, -7), Vector2i(7, -7), Vector2i(-7, 7),
+			Vector2i(4, 0), Vector2i(-4, 0), Vector2i(0, 4), Vector2i(0, -4), Vector2i(3, 3), Vector2i(-3, -3)]
+	for delta in deltas:
 		var t := Vector2i(pos.x + delta.x, pos.y + delta.y)
 		if t.x > 2 and t.y > 2:
 			if not visited.has(str(t)):

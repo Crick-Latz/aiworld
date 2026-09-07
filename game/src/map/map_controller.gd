@@ -89,6 +89,12 @@ func is_walkable_tile(tile: Vector3i) -> bool:
 func get_map_rect() -> Rect2i:
 	return Rect2i(0, 0, _map.width, _map.depth) if _map != null else Rect2i()
 
+# P5 空间感知用：格障碍类型（none/water/rock/tree）。只读真值，仅供 SpatialPerception/SN 裁决
+func get_obstacle(x: int, z: int) -> String:
+	if _map == null or not GridCoord.in_bounds(x, z, _map.width, _map.depth):
+		return "none"
+	return _map.obstacle[z * _map.width + x]
+
 func find_walk_path(from_tile: Vector3i, to_tile: Vector3i, max_nodes: int = 256) -> Array:
 	return MapNavigator.find_path(_map, from_tile, to_tile, max_nodes) if _map != null else []
 

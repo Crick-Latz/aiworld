@@ -1,6 +1,8 @@
 class_name AgentBrain
 extends RefCounted
 ## NPC 行为（OBS-01，M06）：authored profile 目标选择 + 状态机。
+## 【P5 遗留标记】本模块属 WP-04/OBS-01 原型：读精确 POI + 全图 A*（全知导航）。
+## 正式认知/叙事路径是 IslandSimulation（主观空间导航）。不得在新代码中引用本模块。
 ## 每 tick 前进一格（原型逻辑速度）；路径/到达/计划完成由逻辑 tick 判断。
 ## 无路 -> 阻塞事件 + 冷却 -> 冷却结束后按偏好轮换选合法目标。
 ## 不随机传送、不写死播放脚本；决策确定性可复现（不用墙钟/全局随机）。

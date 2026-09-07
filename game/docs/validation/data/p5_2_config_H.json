@@ -1,0 +1,3857 @@
+[
+ {
+  "ck": {
+   "1": {
+    "_avg": 308.333333333333,
+    "npc_kadga": 231,
+    "npc_oun": 404,
+    "npc_weila": 290
+   },
+   "5": {
+    "_avg": 535.666666666667,
+    "npc_kadga": 593,
+    "npc_oun": 404,
+    "npc_weila": 610
+   },
+   "10": {
+    "_avg": 604.333333333333,
+    "npc_kadga": 799,
+    "npc_oun": 404,
+    "npc_weila": 610
+   },
+   "30": {
+    "_avg": 847,
+    "npc_kadga": 1242,
+    "npc_oun": 673,
+    "npc_weila": 626
+   },
+   "60": {
+    "_avg": 890.333333333333,
+    "npc_kadga": 1309,
+    "npc_oun": 736,
+    "npc_weila": 626
+   },
+   "100": {
+    "_avg": 1073,
+    "npc_kadga": 1609,
+    "npc_oun": 984,
+    "npc_weila": 626
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1930,
+   "npc_oun": 1263,
+   "npc_weila": 626
+  },
+  "ev": {
+   "ate_food": 60,
+   "confronted_violation": 2,
+   "crafted": 2,
+   "explored": 4857,
+   "explored_found": 39,
+   "explored_hurt": 47,
+   "fire_lit": 12,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 26,
+   "foraged_empty": 283,
+   "found_person": 14,
+   "gather_wood_empty": 15,
+   "gathered_shells": 5,
+   "gathered_wood": 70,
+   "kept_distance": 5,
+   "movement_blocked": 14,
+   "person_not_found": 17,
+   "rested": 197,
+   "ruins_empty": 1,
+   "rule_abstained": 297,
+   "rule_proposed": 359,
+   "rule_supported": 62,
+   "shelter_built": 29,
+   "socialized": 194,
+   "storage_contributed": 9,
+   "storage_withheld": 8,
+   "water_request_refused": 2,
+   "water_requested": 2,
+   "weather_storm": 239
+  },
+  "food": {
+   "berry": 26,
+   "explore": 39,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 16,
+    "hunger_p50": 560,
+    "hunger_p90": 934,
+    "known_berry_max": 10,
+    "revisit": 150,
+    "stale": 144,
+    "starve": 21,
+    "trips": 160
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 10,
+    "hunger_p50": 498,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 144,
+    "stale": 139,
+    "starve": 24,
+    "trips": 149
+   },
+   "npc_weila": {
+    "desperate": 0,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 112,
+    "trips": 0
+   }
+  },
+  "seed": 60000,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 8,
+    "RELATIONSHIP_CONFLICT": 2
+   },
+   "resolved": 0,
+   "total": 10
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 253.666666666667,
+    "npc_kadga": 224,
+    "npc_oun": 283,
+    "npc_weila": 254
+   },
+   "5": {
+    "_avg": 344.333333333333,
+    "npc_kadga": 265,
+    "npc_oun": 283,
+    "npc_weila": 485
+   },
+   "10": {
+    "_avg": 465.666666666667,
+    "npc_kadga": 487,
+    "npc_oun": 425,
+    "npc_weila": 485
+   },
+   "30": {
+    "_avg": 532.333333333333,
+    "npc_kadga": 491,
+    "npc_oun": 621,
+    "npc_weila": 485
+   },
+   "60": {
+    "_avg": 544.666666666667,
+    "npc_kadga": 491,
+    "npc_oun": 621,
+    "npc_weila": 522
+   },
+   "100": {
+    "_avg": 872.333333333333,
+    "npc_kadga": 491,
+    "npc_oun": 621,
+    "npc_weila": 1505
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 720,
+   "npc_oun": 622,
+   "npc_weila": 1732
+  },
+  "ev": {
+   "ate_food": 71,
+   "explored": 5923,
+   "explored_found": 56,
+   "explored_hurt": 62,
+   "fire_lit": 1,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 11,
+   "foraged_empty": 64,
+   "found_person": 2,
+   "gather_wood_empty": 11,
+   "gathered_wood": 9,
+   "movement_blocked": 12,
+   "person_not_found": 7,
+   "reason_asked": 1,
+   "reason_claimed": 1,
+   "rested": 162,
+   "shelter_built": 5,
+   "socialized": 122,
+   "weather_storm": 258
+  },
+  "food": {
+   "berry": 11,
+   "explore": 56,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 786,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 0,
+    "stale": 2,
+    "starve": 72,
+    "trips": 2
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 10,
+    "hunger_p50": 554,
+    "hunger_p90": 904,
+    "known_berry_max": 5,
+    "revisit": 57,
+    "stale": 52,
+    "starve": 17,
+    "trips": 62
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 694,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 7,
+    "stale": 10,
+    "starve": 56,
+    "trips": 11
+   }
+  },
+  "seed": 60001,
+  "threads": {
+   "by_type": {},
+   "resolved": 0,
+   "total": 0
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 296.333333333333,
+    "npc_kadga": 228,
+    "npc_oun": 350,
+    "npc_weila": 311
+   },
+   "5": {
+    "_avg": 505.333333333333,
+    "npc_kadga": 696,
+    "npc_oun": 350,
+    "npc_weila": 470
+   },
+   "10": {
+    "_avg": 516.333333333333,
+    "npc_kadga": 729,
+    "npc_oun": 350,
+    "npc_weila": 470
+   },
+   "30": {
+    "_avg": 628.333333333333,
+    "npc_kadga": 729,
+    "npc_oun": 686,
+    "npc_weila": 470
+   },
+   "60": {
+    "_avg": 706,
+    "npc_kadga": 904,
+    "npc_oun": 724,
+    "npc_weila": 490
+   },
+   "100": {
+    "_avg": 731.666666666667,
+    "npc_kadga": 928,
+    "npc_oun": 777,
+    "npc_weila": 490
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1298,
+   "npc_oun": 816,
+   "npc_weila": 502
+  },
+  "ev": {
+   "ate_food": 51,
+   "confronted_violation": 1,
+   "explored": 3766,
+   "explored_found": 34,
+   "explored_hurt": 35,
+   "fire_lit": 51,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 41,
+   "foraged_empty": 471,
+   "found_person": 17,
+   "gather_wood_empty": 28,
+   "gathered_wood": 289,
+   "kept_distance": 22,
+   "movement_blocked": 13,
+   "person_not_found": 8,
+   "rested": 115,
+   "rule_abstained": 375,
+   "rule_proposed": 787,
+   "rule_supported": 412,
+   "shelter_built": 102,
+   "socialized": 209,
+   "storage_contributed": 28,
+   "storage_withheld": 9,
+   "water_request_refused": 2,
+   "water_requested": 2,
+   "weather_storm": 264
+  },
+  "food": {
+   "berry": 41,
+   "explore": 34,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 21,
+    "hunger_p50": 594,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 218,
+    "stale": 201,
+    "starve": 26,
+    "trips": 222
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 20,
+    "hunger_p50": 446,
+    "hunger_p90": 714,
+    "known_berry_max": 3,
+    "revisit": 283,
+    "stale": 266,
+    "starve": 6,
+    "trips": 286
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 756,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 2,
+    "stale": 4,
+    "starve": 63,
+    "trips": 4
+   }
+  },
+  "seed": 60002,
+  "threads": {
+   "by_type": {
+    "EPISTEMIC_THREAD": 2,
+    "INSTITUTION_CONFLICT": 9,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 12
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 325.666666666667,
+    "npc_kadga": 216,
+    "npc_oun": 436,
+    "npc_weila": 325
+   },
+   "5": {
+    "_avg": 462.333333333333,
+    "npc_kadga": 586,
+    "npc_oun": 436,
+    "npc_weila": 365
+   },
+   "10": {
+    "_avg": 582.333333333333,
+    "npc_kadga": 678,
+    "npc_oun": 436,
+    "npc_weila": 633
+   },
+   "30": {
+    "_avg": 987,
+    "npc_kadga": 721,
+    "npc_oun": 730,
+    "npc_weila": 1510
+   },
+   "60": {
+    "_avg": 1114,
+    "npc_kadga": 1049,
+    "npc_oun": 783,
+    "npc_weila": 1510
+   },
+   "100": {
+    "_avg": 1121,
+    "npc_kadga": 1056,
+    "npc_oun": 794,
+    "npc_weila": 1513
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1057,
+   "npc_oun": 795,
+   "npc_weila": 1523
+  },
+  "ev": {
+   "asked_about": 2,
+   "ate_food": 43,
+   "confronted_violation": 2,
+   "crafted": 1,
+   "drank": 51,
+   "explored": 3737,
+   "explored_found": 35,
+   "explored_hurt": 35,
+   "fire_lit": 34,
+   "fished": 2,
+   "food_request_refused": 4,
+   "food_requested": 4,
+   "foraged": 2,
+   "foraged_empty": 19,
+   "found_person": 34,
+   "gather_wood_empty": 21,
+   "gathered_shells": 1,
+   "gathered_wood": 57,
+   "institution_established": 1,
+   "kept_distance": 64,
+   "movement_blocked": 10,
+   "person_not_found": 2,
+   "promise_broken": 1,
+   "promise_made": 1,
+   "reason_asked": 1,
+   "reason_deflected": 1,
+   "rested": 218,
+   "ruins_loot": 1,
+   "rule_abstained": 1216,
+   "rule_proposed": 783,
+   "rule_revised": 7,
+   "rule_supported": 130,
+   "shelter_built": 12,
+   "socialized": 311,
+   "storage_withheld": 2,
+   "third_party_claimed": 2,
+   "tool_request_accepted": 1,
+   "tool_request_refused": 2,
+   "tool_requested": 3,
+   "water_request_refused": 2,
+   "water_requested": 2,
+   "weather_storm": 247
+  },
+  "food": {
+   "berry": 2,
+   "explore": 35,
+   "fish": 2,
+   "share": 1
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 2,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 19,
+    "stale": 19,
+    "starve": 129,
+    "trips": 21
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 112,
+    "trips": 0
+   },
+   "npc_weila": {
+    "desperate": 5,
+    "foraged": 0,
+    "hunger_p50": 840,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 87,
+    "trips": 0
+   }
+  },
+  "seed": 60003,
+  "threads": {
+   "by_type": {
+    "AUTHORITY_THREAD": 1,
+    "EPISTEMIC_THREAD": 2,
+    "INSTITUTION_CONFLICT": 2,
+    "PROMISE_THREAD": 1,
+    "RECIPROCITY_THREAD": 1,
+    "RELATIONSHIP_CONFLICT": 2
+   },
+   "resolved": 1,
+   "total": 9
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 299.666666666667,
+    "npc_kadga": 210,
+    "npc_oun": 390,
+    "npc_weila": 299
+   },
+   "5": {
+    "_avg": 478.333333333333,
+    "npc_kadga": 348,
+    "npc_oun": 390,
+    "npc_weila": 697
+   },
+   "10": {
+    "_avg": 707,
+    "npc_kadga": 379,
+    "npc_oun": 432,
+    "npc_weila": 1310
+   },
+   "30": {
+    "_avg": 808.333333333333,
+    "npc_kadga": 526,
+    "npc_oun": 588,
+    "npc_weila": 1311
+   },
+   "60": {
+    "_avg": 909.666666666667,
+    "npc_kadga": 817,
+    "npc_oun": 588,
+    "npc_weila": 1324
+   },
+   "100": {
+    "_avg": 912.666666666667,
+    "npc_kadga": 826,
+    "npc_oun": 588,
+    "npc_weila": 1324
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 826,
+   "npc_oun": 588,
+   "npc_weila": 1324
+  },
+  "ev": {
+   "ate_food": 51,
+   "explored": 4509,
+   "explored_found": 43,
+   "explored_hurt": 50,
+   "fire_lit": 7,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 6,
+   "foraged_empty": 59,
+   "found_person": 4,
+   "gather_wood_empty": 8,
+   "gathered_shells": 16,
+   "gathered_wood": 33,
+   "kept_distance": 7,
+   "movement_blocked": 9,
+   "observing_person": 1,
+   "person_not_found": 10,
+   "reason_asked": 3,
+   "reason_claimed": 3,
+   "rested": 231,
+   "rule_abstained": 1394,
+   "rule_proposed": 1395,
+   "rule_supported": 1,
+   "shelter_built": 14,
+   "socialized": 101,
+   "storage_contributed": 2,
+   "storage_withheld": 4,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 246
+  },
+  "food": {
+   "berry": 6,
+   "explore": 43,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 5,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 54,
+    "stale": 52,
+    "starve": 126,
+    "trips": 57
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 834,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 82,
+    "trips": 0
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 856,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 3,
+    "stale": 7,
+    "starve": 93,
+    "trips": 8
+   }
+  },
+  "seed": 60004,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 4
+   },
+   "resolved": 0,
+   "total": 4
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 314.666666666667,
+    "npc_kadga": 227,
+    "npc_oun": 283,
+    "npc_weila": 434
+   },
+   "5": {
+    "_avg": 337.333333333333,
+    "npc_kadga": 276,
+    "npc_oun": 283,
+    "npc_weila": 453
+   },
+   "10": {
+    "_avg": 408.666666666667,
+    "npc_kadga": 276,
+    "npc_oun": 497,
+    "npc_weila": 453
+   },
+   "30": {
+    "_avg": 446,
+    "npc_kadga": 276,
+    "npc_oun": 609,
+    "npc_weila": 453
+   },
+   "60": {
+    "_avg": 837.666666666667,
+    "npc_kadga": 276,
+    "npc_oun": 632,
+    "npc_weila": 1605
+   },
+   "100": {
+    "_avg": 928,
+    "npc_kadga": 288,
+    "npc_oun": 851,
+    "npc_weila": 1645
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1176,
+   "npc_oun": 1517,
+   "npc_weila": 2324
+  },
+  "ev": {
+   "ate_food": 68,
+   "explored": 4757,
+   "explored_found": 36,
+   "explored_hurt": 54,
+   "fire_lit": 66,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 28,
+   "foraged_empty": 296,
+   "found_person": 20,
+   "gather_wood_empty": 28,
+   "gathered_wood": 168,
+   "kept_distance": 3,
+   "movement_blocked": 26,
+   "person_not_found": 19,
+   "reason_asked": 1,
+   "reason_deflected": 1,
+   "rested": 146,
+   "ruins_loot": 1,
+   "shelter_built": 52,
+   "socialized": 215,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 241
+  },
+  "food": {
+   "berry": 28,
+   "explore": 36,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 7,
+    "hunger_p50": 516,
+    "hunger_p90": 1000,
+    "known_berry_max": 6,
+    "revisit": 56,
+    "stale": 55,
+    "starve": 30,
+    "trips": 62
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 12,
+    "hunger_p50": 534,
+    "hunger_p90": 822,
+    "known_berry_max": 9,
+    "revisit": 172,
+    "stale": 169,
+    "starve": 11,
+    "trips": 181
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 9,
+    "hunger_p50": 526,
+    "hunger_p90": 924,
+    "known_berry_max": 9,
+    "revisit": 72,
+    "stale": 72,
+    "starve": 20,
+    "trips": 81
+   }
+  },
+  "seed": 60005,
+  "threads": {
+   "by_type": {},
+   "resolved": 0,
+   "total": 0
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 319.666666666667,
+    "npc_kadga": 210,
+    "npc_oun": 439,
+    "npc_weila": 310
+   },
+   "5": {
+    "_avg": 420.666666666667,
+    "npc_kadga": 277,
+    "npc_oun": 439,
+    "npc_weila": 546
+   },
+   "10": {
+    "_avg": 641,
+    "npc_kadga": 277,
+    "npc_oun": 458,
+    "npc_weila": 1188
+   },
+   "30": {
+    "_avg": 835,
+    "npc_kadga": 277,
+    "npc_oun": 660,
+    "npc_weila": 1568
+   },
+   "60": {
+    "_avg": 889.666666666667,
+    "npc_kadga": 306,
+    "npc_oun": 662,
+    "npc_weila": 1701
+   },
+   "100": {
+    "_avg": 892,
+    "npc_kadga": 306,
+    "npc_oun": 662,
+    "npc_weila": 1708
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 306,
+   "npc_oun": 823,
+   "npc_weila": 1708
+  },
+  "ev": {
+   "ate_food": 49,
+   "crafted": 2,
+   "drank": 15,
+   "explored": 4617,
+   "explored_found": 37,
+   "explored_hurt": 46,
+   "fire_lit": 21,
+   "fished_empty": 1,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 6,
+   "foraged_empty": 92,
+   "found_person": 1,
+   "gather_wood_empty": 8,
+   "gathered_shells": 7,
+   "gathered_wood": 61,
+   "kept_distance": 42,
+   "movement_blocked": 16,
+   "reason_asked": 1,
+   "reason_claimed": 1,
+   "rested": 182,
+   "ruins_loot": 1,
+   "rule_abstained": 538,
+   "rule_proposed": 1073,
+   "rule_supported": 535,
+   "shelter_built": 20,
+   "socialized": 167,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 239
+  },
+  "food": {
+   "berry": 6,
+   "explore": 37,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 178,
+    "trips": 0
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 5,
+    "hunger_p50": 736,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 81,
+    "stale": 79,
+    "starve": 73,
+    "trips": 84
+   },
+   "npc_weila": {
+    "desperate": 2,
+    "foraged": 1,
+    "hunger_p50": 700,
+    "hunger_p90": 1000,
+    "known_berry_max": 7,
+    "revisit": 7,
+    "stale": 13,
+    "starve": 57,
+    "trips": 14
+   }
+  },
+  "seed": 60006,
+  "threads": {
+   "by_type": {},
+   "resolved": 0,
+   "total": 0
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 266,
+    "npc_kadga": 213,
+    "npc_oun": 283,
+    "npc_weila": 302
+   },
+   "5": {
+    "_avg": 370,
+    "npc_kadga": 276,
+    "npc_oun": 283,
+    "npc_weila": 551
+   },
+   "10": {
+    "_avg": 570.666666666667,
+    "npc_kadga": 276,
+    "npc_oun": 287,
+    "npc_weila": 1149
+   },
+   "30": {
+    "_avg": 786.666666666667,
+    "npc_kadga": 276,
+    "npc_oun": 612,
+    "npc_weila": 1472
+   },
+   "60": {
+    "_avg": 794.333333333333,
+    "npc_kadga": 285,
+    "npc_oun": 626,
+    "npc_weila": 1472
+   },
+   "100": {
+    "_avg": 896.333333333333,
+    "npc_kadga": 428,
+    "npc_oun": 788,
+    "npc_weila": 1473
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 429,
+   "npc_oun": 903,
+   "npc_weila": 1474
+  },
+  "ev": {
+   "ate_food": 46,
+   "drank": 108,
+   "explored": 2550,
+   "explored_found": 28,
+   "explored_hurt": 23,
+   "fire_lit": 90,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 15,
+   "foraged_empty": 266,
+   "found_person": 9,
+   "gather_wood_empty": 44,
+   "gathered_wood": 382,
+   "kept_distance": 33,
+   "movement_blocked": 11,
+   "observing_person": 1,
+   "person_not_found": 4,
+   "reason_asked": 2,
+   "reason_claimed": 2,
+   "rested": 226,
+   "rule_abstained": 672,
+   "rule_proposed": 1364,
+   "rule_supported": 692,
+   "shelter_built": 147,
+   "socialized": 302,
+   "tool_request_refused": 2,
+   "tool_requested": 2,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 237
+  },
+  "food": {
+   "berry": 15,
+   "explore": 28,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 14,
+    "stale": 17,
+    "starve": 152,
+    "trips": 17
+   },
+   "npc_oun": {
+    "desperate": 12,
+    "foraged": 15,
+    "hunger_p50": 496,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 260,
+    "stale": 246,
+    "starve": 39,
+    "trips": 261
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 730,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 0,
+    "stale": 3,
+    "starve": 56,
+    "trips": 3
+   }
+  },
+  "seed": 60007,
+  "threads": {
+   "by_type": {},
+   "resolved": 0,
+   "total": 0
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 252.666666666667,
+    "npc_kadga": 224,
+    "npc_oun": 283,
+    "npc_weila": 251
+   },
+   "5": {
+    "_avg": 347.333333333333,
+    "npc_kadga": 275,
+    "npc_oun": 283,
+    "npc_weila": 484
+   },
+   "10": {
+    "_avg": 437.666666666667,
+    "npc_kadga": 275,
+    "npc_oun": 554,
+    "npc_weila": 484
+   },
+   "30": {
+    "_avg": 565.333333333333,
+    "npc_kadga": 275,
+    "npc_oun": 566,
+    "npc_weila": 855
+   },
+   "60": {
+    "_avg": 1042.66666666667,
+    "npc_kadga": 940,
+    "npc_oun": 588,
+    "npc_weila": 1600
+   },
+   "100": {
+    "_avg": 1428.66666666667,
+    "npc_kadga": 1904,
+    "npc_oun": 776,
+    "npc_weila": 1606
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 2097,
+   "npc_oun": 864,
+   "npc_weila": 2208
+  },
+  "ev": {
+   "ate_food": 60,
+   "confronted_violation": 2,
+   "drank": 2,
+   "explored": 4990,
+   "explored_found": 32,
+   "explored_hurt": 60,
+   "fire_lit": 8,
+   "food_request_refused": 3,
+   "food_requested": 3,
+   "foraged": 24,
+   "foraged_empty": 253,
+   "found_person": 16,
+   "gather_wood_empty": 8,
+   "gathered_wood": 10,
+   "institution_established": 1,
+   "movement_blocked": 31,
+   "observing_person": 1,
+   "person_not_found": 37,
+   "rested": 201,
+   "rule_abstained": 344,
+   "rule_proposed": 243,
+   "rule_supported": 31,
+   "shared_food": 2,
+   "shelter_built": 2,
+   "socialized": 120,
+   "storage_withheld": 15,
+   "weather_storm": 246
+  },
+  "food": {
+   "berry": 24,
+   "explore": 32,
+   "fish": 0,
+   "share": 2
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 8,
+    "hunger_p50": 678,
+    "hunger_p90": 1000,
+    "known_berry_max": 11,
+    "revisit": 59,
+    "stale": 62,
+    "starve": 70,
+    "trips": 70
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 8,
+    "hunger_p50": 694,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 124,
+    "stale": 121,
+    "starve": 61,
+    "trips": 129
+   },
+   "npc_weila": {
+    "desperate": 0,
+    "foraged": 8,
+    "hunger_p50": 544,
+    "hunger_p90": 1000,
+    "known_berry_max": 8,
+    "revisit": 70,
+    "stale": 70,
+    "starve": 39,
+    "trips": 78
+   }
+  },
+  "seed": 60008,
+  "threads": {
+   "by_type": {
+    "AUTHORITY_THREAD": 1,
+    "INSTITUTION_CONFLICT": 15,
+    "RECIPROCITY_THREAD": 2,
+    "RELATIONSHIP_CONFLICT": 2
+   },
+   "resolved": 0,
+   "total": 20
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 290.666666666667,
+    "npc_kadga": 228,
+    "npc_oun": 390,
+    "npc_weila": 254
+   },
+   "5": {
+    "_avg": 598,
+    "npc_kadga": 783,
+    "npc_oun": 439,
+    "npc_weila": 572
+   },
+   "10": {
+    "_avg": 701,
+    "npc_kadga": 805,
+    "npc_oun": 439,
+    "npc_weila": 859
+   },
+   "30": {
+    "_avg": 951.333333333333,
+    "npc_kadga": 825,
+    "npc_oun": 701,
+    "npc_weila": 1328
+   },
+   "60": {
+    "_avg": 1052.66666666667,
+    "npc_kadga": 1021,
+    "npc_oun": 809,
+    "npc_weila": 1328
+   },
+   "100": {
+    "_avg": 1144.66666666667,
+    "npc_kadga": 1278,
+    "npc_oun": 828,
+    "npc_weila": 1328
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1354,
+   "npc_oun": 1177,
+   "npc_weila": 1328
+  },
+  "ev": {
+   "ate_food": 46,
+   "explored": 4101,
+   "explored_found": 30,
+   "explored_hurt": 41,
+   "fire_lit": 73,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 17,
+   "foraged_empty": 229,
+   "found_person": 13,
+   "gather_wood_empty": 28,
+   "gathered_wood": 241,
+   "movement_blocked": 14,
+   "person_not_found": 12,
+   "rested": 166,
+   "ruins_loot": 1,
+   "rule_abstained": 622,
+   "rule_proposed": 795,
+   "rule_supported": 173,
+   "shelter_built": 85,
+   "socialized": 175,
+   "storage_contributed": 7,
+   "storage_withheld": 7,
+   "weather_storm": 225
+  },
+  "food": {
+   "berry": 17,
+   "explore": 30,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 8,
+    "hunger_p50": 818,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 62,
+    "stale": 58,
+    "starve": 92,
+    "trips": 66
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 9,
+    "hunger_p50": 688,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 175,
+    "stale": 170,
+    "starve": 58,
+    "trips": 179
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 0,
+    "stale": 1,
+    "starve": 112,
+    "trips": 1
+   }
+  },
+  "seed": 60009,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 7
+   },
+   "resolved": 0,
+   "total": 7
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 268.666666666667,
+    "npc_kadga": 211,
+    "npc_oun": 283,
+    "npc_weila": 312
+   },
+   "5": {
+    "_avg": 499.666666666667,
+    "npc_kadga": 746,
+    "npc_oun": 283,
+    "npc_weila": 470
+   },
+   "10": {
+    "_avg": 612.333333333333,
+    "npc_kadga": 787,
+    "npc_oun": 580,
+    "npc_weila": 470
+   },
+   "30": {
+    "_avg": 616.666666666667,
+    "npc_kadga": 800,
+    "npc_oun": 580,
+    "npc_weila": 470
+   },
+   "60": {
+    "_avg": 617,
+    "npc_kadga": 801,
+    "npc_oun": 580,
+    "npc_weila": 470
+   },
+   "100": {
+    "_avg": 629.333333333333,
+    "npc_kadga": 801,
+    "npc_oun": 617,
+    "npc_weila": 470
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1318,
+   "npc_oun": 620,
+   "npc_weila": 470
+  },
+  "ev": {
+   "ate_food": 48,
+   "drank": 24,
+   "explored": 4810,
+   "explored_found": 40,
+   "explored_hurt": 43,
+   "fire_lit": 33,
+   "foraged": 13,
+   "foraged_empty": 164,
+   "found_person": 2,
+   "gather_wood_empty": 20,
+   "gathered_wood": 54,
+   "kept_distance": 69,
+   "movement_blocked": 14,
+   "person_not_found": 2,
+   "rested": 249,
+   "ruins_loot": 1,
+   "rule_abstained": 298,
+   "rule_proposed": 298,
+   "shelter_built": 11,
+   "socialized": 218,
+   "storage_contributed": 9,
+   "storage_withheld": 4,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 272
+  },
+  "food": {
+   "berry": 13,
+   "explore": 40,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 13,
+    "hunger_p50": 698,
+    "hunger_p90": 1000,
+    "known_berry_max": 6,
+    "revisit": 171,
+    "stale": 164,
+    "starve": 73,
+    "trips": 177
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 778,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 79,
+    "trips": 0
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 818,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 82,
+    "trips": 0
+   }
+  },
+  "seed": 60010,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 4
+   },
+   "resolved": 0,
+   "total": 4
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 310.333333333333,
+    "npc_kadga": 235,
+    "npc_oun": 415,
+    "npc_weila": 281
+   },
+   "5": {
+    "_avg": 443,
+    "npc_kadga": 302,
+    "npc_oun": 415,
+    "npc_weila": 612
+   },
+   "10": {
+    "_avg": 695.333333333333,
+    "npc_kadga": 520,
+    "npc_oun": 415,
+    "npc_weila": 1151
+   },
+   "30": {
+    "_avg": 808.333333333333,
+    "npc_kadga": 520,
+    "npc_oun": 696,
+    "npc_weila": 1209
+   },
+   "60": {
+    "_avg": 808.333333333333,
+    "npc_kadga": 520,
+    "npc_oun": 696,
+    "npc_weila": 1209
+   },
+   "100": {
+    "_avg": 821,
+    "npc_kadga": 557,
+    "npc_oun": 696,
+    "npc_weila": 1210
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1107,
+   "npc_oun": 867,
+   "npc_weila": 1781
+  },
+  "ev": {
+   "ate_food": 45,
+   "confronted_violation": 1,
+   "explored": 4110,
+   "explored_found": 36,
+   "explored_hurt": 43,
+   "fire_lit": 34,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 6,
+   "foraged_empty": 57,
+   "found_person": 49,
+   "gather_wood_empty": 37,
+   "gathered_wood": 273,
+   "movement_blocked": 19,
+   "person_not_found": 12,
+   "reason_asked": 2,
+   "reason_claimed": 2,
+   "rested": 143,
+   "rule_abstained": 1203,
+   "rule_proposed": 912,
+   "shelter_built": 80,
+   "socialized": 130,
+   "storage_contributed": 1,
+   "storage_withheld": 4,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 247
+  },
+  "food": {
+   "berry": 6,
+   "explore": 36,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 4,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 32,
+    "stale": 30,
+    "starve": 130,
+    "trips": 34
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 970,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 2,
+    "stale": 5,
+    "starve": 107,
+    "trips": 5
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 2,
+    "hunger_p50": 674,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 19,
+    "stale": 22,
+    "starve": 57,
+    "trips": 24
+   }
+  },
+  "seed": 60011,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 4,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 5
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 281.666666666667,
+    "npc_kadga": 269,
+    "npc_oun": 283,
+    "npc_weila": 293
+   },
+   "5": {
+    "_avg": 390.666666666667,
+    "npc_kadga": 324,
+    "npc_oun": 283,
+    "npc_weila": 565
+   },
+   "10": {
+    "_avg": 641.666666666667,
+    "npc_kadga": 482,
+    "npc_oun": 519,
+    "npc_weila": 924
+   },
+   "30": {
+    "_avg": 1064,
+    "npc_kadga": 829,
+    "npc_oun": 1063,
+    "npc_weila": 1300
+   },
+   "60": {
+    "_avg": 1241,
+    "npc_kadga": 1025,
+    "npc_oun": 1398,
+    "npc_weila": 1300
+   },
+   "100": {
+    "_avg": 1402,
+    "npc_kadga": 1265,
+    "npc_oun": 1641,
+    "npc_weila": 1300
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1400,
+   "npc_oun": 1677,
+   "npc_weila": 2059
+  },
+  "ev": {
+   "asked_about": 1,
+   "ate_food": 63,
+   "confronted_violation": 1,
+   "crafted": 4,
+   "drank": 258,
+   "explored": 3293,
+   "explored_found": 24,
+   "explored_hurt": 37,
+   "fire_lit": 73,
+   "fished": 19,
+   "fished_empty": 11,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 42,
+   "foraged_empty": 563,
+   "gather_wood_empty": 82,
+   "gathered_shells": 4,
+   "gathered_wood": 503,
+   "institution_established": 2,
+   "movement_blocked": 23,
+   "observing_person": 1,
+   "person_not_found": 34,
+   "promise_broken": 1,
+   "promise_kept": 2,
+   "promise_made": 3,
+   "reflected": 46,
+   "rested": 111,
+   "ruins_loot": 1,
+   "rule_abstained": 74,
+   "rule_proposed": 101,
+   "rule_supported": 70,
+   "shared_food": 15,
+   "shelter_built": 214,
+   "socialized": 197,
+   "storage_contributed": 12,
+   "storage_withheld": 21,
+   "third_party_claimed": 1,
+   "water_request_accepted": 3,
+   "water_request_refused": 1,
+   "water_requested": 4,
+   "weather_storm": 274
+  },
+  "food": {
+   "berry": 42,
+   "explore": 24,
+   "fish": 19,
+   "share": 18
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 21,
+    "hunger_p50": 420,
+    "hunger_p90": 660,
+    "known_berry_max": 9,
+    "revisit": 216,
+    "stale": 204,
+    "starve": 1,
+    "trips": 225
+   },
+   "npc_oun": {
+    "desperate": 6,
+    "foraged": 18,
+    "hunger_p50": 440,
+    "hunger_p90": 674,
+    "known_berry_max": 9,
+    "revisit": 328,
+    "stale": 319,
+    "starve": 3,
+    "trips": 337
+   },
+   "npc_weila": {
+    "desperate": 136,
+    "foraged": 3,
+    "hunger_p50": 618,
+    "hunger_p90": 1000,
+    "known_berry_max": 10,
+    "revisit": 33,
+    "stale": 40,
+    "starve": 32,
+    "trips": 43
+   }
+  },
+  "seed": 60012,
+  "threads": {
+   "by_type": {
+    "AUTHORITY_THREAD": 2,
+    "INSTITUTION_CONFLICT": 21,
+    "PROMISE_THREAD": 3,
+    "RECIPROCITY_THREAD": 18,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 3,
+   "total": 45
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 309.333333333333,
+    "npc_kadga": 211,
+    "npc_oun": 415,
+    "npc_weila": 302
+   },
+   "5": {
+    "_avg": 452,
+    "npc_kadga": 277,
+    "npc_oun": 415,
+    "npc_weila": 664
+   },
+   "10": {
+    "_avg": 662,
+    "npc_kadga": 337,
+    "npc_oun": 415,
+    "npc_weila": 1234
+   },
+   "30": {
+    "_avg": 827,
+    "npc_kadga": 337,
+    "npc_oun": 415,
+    "npc_weila": 1729
+   },
+   "60": {
+    "_avg": 918.333333333333,
+    "npc_kadga": 576,
+    "npc_oun": 415,
+    "npc_weila": 1764
+   },
+   "100": {
+    "_avg": 938,
+    "npc_kadga": 620,
+    "npc_oun": 429,
+    "npc_weila": 1765
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 620,
+   "npc_oun": 429,
+   "npc_weila": 1765
+  },
+  "ev": {
+   "ate_food": 41,
+   "crafted": 1,
+   "explored": 4572,
+   "explored_found": 24,
+   "explored_hurt": 54,
+   "fire_lit": 5,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 14,
+   "foraged_empty": 256,
+   "found_person": 5,
+   "gather_wood_empty": 27,
+   "gathered_shells": 5,
+   "gathered_wood": 10,
+   "kept_distance": 11,
+   "movement_blocked": 12,
+   "person_not_found": 5,
+   "reason_asked": 3,
+   "reason_claimed": 3,
+   "rested": 213,
+   "rule_abstained": 953,
+   "rule_proposed": 1296,
+   "rule_supported": 343,
+   "shelter_built": 3,
+   "socialized": 161,
+   "storage_contributed": 1,
+   "storage_withheld": 1,
+   "water_request_refused": 2,
+   "water_requested": 2,
+   "weather_storm": 240
+  },
+  "food": {
+   "berry": 14,
+   "explore": 24,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 6,
+    "stale": 6,
+    "starve": 162,
+    "trips": 7
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 12,
+    "hunger_p50": 440,
+    "hunger_p90": 744,
+    "known_berry_max": 1,
+    "revisit": 244,
+    "stale": 233,
+    "starve": 10,
+    "trips": 245
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 6,
+    "revisit": 12,
+    "stale": 17,
+    "starve": 123,
+    "trips": 18
+   }
+  },
+  "seed": 60013,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 1
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 324,
+    "npc_kadga": 253,
+    "npc_oun": 283,
+    "npc_weila": 436
+   },
+   "5": {
+    "_avg": 367,
+    "npc_kadga": 277,
+    "npc_oun": 283,
+    "npc_weila": 541
+   },
+   "10": {
+    "_avg": 474.666666666667,
+    "npc_kadga": 277,
+    "npc_oun": 596,
+    "npc_weila": 551
+   },
+   "30": {
+    "_avg": 480.666666666667,
+    "npc_kadga": 277,
+    "npc_oun": 596,
+    "npc_weila": 569
+   },
+   "60": {
+    "_avg": 923.333333333333,
+    "npc_kadga": 288,
+    "npc_oun": 614,
+    "npc_weila": 1868
+   },
+   "100": {
+    "_avg": 1068.66666666667,
+    "npc_kadga": 288,
+    "npc_oun": 668,
+    "npc_weila": 2250
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 288,
+   "npc_oun": 728,
+   "npc_weila": 2331
+  },
+  "ev": {
+   "ate_food": 54,
+   "confronted_violation": 3,
+   "drank": 24,
+   "explored": 4988,
+   "explored_found": 33,
+   "explored_hurt": 56,
+   "fire_lit": 1,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 18,
+   "foraged_empty": 163,
+   "found_person": 10,
+   "gather_wood_empty": 1,
+   "gathered_wood": 13,
+   "kept_distance": 20,
+   "movement_blocked": 11,
+   "person_not_found": 36,
+   "reason_asked": 3,
+   "reason_deflected": 3,
+   "rested": 242,
+   "rule_abstained": 210,
+   "rule_proposed": 231,
+   "rule_supported": 21,
+   "shared_food": 1,
+   "shelter_built": 7,
+   "socialized": 113,
+   "storage_contributed": 1,
+   "storage_withheld": 9,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 265
+  },
+  "food": {
+   "berry": 18,
+   "explore": 33,
+   "fish": 0,
+   "share": 1
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 125,
+    "trips": 0
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 9,
+    "hunger_p50": 496,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 90,
+    "stale": 85,
+    "starve": 31,
+    "trips": 94
+   },
+   "npc_weila": {
+    "desperate": 0,
+    "foraged": 9,
+    "hunger_p50": 526,
+    "hunger_p90": 998,
+    "known_berry_max": 8,
+    "revisit": 79,
+    "stale": 78,
+    "starve": 26,
+    "trips": 87
+   }
+  },
+  "seed": 60014,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 9,
+    "RECIPROCITY_THREAD": 1,
+    "RELATIONSHIP_CONFLICT": 3
+   },
+   "resolved": 0,
+   "total": 13
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 271.666666666667,
+    "npc_kadga": 211,
+    "npc_oun": 283,
+    "npc_weila": 321
+   },
+   "5": {
+    "_avg": 484,
+    "npc_kadga": 659,
+    "npc_oun": 283,
+    "npc_weila": 510
+   },
+   "10": {
+    "_avg": 659,
+    "npc_kadga": 784,
+    "npc_oun": 503,
+    "npc_weila": 690
+   },
+   "30": {
+    "_avg": 1011,
+    "npc_kadga": 922,
+    "npc_oun": 639,
+    "npc_weila": 1472
+   },
+   "60": {
+    "_avg": 1095,
+    "npc_kadga": 982,
+    "npc_oun": 791,
+    "npc_weila": 1512
+   },
+   "100": {
+    "_avg": 1114,
+    "npc_kadga": 1036,
+    "npc_oun": 791,
+    "npc_weila": 1515
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1255,
+   "npc_oun": 799,
+   "npc_weila": 2153
+  },
+  "ev": {
+   "ate_food": 63,
+   "drank": 175,
+   "explored": 4838,
+   "explored_found": 44,
+   "explored_hurt": 47,
+   "fire_lit": 83,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 17,
+   "foraged_empty": 202,
+   "found_person": 6,
+   "gather_wood_empty": 31,
+   "gathered_wood": 297,
+   "movement_blocked": 19,
+   "person_not_found": 8,
+   "rested": 210,
+   "shared_food": 2,
+   "shelter_built": 106,
+   "socialized": 171,
+   "weather_storm": 262
+  },
+  "food": {
+   "berry": 17,
+   "explore": 44,
+   "fish": 0,
+   "share": 2
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 9,
+    "hunger_p50": 476,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 122,
+    "stale": 115,
+    "starve": 41,
+    "trips": 124
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 3,
+    "hunger_p50": 746,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 33,
+    "stale": 31,
+    "starve": 73,
+    "trips": 34
+   },
+   "npc_weila": {
+    "desperate": 101,
+    "foraged": 5,
+    "hunger_p50": 550,
+    "hunger_p90": 1000,
+    "known_berry_max": 8,
+    "revisit": 53,
+    "stale": 56,
+    "starve": 35,
+    "trips": 61
+   }
+  },
+  "seed": 60015,
+  "threads": {
+   "by_type": {
+    "RECIPROCITY_THREAD": 2
+   },
+   "resolved": 0,
+   "total": 2
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 257.666666666667,
+    "npc_kadga": 224,
+    "npc_oun": 283,
+    "npc_weila": 266
+   },
+   "5": {
+    "_avg": 477.666666666667,
+    "npc_kadga": 407,
+    "npc_oun": 533,
+    "npc_weila": 493
+   },
+   "10": {
+    "_avg": 719.333333333333,
+    "npc_kadga": 432,
+    "npc_oun": 620,
+    "npc_weila": 1106
+   },
+   "30": {
+    "_avg": 913.666666666667,
+    "npc_kadga": 455,
+    "npc_oun": 620,
+    "npc_weila": 1666
+   },
+   "60": {
+    "_avg": 981,
+    "npc_kadga": 455,
+    "npc_oun": 672,
+    "npc_weila": 1816
+   },
+   "100": {
+    "_avg": 1079,
+    "npc_kadga": 455,
+    "npc_oun": 773,
+    "npc_weila": 2009
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 455,
+   "npc_oun": 1629,
+   "npc_weila": 2338
+  },
+  "ev": {
+   "ate_food": 55,
+   "drank": 3,
+   "explored": 4739,
+   "explored_found": 37,
+   "explored_hurt": 39,
+   "fire_lit": 21,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 14,
+   "foraged_empty": 185,
+   "found_person": 5,
+   "gather_wood_empty": 26,
+   "gathered_wood": 137,
+   "movement_blocked": 22,
+   "person_not_found": 68,
+   "rested": 298,
+   "rule_abstained": 89,
+   "rule_proposed": 89,
+   "shelter_built": 39,
+   "socialized": 103,
+   "storage_withheld": 7,
+   "weather_storm": 270
+  },
+  "food": {
+   "berry": 14,
+   "explore": 37,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 125,
+    "trips": 0
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 7,
+    "hunger_p50": 530,
+    "hunger_p90": 1000,
+    "known_berry_max": 7,
+    "revisit": 101,
+    "stale": 101,
+    "starve": 36,
+    "trips": 108
+   },
+   "npc_weila": {
+    "desperate": 116,
+    "foraged": 7,
+    "hunger_p50": 654,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 82,
+    "stale": 84,
+    "starve": 60,
+    "trips": 91
+   }
+  },
+  "seed": 60016,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 7
+   },
+   "resolved": 0,
+   "total": 7
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 316.333333333333,
+    "npc_kadga": 269,
+    "npc_oun": 407,
+    "npc_weila": 273
+   },
+   "5": {
+    "_avg": 424,
+    "npc_kadga": 409,
+    "npc_oun": 407,
+    "npc_weila": 456
+   },
+   "10": {
+    "_avg": 664.333333333333,
+    "npc_kadga": 728,
+    "npc_oun": 492,
+    "npc_weila": 773
+   },
+   "30": {
+    "_avg": 981,
+    "npc_kadga": 908,
+    "npc_oun": 773,
+    "npc_weila": 1262
+   },
+   "60": {
+    "_avg": 1030.66666666667,
+    "npc_kadga": 990,
+    "npc_oun": 840,
+    "npc_weila": 1262
+   },
+   "100": {
+    "_avg": 1036.33333333333,
+    "npc_kadga": 1004,
+    "npc_oun": 843,
+    "npc_weila": 1262
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1026,
+   "npc_oun": 868,
+   "npc_weila": 1262
+  },
+  "ev": {
+   "ate_food": 51,
+   "drank": 312,
+   "explored": 3419,
+   "explored_found": 30,
+   "explored_hurt": 29,
+   "fire_lit": 85,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 20,
+   "foraged_empty": 254,
+   "found_person": 1,
+   "gather_wood_empty": 74,
+   "gathered_wood": 471,
+   "kept_distance": 38,
+   "movement_blocked": 14,
+   "person_not_found": 3,
+   "rested": 178,
+   "rule_abstained": 110,
+   "rule_proposed": 193,
+   "rule_supported": 83,
+   "shelter_built": 179,
+   "socialized": 231,
+   "storage_contributed": 2,
+   "storage_withheld": 6,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 252
+  },
+  "food": {
+   "berry": 20,
+   "explore": 30,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 6,
+    "hunger_p50": 570,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 51,
+    "stale": 46,
+    "starve": 69,
+    "trips": 52
+   },
+   "npc_oun": {
+    "desperate": 7,
+    "foraged": 14,
+    "hunger_p50": 556,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 221,
+    "stale": 208,
+    "starve": 43,
+    "trips": 222
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 864,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 88,
+    "trips": 0
+   }
+  },
+  "seed": 60017,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 6
+   },
+   "resolved": 0,
+   "total": 6
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 252.666666666667,
+    "npc_kadga": 222,
+    "npc_oun": 283,
+    "npc_weila": 253
+   },
+   "5": {
+    "_avg": 310.333333333333,
+    "npc_kadga": 223,
+    "npc_oun": 283,
+    "npc_weila": 425
+   },
+   "10": {
+    "_avg": 442,
+    "npc_kadga": 460,
+    "npc_oun": 441,
+    "npc_weila": 425
+   },
+   "30": {
+    "_avg": 613.333333333333,
+    "npc_kadga": 720,
+    "npc_oun": 695,
+    "npc_weila": 425
+   },
+   "60": {
+    "_avg": 708,
+    "npc_kadga": 1004,
+    "npc_oun": 695,
+    "npc_weila": 425
+   },
+   "100": {
+    "_avg": 834.666666666667,
+    "npc_kadga": 1384,
+    "npc_oun": 695,
+    "npc_weila": 425
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1386,
+   "npc_oun": 775,
+   "npc_weila": 425
+  },
+  "ev": {
+   "ate_food": 59,
+   "confronted_violation": 2,
+   "crafted": 3,
+   "explored": 3707,
+   "explored_found": 35,
+   "explored_hurt": 29,
+   "fire_lit": 45,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 28,
+   "foraged_empty": 258,
+   "found_person": 20,
+   "gather_wood_empty": 47,
+   "gathered_shells": 12,
+   "gathered_wood": 218,
+   "kept_distance": 24,
+   "movement_blocked": 19,
+   "person_not_found": 11,
+   "rested": 227,
+   "rule_abstained": 718,
+   "rule_proposed": 962,
+   "rule_supported": 244,
+   "shelter_built": 86,
+   "socialized": 225,
+   "storage_contributed": 8,
+   "storage_withheld": 16,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 245
+  },
+  "food": {
+   "berry": 28,
+   "explore": 35,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 18,
+    "hunger_p50": 578,
+    "hunger_p90": 852,
+    "known_berry_max": 5,
+    "revisit": 143,
+    "stale": 130,
+    "starve": 14,
+    "trips": 148
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 10,
+    "hunger_p50": 484,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 130,
+    "stale": 125,
+    "starve": 24,
+    "trips": 135
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 0,
+    "hunger_p50": 856,
+    "hunger_p90": 1000,
+    "known_berry_max": 1,
+    "revisit": 2,
+    "stale": 3,
+    "starve": 87,
+    "trips": 3
+   }
+  },
+  "seed": 60018,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 16,
+    "RELATIONSHIP_CONFLICT": 2
+   },
+   "resolved": 0,
+   "total": 18
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 261,
+    "npc_kadga": 246,
+    "npc_oun": 283,
+    "npc_weila": 254
+   },
+   "5": {
+    "_avg": 583,
+    "npc_kadga": 697,
+    "npc_oun": 283,
+    "npc_weila": 769
+   },
+   "10": {
+    "_avg": 718,
+    "npc_kadga": 737,
+    "npc_oun": 588,
+    "npc_weila": 829
+   },
+   "30": {
+    "_avg": 961.333333333333,
+    "npc_kadga": 788,
+    "npc_oun": 727,
+    "npc_weila": 1369
+   },
+   "60": {
+    "_avg": 1047.33333333333,
+    "npc_kadga": 960,
+    "npc_oun": 813,
+    "npc_weila": 1369
+   },
+   "100": {
+    "_avg": 1064.33333333333,
+    "npc_kadga": 978,
+    "npc_oun": 817,
+    "npc_weila": 1398
+   }
+  },
+  "cohort": "natural",
+  "cov_end": {
+   "npc_kadga": 1089,
+   "npc_oun": 837,
+   "npc_weila": 1398
+  },
+  "ev": {
+   "ate_food": 58,
+   "confronted_violation": 1,
+   "drank": 326,
+   "explored": 3635,
+   "explored_found": 23,
+   "explored_hurt": 36,
+   "fire_lit": 42,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 32,
+   "foraged_empty": 408,
+   "found_person": 1,
+   "gather_wood_empty": 77,
+   "gathered_wood": 356,
+   "kept_distance": 16,
+   "movement_blocked": 14,
+   "observing_person": 1,
+   "person_not_found": 1,
+   "rested": 221,
+   "rule_abstained": 153,
+   "rule_proposed": 251,
+   "rule_supported": 98,
+   "shelter_built": 158,
+   "socialized": 246,
+   "storage_withheld": 13,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "weather_storm": 286
+  },
+  "food": {
+   "berry": 32,
+   "explore": 23,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 11,
+    "hunger_p50": 652,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 124,
+    "stale": 117,
+    "starve": 55,
+    "trips": 128
+   },
+   "npc_oun": {
+    "desperate": 2,
+    "foraged": 17,
+    "hunger_p50": 498,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 292,
+    "stale": 278,
+    "starve": 26,
+    "trips": 295
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 4,
+    "hunger_p50": 672,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 13,
+    "stale": 13,
+    "starve": 47,
+    "trips": 17
+   }
+  },
+  "seed": 60019,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 13,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 14
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 269.666666666667,
+    "npc_kadga": 279,
+    "npc_oun": 251,
+    "npc_weila": 279
+   },
+   "5": {
+    "_avg": 495.666666666667,
+    "npc_kadga": 527,
+    "npc_oun": 436,
+    "npc_weila": 524
+   },
+   "10": {
+    "_avg": 598.333333333333,
+    "npc_kadga": 789,
+    "npc_oun": 482,
+    "npc_weila": 524
+   },
+   "30": {
+    "_avg": 740.666666666667,
+    "npc_kadga": 789,
+    "npc_oun": 574,
+    "npc_weila": 859
+   },
+   "60": {
+    "_avg": 908,
+    "npc_kadga": 1130,
+    "npc_oun": 735,
+    "npc_weila": 859
+   },
+   "100": {
+    "_avg": 1146.33333333333,
+    "npc_kadga": 1221,
+    "npc_oun": 735,
+    "npc_weila": 1483
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 1706,
+   "npc_oun": 735,
+   "npc_weila": 1719
+  },
+  "ev": {
+   "ate_food": 49,
+   "drank": 378,
+   "explored": 4560,
+   "explored_found": 36,
+   "explored_hurt": 53,
+   "fire_lit": 18,
+   "food_request_refused": 3,
+   "food_requested": 3,
+   "foraged": 17,
+   "foraged_empty": 158,
+   "gather_wood_empty": 15,
+   "gathered_wood": 106,
+   "movement_blocked": 19,
+   "observing_person": 1,
+   "person_not_found": 9,
+   "promise_broken": 1,
+   "promise_made": 1,
+   "reason_asked": 1,
+   "reason_claimed": 1,
+   "reflected": 45,
+   "rested": 193,
+   "ruins_empty": 1,
+   "rule_abstained": 579,
+   "rule_proposed": 579,
+   "shared_food": 3,
+   "shelter_built": 45,
+   "socialized": 281,
+   "storage_contributed": 8,
+   "storage_withheld": 9,
+   "tool_request_refused": 2,
+   "tool_requested": 2,
+   "water_request_accepted": 1,
+   "water_request_refused": 1,
+   "water_requested": 2,
+   "weather_storm": 267
+  },
+  "food": {
+   "berry": 17,
+   "explore": 36,
+   "fish": 0,
+   "share": 4
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 9,
+    "hunger_p50": 578,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 99,
+    "stale": 95,
+    "starve": 50,
+    "trips": 104
+   },
+   "npc_oun": {
+    "desperate": 14,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 143,
+    "trips": 0
+   },
+   "npc_weila": {
+    "desperate": 0,
+    "foraged": 8,
+    "hunger_p50": 604,
+    "hunger_p90": 1000,
+    "known_berry_max": 5,
+    "revisit": 66,
+    "stale": 63,
+    "starve": 69,
+    "trips": 71
+   }
+  },
+  "seed": 60000,
+  "threads": {
+   "by_type": {
+    "EPISTEMIC_THREAD": 5,
+    "INSTITUTION_CONFLICT": 9,
+    "PROMISE_THREAD": 1,
+    "RECIPROCITY_THREAD": 4
+   },
+   "resolved": 1,
+   "total": 19
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 251.666666666667,
+    "npc_kadga": 247,
+    "npc_oun": 254,
+    "npc_weila": 254
+   },
+   "5": {
+    "_avg": 354.666666666667,
+    "npc_kadga": 325,
+    "npc_oun": 254,
+    "npc_weila": 485
+   },
+   "10": {
+    "_avg": 472,
+    "npc_kadga": 622,
+    "npc_oun": 309,
+    "npc_weila": 485
+   },
+   "30": {
+    "_avg": 939.333333333333,
+    "npc_kadga": 785,
+    "npc_oun": 465,
+    "npc_weila": 1568
+   },
+   "60": {
+    "_avg": 1179.33333333333,
+    "npc_kadga": 1496,
+    "npc_oun": 465,
+    "npc_weila": 1577
+   },
+   "100": {
+    "_avg": 1512.66666666667,
+    "npc_kadga": 1610,
+    "npc_oun": 1351,
+    "npc_weila": 1577
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 2326,
+   "npc_oun": 2035,
+   "npc_weila": 2261
+  },
+  "ev": {
+   "ate_food": 64,
+   "explored": 4692,
+   "explored_found": 42,
+   "explored_hurt": 47,
+   "fire_lit": 19,
+   "foraged": 19,
+   "foraged_empty": 204,
+   "found_person": 10,
+   "gather_wood_empty": 1,
+   "gathered_wood": 57,
+   "movement_blocked": 30,
+   "person_not_found": 114,
+   "rested": 223,
+   "shelter_built": 20,
+   "socialized": 152,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "weather_storm": 246
+  },
+  "food": {
+   "berry": 19,
+   "explore": 42,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 6,
+    "hunger_p50": 728,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 40,
+    "stale": 43,
+    "starve": 78,
+    "trips": 49
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 6,
+    "hunger_p50": 634,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 82,
+    "stale": 85,
+    "starve": 46,
+    "trips": 91
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 7,
+    "hunger_p50": 660,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 74,
+    "stale": 76,
+    "starve": 50,
+    "trips": 83
+   }
+  },
+  "seed": 60001,
+  "threads": {
+   "by_type": {
+    "EPISTEMIC_THREAD": 1
+   },
+   "resolved": 0,
+   "total": 1
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 261.666666666667,
+    "npc_kadga": 257,
+    "npc_oun": 231,
+    "npc_weila": 297
+   },
+   "5": {
+    "_avg": 544.666666666667,
+    "npc_kadga": 488,
+    "npc_oun": 231,
+    "npc_weila": 915
+   },
+   "10": {
+    "_avg": 655.666666666667,
+    "npc_kadga": 506,
+    "npc_oun": 353,
+    "npc_weila": 1108
+   },
+   "30": {
+    "_avg": 846,
+    "npc_kadga": 559,
+    "npc_oun": 667,
+    "npc_weila": 1312
+   },
+   "60": {
+    "_avg": 1631,
+    "npc_kadga": 1664,
+    "npc_oun": 888,
+    "npc_weila": 2341
+   },
+   "100": {
+    "_avg": 1876.33333333333,
+    "npc_kadga": 1872,
+    "npc_oun": 909,
+    "npc_weila": 2848
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 1948,
+   "npc_oun": 916,
+   "npc_weila": 3031
+  },
+  "ev": {
+   "ate_food": 66,
+   "confronted_violation": 1,
+   "crafted": 11,
+   "drank": 25,
+   "explored": 4833,
+   "explored_found": 45,
+   "explored_hurt": 44,
+   "fire_lit": 31,
+   "fished": 3,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 20,
+   "foraged_empty": 202,
+   "found_person": 24,
+   "gather_wood_empty": 20,
+   "gathered_shells": 47,
+   "gathered_wood": 150,
+   "institution_established": 1,
+   "movement_blocked": 28,
+   "person_not_found": 17,
+   "rested": 166,
+   "ruins_loot": 1,
+   "rule_abstained": 120,
+   "rule_proposed": 86,
+   "rule_supported": 5,
+   "shared_food": 1,
+   "shelter_built": 55,
+   "socialized": 130,
+   "storage_contributed": 8,
+   "storage_withheld": 15,
+   "weather_storm": 240
+  },
+  "food": {
+   "berry": 20,
+   "explore": 45,
+   "fish": 3,
+   "share": 1
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 36,
+    "foraged": 10,
+    "hunger_p50": 752,
+    "hunger_p90": 1000,
+    "known_berry_max": 7,
+    "revisit": 98,
+    "stale": 95,
+    "starve": 64,
+    "trips": 105
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 2,
+    "hunger_p50": 882,
+    "hunger_p90": 1000,
+    "known_berry_max": 2,
+    "revisit": 47,
+    "stale": 47,
+    "starve": 90,
+    "trips": 49
+   },
+   "npc_weila": {
+    "desperate": 45,
+    "foraged": 8,
+    "hunger_p50": 482,
+    "hunger_p90": 806,
+    "known_berry_max": 12,
+    "revisit": 56,
+    "stale": 60,
+    "starve": 8,
+    "trips": 68
+   }
+  },
+  "seed": 60002,
+  "threads": {
+   "by_type": {
+    "AUTHORITY_THREAD": 1,
+    "INSTITUTION_CONFLICT": 15,
+    "RECIPROCITY_THREAD": 1,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 18
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 270.666666666667,
+    "npc_kadga": 252,
+    "npc_oun": 250,
+    "npc_weila": 310
+   },
+   "5": {
+    "_avg": 432.333333333333,
+    "npc_kadga": 436,
+    "npc_oun": 250,
+    "npc_weila": 611
+   },
+   "10": {
+    "_avg": 687,
+    "npc_kadga": 457,
+    "npc_oun": 250,
+    "npc_weila": 1354
+   },
+   "30": {
+    "_avg": 1251.66666666667,
+    "npc_kadga": 838,
+    "npc_oun": 1130,
+    "npc_weila": 1787
+   },
+   "60": {
+    "_avg": 1331,
+    "npc_kadga": 838,
+    "npc_oun": 1365,
+    "npc_weila": 1790
+   },
+   "100": {
+    "_avg": 1411.33333333333,
+    "npc_kadga": 856,
+    "npc_oun": 1375,
+    "npc_weila": 2003
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 857,
+   "npc_oun": 1381,
+   "npc_weila": 2076
+  },
+  "ev": {
+   "ate_food": 68,
+   "confronted_violation": 1,
+   "crafted": 1,
+   "drank": 127,
+   "explored": 3365,
+   "explored_found": 33,
+   "explored_hurt": 25,
+   "fire_lit": 139,
+   "fished": 1,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 32,
+   "foraged_empty": 253,
+   "gather_wood_empty": 24,
+   "gathered_shells": 13,
+   "gathered_wood": 394,
+   "movement_blocked": 24,
+   "person_not_found": 82,
+   "rested": 165,
+   "ruins_loot": 1,
+   "rule_abstained": 185,
+   "rule_proposed": 464,
+   "rule_supported": 279,
+   "shared_food": 3,
+   "shelter_built": 113,
+   "socialized": 173,
+   "storage_contributed": 1,
+   "storage_withheld": 17,
+   "weather_storm": 245
+  },
+  "food": {
+   "berry": 32,
+   "explore": 33,
+   "fish": 1,
+   "share": 3
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 12,
+    "hunger_p50": 512,
+    "hunger_p90": 840,
+    "known_berry_max": 4,
+    "revisit": 115,
+    "stale": 107,
+    "starve": 16,
+    "trips": 119
+   },
+   "npc_oun": {
+    "desperate": 17,
+    "foraged": 14,
+    "hunger_p50": 370,
+    "hunger_p90": 574,
+    "known_berry_max": 5,
+    "revisit": 129,
+    "stale": 120,
+    "starve": 6,
+    "trips": 134
+   },
+   "npc_weila": {
+    "desperate": 1,
+    "foraged": 6,
+    "hunger_p50": 510,
+    "hunger_p90": 1000,
+    "known_berry_max": 6,
+    "revisit": 26,
+    "stale": 26,
+    "starve": 32,
+    "trips": 32
+   }
+  },
+  "seed": 60003,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 17,
+    "RECIPROCITY_THREAD": 3,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 0,
+   "total": 21
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 259,
+    "npc_kadga": 231,
+    "npc_oun": 247,
+    "npc_weila": 299
+   },
+   "5": {
+    "_avg": 480.333333333333,
+    "npc_kadga": 515,
+    "npc_oun": 247,
+    "npc_weila": 679
+   },
+   "10": {
+    "_avg": 630.666666666667,
+    "npc_kadga": 801,
+    "npc_oun": 260,
+    "npc_weila": 831
+   },
+   "30": {
+    "_avg": 1496,
+    "npc_kadga": 1531,
+    "npc_oun": 1124,
+    "npc_weila": 1833
+   },
+   "60": {
+    "_avg": 1630,
+    "npc_kadga": 1615,
+    "npc_oun": 1124,
+    "npc_weila": 2151
+   },
+   "100": {
+    "_avg": 1631,
+    "npc_kadga": 1615,
+    "npc_oun": 1124,
+    "npc_weila": 2154
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 1761,
+   "npc_oun": 1124,
+   "npc_weila": 3208
+  },
+  "ev": {
+   "ate_food": 72,
+   "drank": 12,
+   "explored": 5210,
+   "explored_found": 40,
+   "explored_hurt": 49,
+   "fire_lit": 6,
+   "foraged": 27,
+   "foraged_empty": 285,
+   "found_person": 1,
+   "gather_wood_empty": 15,
+   "gathered_shells": 2,
+   "gathered_wood": 74,
+   "movement_blocked": 27,
+   "person_not_found": 46,
+   "rested": 187,
+   "ruins_loot": 1,
+   "shelter_built": 35,
+   "socialized": 142,
+   "weather_storm": 244
+  },
+  "food": {
+   "berry": 27,
+   "explore": 40,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 9,
+    "hunger_p50": 538,
+    "hunger_p90": 862,
+    "known_berry_max": 7,
+    "revisit": 77,
+    "stale": 75,
+    "starve": 19,
+    "trips": 84
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 12,
+    "hunger_p50": 496,
+    "hunger_p90": 772,
+    "known_berry_max": 5,
+    "revisit": 148,
+    "stale": 141,
+    "starve": 11,
+    "trips": 153
+   },
+   "npc_weila": {
+    "desperate": 14,
+    "foraged": 6,
+    "hunger_p50": 584,
+    "hunger_p90": 1000,
+    "known_berry_max": 11,
+    "revisit": 64,
+    "stale": 69,
+    "starve": 42,
+    "trips": 75
+   }
+  },
+  "seed": 60004,
+  "threads": {
+   "by_type": {},
+   "resolved": 0,
+   "total": 0
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 318.333333333333,
+    "npc_kadga": 290,
+    "npc_oun": 231,
+    "npc_weila": 434
+   },
+   "5": {
+    "_avg": 417.666666666667,
+    "npc_kadga": 569,
+    "npc_oun": 231,
+    "npc_weila": 453
+   },
+   "10": {
+    "_avg": 519,
+    "npc_kadga": 726,
+    "npc_oun": 310,
+    "npc_weila": 521
+   },
+   "30": {
+    "_avg": 1119,
+    "npc_kadga": 1200,
+    "npc_oun": 1252,
+    "npc_weila": 905
+   },
+   "60": {
+    "_avg": 1520,
+    "npc_kadga": 1580,
+    "npc_oun": 1328,
+    "npc_weila": 1652
+   },
+   "100": {
+    "_avg": 1699.33333333333,
+    "npc_kadga": 1643,
+    "npc_oun": 1409,
+    "npc_weila": 2046
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 1851,
+   "npc_oun": 1527,
+   "npc_weila": 2237
+  },
+  "ev": {
+   "ate_food": 55,
+   "confronted_violation": 3,
+   "drank": 207,
+   "explored": 3110,
+   "explored_found": 23,
+   "explored_hurt": 34,
+   "fire_lit": 84,
+   "food_request_refused": 1,
+   "food_requested": 1,
+   "foraged": 53,
+   "foraged_empty": 596,
+   "found_person": 1,
+   "gather_wood_empty": 48,
+   "gathered_wood": 508,
+   "movement_blocked": 22,
+   "observing_person": 2,
+   "person_not_found": 19,
+   "rested": 97,
+   "rule_abstained": 423,
+   "rule_proposed": 423,
+   "shared_food": 1,
+   "shelter_built": 207,
+   "socialized": 235,
+   "storage_contributed": 25,
+   "storage_withheld": 21,
+   "water_request_refused": 2,
+   "water_requested": 2,
+   "weather_storm": 229
+  },
+  "food": {
+   "berry": 53,
+   "explore": 23,
+   "fish": 0,
+   "share": 1
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 0,
+    "foraged": 21,
+    "hunger_p50": 494,
+    "hunger_p90": 734,
+    "known_berry_max": 7,
+    "revisit": 213,
+    "stale": 199,
+    "starve": 4,
+    "trips": 220
+   },
+   "npc_oun": {
+    "desperate": 13,
+    "foraged": 18,
+    "hunger_p50": 418,
+    "hunger_p90": 648,
+    "known_berry_max": 6,
+    "revisit": 306,
+    "stale": 294,
+    "starve": 3,
+    "trips": 312
+   },
+   "npc_weila": {
+    "desperate": 13,
+    "foraged": 14,
+    "hunger_p50": 484,
+    "hunger_p90": 772,
+    "known_berry_max": 7,
+    "revisit": 110,
+    "stale": 103,
+    "starve": 8,
+    "trips": 117
+   }
+  },
+  "seed": 60005,
+  "threads": {
+   "by_type": {
+    "EPISTEMIC_THREAD": 2,
+    "INSTITUTION_CONFLICT": 21,
+    "RECIPROCITY_THREAD": 1,
+    "RELATIONSHIP_CONFLICT": 3
+   },
+   "resolved": 0,
+   "total": 27
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 295,
+    "npc_kadga": 231,
+    "npc_oun": 344,
+    "npc_weila": 310
+   },
+   "5": {
+    "_avg": 376,
+    "npc_kadga": 382,
+    "npc_oun": 344,
+    "npc_weila": 402
+   },
+   "10": {
+    "_avg": 740,
+    "npc_kadga": 857,
+    "npc_oun": 357,
+    "npc_weila": 1006
+   },
+   "30": {
+    "_avg": 1197,
+    "npc_kadga": 1051,
+    "npc_oun": 1086,
+    "npc_weila": 1454
+   },
+   "60": {
+    "_avg": 1561.33333333333,
+    "npc_kadga": 1468,
+    "npc_oun": 1412,
+    "npc_weila": 1804
+   },
+   "100": {
+    "_avg": 1580.33333333333,
+    "npc_kadga": 1472,
+    "npc_oun": 1420,
+    "npc_weila": 1849
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 1538,
+   "npc_oun": 1689,
+   "npc_weila": 1910
+  },
+  "ev": {
+   "ate_food": 62,
+   "confronted_violation": 1,
+   "crafted": 9,
+   "drank": 331,
+   "explored": 2900,
+   "explored_found": 32,
+   "explored_hurt": 36,
+   "fire_lit": 149,
+   "fished": 2,
+   "fished_empty": 1,
+   "food_request_refused": 3,
+   "food_requested": 3,
+   "foraged": 32,
+   "foraged_empty": 491,
+   "gather_wood_empty": 67,
+   "gathered_shells": 38,
+   "gathered_wood": 633,
+   "kept_distance": 6,
+   "movement_blocked": 16,
+   "person_not_found": 9,
+   "promise_broken": 1,
+   "promise_made": 1,
+   "rested": 97,
+   "ruins_loot": 1,
+   "rule_abstained": 320,
+   "rule_proposed": 389,
+   "rule_supported": 85,
+   "shelter_built": 236,
+   "socialized": 263,
+   "storage_contributed": 9,
+   "storage_withheld": 25,
+   "water_request_accepted": 1,
+   "water_request_refused": 1,
+   "water_requested": 2,
+   "weather_storm": 244
+  },
+  "food": {
+   "berry": 32,
+   "explore": 32,
+   "fish": 2,
+   "share": 1
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 3,
+    "foraged": 16,
+    "hunger_p50": 616,
+    "hunger_p90": 1000,
+    "known_berry_max": 7,
+    "revisit": 242,
+    "stale": 233,
+    "starve": 52,
+    "trips": 249
+   },
+   "npc_oun": {
+    "desperate": 10,
+    "foraged": 15,
+    "hunger_p50": 472,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 246,
+    "stale": 240,
+    "starve": 28,
+    "trips": 255
+   },
+   "npc_weila": {
+    "desperate": 3,
+    "foraged": 1,
+    "hunger_p50": 596,
+    "hunger_p90": 1000,
+    "known_berry_max": 7,
+    "revisit": 12,
+    "stale": 18,
+    "starve": 47,
+    "trips": 19
+   }
+  },
+  "seed": 60006,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 25,
+    "PROMISE_THREAD": 1,
+    "RECIPROCITY_THREAD": 1,
+    "RELATIONSHIP_CONFLICT": 1
+   },
+   "resolved": 1,
+   "total": 28
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 248,
+    "npc_kadga": 232,
+    "npc_oun": 231,
+    "npc_weila": 281
+   },
+   "5": {
+    "_avg": 575.333333333333,
+    "npc_kadga": 522,
+    "npc_oun": 543,
+    "npc_weila": 661
+   },
+   "10": {
+    "_avg": 882.333333333333,
+    "npc_kadga": 722,
+    "npc_oun": 877,
+    "npc_weila": 1048
+   },
+   "30": {
+    "_avg": 1771,
+    "npc_kadga": 2069,
+    "npc_oun": 1441,
+    "npc_weila": 1803
+   },
+   "60": {
+    "_avg": 1881.66666666667,
+    "npc_kadga": 2386,
+    "npc_oun": 1456,
+    "npc_weila": 1803
+   },
+   "100": {
+    "_avg": 1881.66666666667,
+    "npc_kadga": 2386,
+    "npc_oun": 1456,
+    "npc_weila": 1803
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 2386,
+   "npc_oun": 1456,
+   "npc_weila": 1804
+  },
+  "ev": {
+   "asked_about": 1,
+   "ate_food": 45,
+   "explored": 4260,
+   "explored_found": 38,
+   "explored_hurt": 40,
+   "food_request_refused": 4,
+   "food_requested": 4,
+   "foraged": 4,
+   "foraged_empty": 50,
+   "found_person": 11,
+   "gather_wood_empty": 14,
+   "institution_established": 2,
+   "kept_distance": 41,
+   "movement_blocked": 37,
+   "person_not_found": 45,
+   "reason_asked": 3,
+   "reason_claimed": 1,
+   "reason_deflected": 2,
+   "rested": 293,
+   "rule_abstained": 986,
+   "rule_proposed": 676,
+   "rule_revised": 1,
+   "rule_supported": 359,
+   "shelter_built": 1,
+   "socialized": 267,
+   "storage_withheld": 3,
+   "third_party_claimed": 1,
+   "tool_request_refused": 3,
+   "tool_requested": 3,
+   "water_request_refused": 3,
+   "water_requested": 3,
+   "weather_storm": 248
+  },
+  "food": {
+   "berry": 4,
+   "explore": 38,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 9,
+    "revisit": 12,
+    "stale": 20,
+    "starve": 133,
+    "trips": 21
+   },
+   "npc_oun": {
+    "desperate": 202,
+    "foraged": 1,
+    "hunger_p50": 812,
+    "hunger_p90": 1000,
+    "known_berry_max": 3,
+    "revisit": 14,
+    "stale": 16,
+    "starve": 93,
+    "trips": 17
+   },
+   "npc_weila": {
+    "desperate": 202,
+    "foraged": 2,
+    "hunger_p50": 764,
+    "hunger_p90": 1000,
+    "known_berry_max": 4,
+    "revisit": 12,
+    "stale": 14,
+    "starve": 76,
+    "trips": 16
+   }
+  },
+  "seed": 60007,
+  "threads": {
+   "by_type": {
+    "AUTHORITY_THREAD": 2,
+    "EPISTEMIC_THREAD": 2,
+    "INSTITUTION_CONFLICT": 3
+   },
+   "resolved": 0,
+   "total": 7
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 271.333333333333,
+    "npc_kadga": 244,
+    "npc_oun": 321,
+    "npc_weila": 249
+   },
+   "5": {
+    "_avg": 364.333333333333,
+    "npc_kadga": 355,
+    "npc_oun": 321,
+    "npc_weila": 417
+   },
+   "10": {
+    "_avg": 428.666666666667,
+    "npc_kadga": 455,
+    "npc_oun": 344,
+    "npc_weila": 487
+   },
+   "30": {
+    "_avg": 850.666666666667,
+    "npc_kadga": 587,
+    "npc_oun": 609,
+    "npc_weila": 1356
+   },
+   "60": {
+    "_avg": 1086.66666666667,
+    "npc_kadga": 642,
+    "npc_oun": 855,
+    "npc_weila": 1763
+   },
+   "100": {
+    "_avg": 1086.66666666667,
+    "npc_kadga": 642,
+    "npc_oun": 855,
+    "npc_weila": 1763
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 642,
+   "npc_oun": 855,
+   "npc_weila": 2232
+  },
+  "ev": {
+   "ate_food": 47,
+   "drank": 231,
+   "explored": 3425,
+   "explored_found": 25,
+   "explored_hurt": 35,
+   "fire_lit": 122,
+   "food_request_refused": 3,
+   "food_requested": 3,
+   "foraged": 21,
+   "foraged_empty": 277,
+   "gather_wood_empty": 72,
+   "gathered_wood": 665,
+   "kept_distance": 14,
+   "movement_blocked": 15,
+   "person_not_found": 45,
+   "rested": 108,
+   "rule_abstained": 107,
+   "rule_proposed": 103,
+   "shelter_built": 259,
+   "socialized": 199,
+   "storage_contributed": 3,
+   "storage_withheld": 18,
+   "tool_request_refused": 1,
+   "tool_requested": 1,
+   "weather_storm": 255
+  },
+  "food": {
+   "berry": 21,
+   "explore": 25,
+   "fish": 0,
+   "share": 0
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 178,
+    "foraged": 0,
+    "hunger_p50": 1000,
+    "hunger_p90": 1000,
+    "known_berry_max": 0,
+    "revisit": 0,
+    "stale": 0,
+    "starve": 140,
+    "trips": 0
+   },
+   "npc_oun": {
+    "desperate": 9,
+    "foraged": 14,
+    "hunger_p50": 522,
+    "hunger_p90": 876,
+    "known_berry_max": 1,
+    "revisit": 230,
+    "stale": 217,
+    "starve": 15,
+    "trips": 231
+   },
+   "npc_weila": {
+    "desperate": 0,
+    "foraged": 7,
+    "hunger_p50": 580,
+    "hunger_p90": 1000,
+    "known_berry_max": 10,
+    "revisit": 57,
+    "stale": 60,
+    "starve": 52,
+    "trips": 67
+   }
+  },
+  "seed": 60008,
+  "threads": {
+   "by_type": {
+    "INSTITUTION_CONFLICT": 18
+   },
+   "resolved": 0,
+   "total": 18
+  },
+  "ticks": 5000
+ },
+ {
+  "ck": {
+   "1": {
+    "_avg": 283.333333333333,
+    "npc_kadga": 302,
+    "npc_oun": 294,
+    "npc_weila": 254
+   },
+   "5": {
+    "_avg": 418,
+    "npc_kadga": 389,
+    "npc_oun": 294,
+    "npc_weila": 571
+   },
+   "10": {
+    "_avg": 574,
+    "npc_kadga": 845,
+    "npc_oun": 306,
+    "npc_weila": 571
+   },
+   "30": {
+    "_avg": 1128.33333333333,
+    "npc_kadga": 1399,
+    "npc_oun": 472,
+    "npc_weila": 1514
+   },
+   "60": {
+    "_avg": 1724.33333333333,
+    "npc_kadga": 1967,
+    "npc_oun": 472,
+    "npc_weila": 2734
+   },
+   "100": {
+    "_avg": 2415.33333333333,
+    "npc_kadga": 3240,
+    "npc_oun": 862,
+    "npc_weila": 3144
+   }
+  },
+  "cohort": "camp",
+  "cov_end": {
+   "npc_kadga": 3246,
+   "npc_oun": 1532,
+   "npc_weila": 3153
+  },
+  "ev": {
+   "ate_food": 56,
+   "drank": 115,
+   "explored": 4043,
+   "explored_found": 31,
+   "explored_hurt": 39,
+   "fire_lit": 18,
+   "food_request_refused": 2,
+   "food_requested": 2,
+   "foraged": 21,
+   "foraged_empty": 277,
+   "found_person": 4,
+   "gather_wood_empty": 2,
+   "gathered_shells": 43,
+   "gathered_wood": 70,
+   "kept_distance": 14,
+   "movement_blocked": 51,
+   "observing_person": 1,
+   "person_not_found": 37,
+   "reason_asked": 4,
+   "reason_claimed": 4,
+   "rested": 258,
+   "rule_abstained": 802,
+   "rule_proposed": 802,
+   "shared_food": 2,
+   "shelter_built": 27,
+   "socialized": 188,
+   "tool_request_refused": 2,
+   "tool_requested": 2,
+   "water_request_refused": 1,
+   "water_requested": 1,
+   "weather_storm": 209
+  },
+  "food": {
+   "berry": 21,
+   "explore": 31,
+   "fish": 0,
+   "share": 2
+  },
+  "map_cells": 4096,
+  "per": {
+   "npc_kadga": {
+    "desperate": 69,
+    "foraged": 4,
+    "hunger_p50": 954,
+    "hunger_p90": 1000,
+    "known_berry_max": 11,
+    "revisit": 25,
+    "stale": 32,
+    "starve": 105,
+    "trips": 36
+   },
+   "npc_oun": {
+    "desperate": 78,
+    "foraged": 14,
+    "hunger_p50": 416,
+    "hunger_p90": 1000,
+    "known_berry_max": 8,
+    "revisit": 222,
+    "stale": 216,
+    "starve": 34,
+    "trips": 230
+   },
+   "npc_weila": {
+    "desperate": 50,
+    "foraged": 3,
+    "hunger_p50": 782,
+    "hunger_p90": 1000,
+    "known_berry_max": 10,
+    "revisit": 22,
+    "stale": 29,
+    "starve": 77,
+    "trips": 32
+   }
+  },
+  "seed": 60009,
+  "threads": {
+   "by_type": {
+    "RECIPROCITY_THREAD": 2
+   },
+   "resolved": 0,
+   "total": 2
+  },
+  "ticks": 5000
+ }
+]

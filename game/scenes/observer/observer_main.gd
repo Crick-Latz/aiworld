@@ -222,6 +222,29 @@ func _process(delta: float) -> void:
 		_hud_refresh_acc = 0.0
 		_refresh_hud()
 
+## P4.3：LLM 线程渲染（fire-and-forget 协程；失败只影响显示，不影响模拟/线程结构）
+func _p43_render_llm_threads(te, thread_irs: Array, ev_lookup: Dictionary) -> void:
+	var config: Dictionary = LlmNarrativeRenderer.load_config()
+	if config.is_empty():
+		set_meta("_p43_busy", false)
+		return
+	var count := 0
+	for tir in thread_irs:
+		if count >= 3:
+			break
+		var thread = te.engine.thread_by_id(str(tir.get("thread_id", "")))
+		if thread == null:
+			continue
+		var render_ir: Dictionary = LlmThreadRenderer.build_render_ir(island_sim, thread)
+		var out_title: Dictionary = await LlmThreadRenderer.render(config, render_ir, "TITLE", ev_lookup)
+		tir["_llm_title"] = str(out_title.get("text", ""))
+		var out_sum: Dictionary = await LlmThreadRenderer.render(config, render_ir, "SUMMARY", ev_lookup)
+		tir["_llm_summary"] = str(out_sum.get("text", ""))
+		tir["_llm_renderer"] = str(out_sum.get("renderer", ""))
+		tir["_llm_drilldown"] = out_sum.get("sentences", [])
+		count += 1
+	set_meta("_p43_busy", false)
+
 func _process_story(delta: float) -> void:
 	if not sim_paused:
 		_acc += delta * speed_multiplier
@@ -446,6 +469,12 @@ func _refresh_hud() -> void:
 				tir["_title"] = ThreadSummaryRenderer.render_title(tir)
 				thread_irs.append(tir)
 			model["story_threads"] = thread_irs
+			# P4.3（§20）：LLM 线程渲染——AIWORD_THREAD_LLM=1 时，对前 3 条线程
+			# 追加 _llm_title/_llm_summary + debug 回溯（sentence→claim_ids→sources）。
+			# 防重入：上一次渲染未完成就跳过；任何失败静默走模板（面板仍有 _summary）。
+			if OS.get_environment("AIWORD_THREAD_LLM") == "1" and not get_meta("_p43_busy", false):
+				set_meta("_p43_busy", true)
+				_p43_render_llm_threads(_te, thread_irs, ev_lookup)
 		# P3b-5: 对话转录——从最近社会事件提取 SpeechAct → 模板台词
 		if island_sim != null:
 			var dialogue_lines: Array = []

@@ -124,8 +124,8 @@ func _test_sim_encounter_graph() -> void:
 		var cfg = ac.duplicate()
 		cfg["spawn"] = spot
 		configs.append(cfg)
-	var sim := IslandSimulation.new(mq, 30003, configs)
-	for i in 600:
+	var sim := IslandSimulation.new(mq, 30001, configs)
+	for i in 1500:
 		sim.step()
 	var g: Dictionary = sim.encounter_graph()
 	var total_co := 0

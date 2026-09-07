@@ -1,0 +1,691 @@
+{
+ "agg": {
+  "by_problem": {
+   "HUNGER": {
+    "blocked": 11926,
+    "no_plan": 622,
+    "ready": 10415
+   },
+   "ISOLATION": {
+    "blocked": 1833,
+    "no_plan": 532,
+    "ready": 1572
+   },
+   "THIRST": {
+    "blocked": 10895,
+    "no_plan": 3609,
+    "ready": 11416
+   }
+  },
+  "cache_hits": 254316,
+  "divergence": 7277,
+  "ms": 663975,
+  "planner_calls": 15684,
+  "plans": 24007,
+  "records": 15684,
+  "top_missing": {
+   "FISH": 3571,
+   "TRAP": 8355
+  }
+ },
+ "divergence": [
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40000,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40000,
+   "tick": 120
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40001,
+   "tick": 84
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40001,
+   "tick": 90
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    }
+   ],
+   "ready": 1,
+   "seed": 40002,
+   "tick": 100
+  },
+  {
+   "actor": "npc_kadga",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40002,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40003,
+   "tick": 84
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40003,
+   "tick": 96
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40004,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40004,
+   "tick": 120
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40005,
+   "tick": 84
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40005,
+   "tick": 96
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "explore",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40006,
+   "tick": 249
+  },
+  {
+   "actor": "npc_oun",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40006,
+   "tick": 250
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "fish_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40008,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "fish_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40008,
+   "tick": 120
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40009,
+   "tick": 84
+  },
+  {
+   "actor": "npc_weila",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "spring_water"
+    }
+   ],
+   "ready": 1,
+   "seed": 40009,
+   "tick": 92
+  },
+  {
+   "actor": "npc_kadga",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40010,
+   "tick": 100
+  },
+  {
+   "actor": "npc_kadga",
+   "actual": "",
+   "cohort": "natural",
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "proposals": [
+    {
+     "status": "READY",
+     "via": "berry_patch_food"
+    },
+    {
+     "status": "BLOCKED_PLAN",
+     "via": "set_trap"
+    }
+   ],
+   "ready": 1,
+   "seed": 40010,
+   "tick": 109
+  }
+ ],
+ "blocked": [
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40000,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40000,
+   "tick": 120
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "FISH",
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40001,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40001,
+   "tick": 100
+  },
+  {
+   "actor": "npc_kadga",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40002,
+   "tick": 100
+  },
+  {
+   "actor": "npc_kadga",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40002,
+   "tick": 115
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "FISH"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40003,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40003,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40004,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40004,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40005,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40005,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40006,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "FISH"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40006,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40007,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40007,
+   "tick": 120
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "FISH",
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40008,
+   "tick": 100
+  },
+  {
+   "actor": "npc_oun",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40008,
+   "tick": 100
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40009,
+   "tick": 202
+  },
+  {
+   "actor": "npc_weila",
+   "cohort": "natural",
+   "missing": [
+    "TRAP"
+   ],
+   "problems": [
+    "HUNGER",
+    "THIRST"
+   ],
+   "seed": 40009,
+   "tick": 213
+  }
+ ]
+}

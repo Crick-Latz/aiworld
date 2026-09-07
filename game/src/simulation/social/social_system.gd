@@ -103,6 +103,12 @@ static func pick_request_target(proposer: Dictionary, nearby_infos: Array, trust
 		if float(stance.get(oid, 0.0)) > 0.6:
 			continue  # 我已倾向回避此人，饿死也不求他（解释系统写入的倾向）
 		var has_food := tom.raw_belief(oid, predicate)  # 挑目标看证据方向；把握程度进预测器
+		# P5 外观推断：没有任何直接证据、但他的"饿"感知明显为负（气色不像挨饿的人）——
+		# 多半有存粮（主观推断，可能错——被拒就是"为什么"疑问的种子）。
+		# 只在有明确反向证据时推断：无感知（0）不开口（"没理由不开口"原则保留）
+		if predicate == "has_food" and absf(has_food) < 0.05:
+			if tom.belief_about(oid, "hungry") < -0.2:
+				has_food = 0.25
 		var trust_f := clampf(float(t) / 400.0, -1.0, 1.0)
 		var score := has_food * 0.65 + trust_f * 0.35
 		if score > best_score:

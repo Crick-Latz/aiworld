@@ -31,14 +31,20 @@ func _init(map_query, seed: int, actor_configs: Array, economy_overrides: Dictio
 	self.map_query = map_query
 	_rng.seed = seed
 	_economy = {
-		"berry_count": 3, "berry_food": 1, "berry_regrow_days": 5,
-		"fish_prob": 0.5, "fish_amount": 1, "explore_food_prob": 0.04,
+		"berry_count": 4, "berry_food": 1, "berry_regrow_days": 5,
+		"fish_prob": 0.5, "fish_amount": 1, "explore_food_prob": 0.015,
+		"bush_capacity": 2,  # P5.2：每丛每再生窗口的份数（多人共享一丛；每次仍采 1）
 	}.duplicate()
 	for k in economy_overrides:
 		if _economy.has(k):
 			_economy[k] = economy_overrides[k]
 	_init_world_resources()
 	_init_actors(actor_configs)
+	# P5：初始感知——落地时看一眼周围（他们刚上岛，只知道眼前的世界）
+	var rect: Rect2i = map_query.get_map_rect()
+	for id in actors:
+		(actors[id]["spatial"] as SpatialBeliefMap).configure(rect)
+		SpatialPerception.perceive(self, actors[id])
 
 var _economy := {}
 
@@ -54,7 +60,7 @@ func _init_world_resources() -> void:
 
 	for i in int(_economy["berry_count"]):  # 浆果丛（默认稀疏——匮乏驱动社交；富裕世界可覆盖）
 		var pos := _find_walkable_spot(map_size)
-		berry_bushes.append({"pos": pos, "food": int(_economy["berry_food"]), "regrow_day": -1})
+		berry_bushes.append({"pos": pos, "food": int(_economy["bush_capacity"]), "regrow_day": -1})
 	for i in 1:  # 1 个水泉
 		var pos2 := _find_walkable_spot(map_size)
 		water_springs.append(pos2)
@@ -153,6 +159,8 @@ func _init_actors(actor_configs: Array) -> void:
 			"visited_tiles": {},
 			"relationships": {},
 			"tom": TheoryOfMind.new(),  # 一阶心智模型（证据累积+响应预测）
+			"spatial": SpatialBeliefMap.new(),  # P5: 空间信念图（每人独立——只有看过的格子）
+			"nav_plan": {},  # P5: 主观导航计划缓存 {target_key, path, tick}
 			"norms": _init_norms(cfg.get("norms", {})),  # P1.5: personal/descriptive/injunctive 三层
 			"social_stance": {},    # P1.5: 对每人的接近/回避倾向（解释系统写入）
 			"pending_predictions": [],
@@ -218,6 +226,10 @@ func step() -> Array:
 	_update_world_time()
 	_update_weather()
 	var new_events: Array = []
+
+	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
+	for id in actors:
+		SpatialPerception.perceive(self, actors[id])
 
 	for id in _ordered_ids():
 		var a: Dictionary = actors[id]
@@ -296,10 +308,19 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 		# 否则 2-tick 行动总在半路完成（67 次伐木 0 成功的死因）
 		var cur_action: Dictionary = a.get("current_action", {})
 		if cur_action.has("target_actor") and actors.has(str(cur_action["target_actor"])):
-			var pursue_tile: Vector2i = actors[str(cur_action["target_actor"])]["tile"]
+			# P5（SN-B 修复）：目标在视野内 → 实时追踪合法并刷新 last_seen；
+			# 不在视野内 → 只用记忆位置（扑空是真实结果）。不再读真坐标当 GPS。
+			var tgt_id := str(cur_action["target_actor"])
+			var pursue_tile: Vector2i
+			if _actor_visible_to(a, tgt_id):
+				pursue_tile = actors[tgt_id]["tile"]
+				(a["tom"] as TheoryOfMind).see_at(tgt_id, pursue_tile, tick)
+			else:
+				var ls: Dictionary = (a["tom"] as TheoryOfMind).last_seen_of(tgt_id)
+				pursue_tile = ls.get("tile", a["tile"]) if not ls.is_empty() else a["tile"]
 			var away := str(cur_action.get("action", "")) == "keep_distance"
 			if away:
-				pursue_tile = _away_tile(a["tile"], pursue_tile)
+				pursue_tile = _away_tile(a["tile"], pursue_tile, a.get("spatial", null))
 			if a["tile"] != pursue_tile:
 				_move_toward(a, pursue_tile)
 		elif cur_action.has("target") and typeof(cur_action["target"]) == TYPE_VECTOR2I and cur_action["target"] != a["tile"]:
@@ -398,7 +419,7 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 func _do_forage(id: String, a: Dictionary, ev: Array) -> void:
 	for bush in world["berry_bushes"]:
 		if bush["pos"] == a["tile"] and int(bush["food"]) > 0:
-			var got := mini(2, int(bush["food"]))
+			var got := mini(1, int(bush["food"]))  # P5.2：每次采 1——多容量供多人分，不供单人搬空
 			bush["food"] = int(bush["food"]) - got
 			if int(bush["food"]) <= 0:
 				bush["regrow_day"] = int(world_time["day"]) + int(_economy["berry_regrow_days"])
@@ -567,6 +588,12 @@ func _do_request(id: String, a: Dictionary, action: Dictionary, ev: Array) -> vo
 		_emit(ev_prefix + "_request_refused", target_id,
 				"%s 摇了摇头：%s——%s 的求助被拒绝了" % [target["display_name"], str(result.get("reason", "")), a["display_name"]],
 				{"proposer_id": id, "object": object_id})
+		# P5 拒绝记忆：刚被拒的人短期内拉不下脸再求（防无-source 世界里的求救刷屏）
+		var rmem: Array = a.get("refusal_memory", [])
+		rmem.append({"by": target_id, "tick": tick, "object": object_id})
+		if rmem.size() > 8:
+			rmem = rmem.slice(rmem.size() - 8)
+		a["refusal_memory"] = rmem
 
 ## P1.7b 寻人执行：走到记忆位置；人在则当场产生一次相遇（后续 ask_reason 由决策层接手）
 func _do_seek_person(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
@@ -939,7 +966,7 @@ func _daily_update() -> void:
 	# 浆果丛刷新（默认 5 天一茬；岛上养不活三个人——匮乏驱动社交）
 	for bush in world["berry_bushes"]:
 		if int(bush["food"]) <= 0 and int(world_time["day"]) >= int(bush.get("regrow_day", 9999)):
-			bush["food"] = int(_economy["berry_food"])
+			bush["food"] = int(_economy["bush_capacity"])
 			bush["regrow_day"] = -1
 	_flatten_resources()
 	# P1: 对他人的旧印象每天淡忘一点（回到中性）
@@ -1024,7 +1051,8 @@ func _update_nearby_info() -> void:
 				continue
 			var other: Dictionary = actors[other_id]
 			var dist := absi(a["tile"].x - other["tile"].x) + absi(a["tile"].y - other["tile"].y)
-			if dist <= 8:  # 喊话/目击范围，与 _is_nearby 一致
+			# P5（SN-F 修复）：注意到某人 = 看得见（视野/LOS）或近到听得见（≤3）
+			if dist <= 3 or _actor_visible_to(a, other_id):
 				nearby.append(other_id)
 				if int(other["needs"].get("hunger", 0)) > 600:
 					hungry_nearby = true
@@ -1059,21 +1087,14 @@ func _update_nearby_info() -> void:
 				if (ca1 != null and str(ca1.get("target_actor", "")) == other_id) or (ca2 != null and str(ca2.get("target_actor", "")) == id):
 					_encounters[dyad]["voluntary"] = int(_encounters[dyad]["voluntary"]) + 1
 	# P1.6 感知门：「谁看起来饿了」由各观察者的 ToM 感知决定，不读真实 hunger；
-	# 病伤是高可见状态（可观察性分级），保留直读
-	var anyone_appears_hungry := false
-	var anyone_needs_help := false
+	# P5：只有 per-actor 键（appears_hungry_X）——全局聚合键已删，
+	# 岛东看见的饿不该影响岛西的分享决策（跨角色感知泄漏修复）
 	for id in actors:
 		var appears := false
 		for other_id in world["nearby_" + id]:
 			if float(actors[id]["tom"].belief_about(other_id, "hungry")) > 0.4:
 				appears = true
 		world["appears_hungry_" + id] = appears
-		if appears:
-			anyone_appears_hungry = true
-		if bool(actors[id]["physical"].get("sick", false)) or bool(actors[id]["physical"].get("injured", false)):
-			anyone_needs_help = true
-	world["someone_hungry_nearby"] = anyone_appears_hungry  # 兼容键：语义=有人看起来饿了
-	world["someone_needs_help_nearby"] = anyone_needs_help
 
 func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 	# P1: 决策需要的社交信息——ToM、对每人的信任、附近有谁（不含他们的隐私状态）
@@ -1089,8 +1110,9 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		pass  # P2.1.1：不再提供实时全图坐标（上帝视角泄漏）
 		var d := absi(a["tile"].x - otile.x) + absi(a["tile"].y - otile.y)
 		var ls2: Dictionary = a["tom"].last_seen_of(other_id)  # P2.1.1: 记忆位置（无实时真值）
-		if d <= 12:
-			others_visible.append({"id": other_id, "tile": otile})  # 喊话/可视范围：求助可以走过去问
+		# P5（SN-F 修复）：可见 = 视野（昼夜/天气/LOS），不再是固定曼哈顿 12 格
+		if _actor_visible_to(a, other_id):
+			others_visible.append({"id": other_id, "tile": otile})  # 看得见 → 可以走过去求助
 			others_all.append({"id": other_id, "tile": otile})
 		if not ls2.is_empty():
 			others_all.append({"id": other_id, "tile": ls2["tile"], "stale_tick": int(ls2["tick"])})  # 记忆位置（可能过时——扑空是真实的）
@@ -1123,6 +1145,24 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 			"_owed_hint": clampf(float((a.get("my_obligations", []) as Array).size()) / 2.0, 0.0, 1.0),  # P1.6: 未解之惑进决策视野——不然永远没人去问
 		"social_stance": a.get("social_stance", {}),
 		"grudges": a.get("grudges", {}),
+		# P5（SN 资源修复）：决策只看自己见过的资源；饥饿感知只看自己 ToM 的判断
+		"known_resources": _known_resources_view(a),
+		"appears_hungry_nearby": bool(world.get("appears_hungry_" + id, false)),
+	}
+
+## P5：从空间信念导出决策用资源视图（只含 believed_available 的）
+func _known_resources_view(a: Dictionary) -> Dictionary:
+	var belief: SpatialBeliefMap = a.get("spatial", null)
+	if belief == null:
+		return {}
+	return {
+		"berry_bushes": belief.resource_tiles("berry"),
+		"water_springs": belief.resource_tiles("water"),
+		"fish_spots": belief.resource_tiles("fish"),
+		"shell_beaches": belief.resource_tiles("shell"),
+		"ruins": belief.resource_tiles("ruin"),
+		"trees": belief.resource_tiles("tree"),
+		"fires": belief.fire_dict(),
 	}
 
 ## P0: 丰富 DecisionTrace——把 belief/goal/intention/memories 写入
@@ -1154,7 +1194,93 @@ func _enrich_trace(a: Dictionary, decision: Dictionary, gm: GoalManager) -> void
 	# 记忆量
 	trace["memory_count"] = (a.get("memories", []) as Array).size()
 
+## P5 主观导航：路径来自 SpatialBeliefMap（UNKNOWN 按人格定成本）；
+## 世界真值只在"迈一步"时裁决——撞墙 = movement_blocked + 信念修正 + 下 tick 重规划（SN 第十/十五节）
 func _move_toward(a: Dictionary, target: Vector2i) -> void:
+	var belief: SpatialBeliefMap = a.get("spatial", null)
+	if belief == null:
+		_move_toward_truth(a, target)
+		return
+	var target_key := "%d,%d" % [target.x, target.y]
+	var plan: Dictionary = a.get("nav_plan", {})
+	var path: Array = plan.get("path", [])
+	# 重规划时机：目标变了 / 计划耗尽 / 计划过期（新信念可能给出更好的路）/ 不在计划轨上
+	if str(plan.get("target_key", "")) != target_key or path.size() <= 1 \
+			or tick - int(plan.get("tick", -9999)) >= 24 or _plan_index_of(path, a["tile"]) < 0:
+		path = SubjectiveNavigator.find_path(belief, a["tile"], target, _unknown_cost(a))
+		a["nav_plan"] = {"target_key": target_key, "path": path, "tick": tick}
+	if path.size() > 1:
+		var idx := _plan_index_of(path, a["tile"])
+		var next: Vector2i = path[idx + 1]
+		if map_query.is_walkable_tile(Vector3i(next.x, 0, next.y)):
+			# P5.1 观测埋点：这一步踩进的是已知格还是未知格（规划者敢不敢闯）
+			a["_p5_step_kind"] = "unknown" if belief.cell_state(next.x, next.y) == SpatialBeliefMap.CELL_UNKNOWN else "known"
+			a["tile"] = next
+			a["nav_plan"]["path"] = path.slice(idx + 1)
+			return
+		# 信念错了：主观认为可走、真实不可走 → 当场看见 → 修正 → 重规划
+		var block_kind := "stale_free" if belief.cell_state(next.x, next.y) == SpatialBeliefMap.CELL_FREE else "unknown_obstacle"
+		belief.observe_cell(next.x, next.y, SpatialBeliefMap.CELL_BLOCKED,
+				map_query.get_obstacle(next.x, next.y), tick)
+		_emit("movement_blocked", str(a.get("id", "")),
+				"%s 被挡住了，只好重新找路" % str(a.get("display_name", "")),
+				{"pos": str(next), "block_kind": block_kind})
+		a["nav_plan"] = {}
+		return
+	# 信念中无路（目标被已知障碍围死/全然未知）→ 沿目标方向直线摸索一步（允许迷路）
+	_step_toward_direct(a, target)
+
+func _plan_index_of(path: Array, pos: Vector2i) -> int:
+	for i in path.size():
+		if path[i] is Vector2i and path[i].x == pos.x and path[i].y == pos.y:
+			return i
+	return -1
+
+## 直线摸索：优先已知自由格，其次未知格（敢闯）；已知障碍不走
+func _step_toward_direct(a: Dictionary, target: Vector2i) -> void:
+	var belief: SpatialBeliefMap = a.get("spatial", null)
+	var best: Array = []
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var n: Vector2i = a["tile"] + d
+		var cur_dist := absi(a["tile"].x - target.x) + absi(a["tile"].y - target.y)
+		var n_dist := absi(n.x - target.x) + absi(n.y - target.y)
+		if n_dist >= cur_dist or not belief.map_rect.has_point(n):
+			continue
+		var st := belief.cell_state(n.x, n.y)
+		if st == SpatialBeliefMap.CELL_BLOCKED:
+			continue
+		var priority := 0 if st == SpatialBeliefMap.CELL_FREE else 1
+		best.append([priority, n_dist, n])
+	if best.is_empty():
+		return
+	best.sort_custom(func(x, y): return int(x[0]) < int(y[0]) or (int(x[0]) == int(y[0]) and int(x[1]) < int(y[1])))
+	var step_to: Vector2i = best[0][2]
+	if map_query.is_walkable_tile(Vector3i(step_to.x, 0, step_to.y)):
+		a["_p5_step_kind"] = "unknown" if belief.cell_state(step_to.x, step_to.y) == SpatialBeliefMap.CELL_UNKNOWN else "known"
+		a["tile"] = step_to
+	else:
+		var d_kind := "stale_free" if belief.cell_state(step_to.x, step_to.y) == SpatialBeliefMap.CELL_FREE else "unknown_obstacle"
+		belief.observe_cell(step_to.x, step_to.y, SpatialBeliefMap.CELL_BLOCKED,
+				map_query.get_obstacle(step_to.x, step_to.y), tick)
+		_emit("movement_blocked", str(a.get("id", "")),
+				"%s 撞上了什么，停了下来" % str(a.get("display_name", "")),
+				{"pos": str(step_to), "block_kind": d_kind})
+		a["nav_plan"] = {}
+
+## 未知格成本：谨慎/恐惧/黑夜 → 更贵；好奇 → 更便宜（人格动力供给，禁止角色名硬编码）
+func _unknown_cost(a: Dictionary) -> float:
+	var p: PersonalityProfile = a.get("personality", null)
+	var cost := 1.2
+	if p != null:
+		cost += float(p.traits.get("caution", 0.5)) * 1.5
+		cost += float(p.emotions.get("fear", 0.0)) * 2.0
+		cost -= float(p.traits.get("curiosity", 0.5)) * 0.8
+	if bool(world.get("is_night", false)):
+		cost += 1.0
+	return cost
+
+## 遗留真值寻路（无空间信念的对象不应出现；保险通道，仅裁决不泄露给决策）
+func _move_toward_truth(a: Dictionary, target: Vector2i) -> void:
 	var path: Array = map_query.find_walk_path(
 		Vector3i(a["tile"].x, 0, a["tile"].y),
 		Vector3i(target.x, 0, target.y)
@@ -1179,7 +1305,11 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 	var witnesses: Array = []
 	for id in actors:
 		var a: Dictionary = actors[id]
-		var is_witness: bool = id == actor_id or _is_nearby(actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO, a["tile"])
+		# P5（SN-F 修复）：目击 = 看得见（视野/LOS）或贴得很近（≤3 格听得见动静）
+		var ev_actor_tile: Vector2i = actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO
+		var close_enough := absi(ev_actor_tile.x - a["tile"].x) + absi(ev_actor_tile.y - a["tile"].y) <= 3
+		var is_witness: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
+				int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
 		if is_witness:
 			var salience := 0.5
 			if id == actor_id or str(e.get("proposer_id", "")) == id or str(e.get("to_id", "")) == id or str(e.get("target_id", "")) == id:
@@ -1245,16 +1375,24 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 					a["institutional_goals"] = goals9
 	return int(e["seq"])
 
-## 远离目标方向的可行走格（回避用）
-func _away_tile(mine: Vector2i, their: Vector2i) -> Vector2i:
+## P5：可见判定（昼夜/天气/LOS）——决策视野用这个，不用真坐标距离
+func _actor_visible_to(a: Dictionary, other_id: String) -> bool:
+	if not actors.has(other_id):
+		return false
+	return SpatialPerception.can_see(map_query, int(world_time.get("hour", 12)),
+			str(world.get("weather", "clear")), a["tile"], actors[other_id]["tile"])
+
+## 远离目标方向的可行走格（回避用；P5：只信自己的空间信念）
+func _away_tile(mine: Vector2i, their: Vector2i, belief: SpatialBeliefMap) -> Vector2i:
 	var dir := mine - their
 	if dir == Vector2i.ZERO:
 		dir = Vector2i(1, 1)
 	for c in [mine + Vector2i(sign(dir.x) * 3, 0), mine + Vector2i(0, sign(dir.y) * 3), mine + Vector2i(sign(dir.x) * 2, sign(dir.y) * 2)]:
-		if c.x > 2 and c.y > 2 and map_query.is_walkable_tile(Vector3i(c.x, 0, c.y)):
+		if c.x > 2 and c.y > 2 and belief != null and belief.cell_state(c.x, c.y) == SpatialBeliefMap.CELL_FREE:
 			return c
 	return mine
 
+## 互动半径（说话/递交的物理距离 ≤8）——不是视野；视野判定走 _actor_visible_to
 func _is_nearby(a: Vector2i, b: Vector2i) -> bool:
 	return absi(a.x - b.x) + absi(a.y - b.y) <= 8
 

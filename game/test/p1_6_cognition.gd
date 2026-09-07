@@ -301,7 +301,7 @@ func _retarget(ev: Dictionary, new_proposer: String) -> Dictionary:
 
 # ── K. 野外认识链（无脚本）：拒绝 → 「我不知道为什么」→ 主动去问 ──
 ## 在完整模拟中自然出现——不是单元测试手工塞证据。
-## 营地密度（三人同点出生，符合荒岛剧本前提）；种子 30003 经验证含完整链。
+## 营地密度（三人同点出生，符合荒岛剧本前提）；P5.1 SK fail-closed 后重校准：种子 30014×1500 经验证含完整链（真主观采食下世界更慢热——30001 的链曾依赖 _forage 漏传 actor 的全知回退，SK 门暴露后作废）。
 func _test_k_wild_epistemic_chain() -> void:
 	var mq = await _make_map()
 	if mq == null:
@@ -314,8 +314,8 @@ func _test_k_wild_epistemic_chain() -> void:
 		var cfg = ac.duplicate()
 		cfg["spawn"] = spot
 		configs.append(cfg)
-	var sim := IslandSimulation.new(mq, 30003, configs)
-	for i in 600:
+	var sim := IslandSimulation.new(mq, 30014, configs)
+	for i in 1500:
 		sim.step()
 	var refusals := 0
 	var epist := 0

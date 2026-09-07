@@ -1,0 +1,231 @@
+{
+  "pack_id": "island_survival",
+  "facts": [
+    {
+      "id": "kf_spear_recipe",
+      "layer": "CULTURAL",
+      "subject_tags": [
+        "SPEAR"
+      ],
+      "relation": "ENABLES",
+      "object": "HUNT_MEDIUM",
+      "statement": "木矛加尖头可以狩猎中型动物"
+    },
+    {
+      "id": "kf_spear_materials",
+      "layer": "CULTURAL",
+      "subject_tags": [
+        "SPEAR"
+      ],
+      "relation": "REQUIRES",
+      "object": "WOOD+SHARP+BINDING",
+      "statement": "造矛需木杆、尖物与捆扎"
+    },
+    {
+      "id": "kf_fire_recipe",
+      "layer": "CULTURAL",
+      "subject_tags": [
+        "FIRE"
+      ],
+      "relation": "REQUIRES",
+      "object": "FLINT+WOOD",
+      "statement": "燧石与干柴可以生火"
+    },
+    {
+      "id": "kf_boat_concept",
+      "layer": "CULTURAL",
+      "subject_tags": [
+        "BOAT",
+        "RAFT"
+      ],
+      "relation": "ENABLES",
+      "object": "WATER_TRANSPORT",
+      "statement": "筏/船可以离岛"
+    },
+    {
+      "id": "kf_boat_requirements",
+      "layer": "CULTURAL",
+      "subject_tags": [
+        "BOAT",
+        "RAFT"
+      ],
+      "relation": "REQUIRES",
+      "object": "WOOD+BINDING+BUILD_STRONG+NAVIGATE",
+      "statement": "造筏需木材、捆扎、坚固建造与航行知识"
+    },
+    {
+      "id": "kf_trap_concept",
+      "layer": "EXPERTISE",
+      "subject_tags": [
+        "TRAPPING"
+      ],
+      "relation": "ENABLES",
+      "object": "TRAP",
+      "statement": "陷阱可以无武器捕获动物（需狩猎专长）"
+    },
+    {
+      "id": "kf_preserve_smoke",
+      "layer": "EXPERTISE",
+      "subject_tags": [
+        "FOODHANDLING"
+      ],
+      "relation": "ENABLES",
+      "object": "PRESERVE",
+      "statement": "烟熏可以保存肉食（需食物处理专长）"
+    },
+    {
+      "id": "kf_navigation_seafaring",
+      "layer": "EXPERTISE",
+      "subject_tags": [
+        "NAVIGATION"
+      ],
+      "relation": "ENABLES",
+      "object": "NAVIGATE",
+      "statement": "航海经验支持航行（需航行专长）"
+    },
+    {
+      "id": "kf_construction_wood",
+      "layer": "EXPERTISE",
+      "subject_tags": [
+        "WOODWORKING"
+      ],
+      "relation": "ENABLES",
+      "object": "BUILD_STRONG",
+      "statement": "木工经验支持坚固建造（需木工专长）"
+    }
+  ],
+  "affordances": [
+    {
+      "id": "craft_spear",
+      "subject_tags": [
+        "WOOD",
+        "SHARP_STONE",
+        "BINDING"
+      ],
+      "affordance": "TOOL_CRAFT",
+      "produces": [
+        "TOOL"
+      ],
+      "provides_capabilities": [
+        "PIERCE",
+        "HUNT_MEDIUM",
+        "THREATEN",
+        "DEFEND"
+      ],
+      "requirements": [
+        "BIND",
+        "CUT"
+      ],
+      "risks": [],
+      "knowledge_required": [
+        "kf_spear_recipe",
+        "kf_spear_materials"
+      ],
+      "estimated_effort": 2
+    },
+    {
+      "id": "make_fire",
+      "subject_tags": [
+        "FLINT",
+        "WOOD"
+      ],
+      "affordance": "FIRE_MAKING",
+      "produces": [
+        "HEAT_SOURCE"
+      ],
+      "provides_capabilities": [
+        "LIGHT",
+        "HEAT",
+        "COOK"
+      ],
+      "requirements": [],
+      "risks": [
+        "SPREAD"
+      ],
+      "knowledge_required": [
+        "kf_fire_recipe"
+      ],
+      "estimated_effort": 1.5
+    },
+    {
+      "id": "build_raft",
+      "subject_tags": [
+        "WOOD",
+        "BINDING"
+      ],
+      "affordance": "ESCAPE_VEHICLE",
+      "produces": [
+        "ESCAPE_MEANS"
+      ],
+      "provides_capabilities": [
+        "WATER_TRANSPORT"
+      ],
+      "requirements": [
+        "BUILD_STRONG",
+        "NAVIGATE",
+        "BIND"
+      ],
+      "risks": [
+        "DROWN",
+        "STORM"
+      ],
+      "knowledge_required": [
+        "kf_boat_concept",
+        "kf_boat_requirements"
+      ],
+      "estimated_effort": 8
+    },
+    {
+      "id": "build_shelter",
+      "subject_tags": [
+        "WOOD"
+      ],
+      "affordance": "SHELTER_BUILD",
+      "produces": [
+        "SHELTER"
+      ],
+      "provides_capabilities": [],
+      "requirements": [
+        "BUILD_BASIC"
+      ],
+      "risks": [],
+      "knowledge_required": [],
+      "estimated_effort": 3
+    },
+    {
+      "id": "set_trap",
+      "subject_tags": [
+        "WOOD",
+        "BINDING"
+      ],
+      "affordance": "TRAPPING",
+      "produces": [
+        "FOOD"
+      ],
+      "provides_capabilities": [],
+      "requirements": [
+        "TRAP"
+      ],
+      "risks": [],
+      "knowledge_required": [
+        "kf_trap_concept"
+      ],
+      "estimated_effort": 2.5
+    },
+    {
+      "id": "bind_cord",
+      "subject_tags": [
+        "BINDING"
+      ],
+      "affordance": "BINDING_MATERIAL",
+      "produces": [],
+      "provides_capabilities": [
+        "BIND"
+      ],
+      "requirements": [],
+      "risks": [],
+      "knowledge_required": [],
+      "estimated_effort": 0.5
+    }
+  ]
+}

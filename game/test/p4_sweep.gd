@@ -9,9 +9,9 @@ extends SceneTree
 
 var _f := false
 var _started := false
-var _phase := "breadth"
-var _natural := 500
-var _camp := 100
+var _phase := "pilot"
+var _natural := 0
+var _camp := 4
 var _ticks := 2000
 var _seed_base := 50000
 
