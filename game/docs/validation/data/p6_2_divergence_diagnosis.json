@@ -1,0 +1,37 @@
+{
+ "by_action": {
+  "drink_water": {
+   "ACTION_IN_PROGRESS": 20,
+   "BETWEEN_ACTIONS": 1446,
+   "INTENTION_PERSISTED": 736
+  },
+  "fish": {
+   "ACTION_IN_PROGRESS": 2,
+   "BETWEEN_ACTIONS": 257,
+   "INTENTION_PERSISTED": 178
+  },
+  "forage_berries": {
+   "ACTION_IN_PROGRESS": 40,
+   "BETWEEN_ACTIONS": 2241,
+   "INTENTION_PERSISTED": 1292
+  }
+ },
+ "by_problem": {
+  "HUNGER": {
+   "ACTION_IN_PROGRESS": 42,
+   "BETWEEN_ACTIONS": 2498,
+   "INTENTION_PERSISTED": 1470
+  },
+  "THIRST": {
+   "ACTION_IN_PROGRESS": 20,
+   "BETWEEN_ACTIONS": 1446,
+   "INTENTION_PERSISTED": 736
+  }
+ },
+ "categories": {
+  "ACTION_IN_PROGRESS": 62,
+  "BETWEEN_ACTIONS": 3944,
+  "INTENTION_PERSISTED": 2206
+ },
+ "total_ready_proposals": 6212
+}

@@ -10,14 +10,7 @@ extends RefCounted
 
 const REVIEW_INTERVAL := 24
 
-## Plan Step 执行标注（§27）：只标记，不执行
-const RULE_EXISTING_ACTIONS := {
-	"berry_patch_food": "forage_berries",
-	"spring_water": "drink_water",
-	"build_shelter": "build_shelter",
-	"fish_food": "fish",
-	"wood_structure": "gather_wood",
-}
+## Plan Step 执行标注（§27）→ P6.2-R1：契约集中到 AgencyActionBridge（RULE_TO_ACTION + annotate_steps）
 
 var records: Array = []
 var cache := {}           # actor_id -> {hash, problems, proposals}
@@ -109,21 +102,8 @@ func _slim_proposals(problems: Array, store: WorldKnowledgeStore, ctx: Dictionar
 			})
 	return out
 
-## §27：给步骤标 EXISTING_ACTION / FUTURE_CAPABILITY / BLOCKED——只标记，不映射执行
 func _annotate_steps(p: Dictionary) -> void:
-	var via := str(p.get("via_rule", ""))
-	var existing := str(RULE_EXISTING_ACTIONS.get(via, ""))
-	for st in p.get("steps", []):
-		var kind := str(st.get("kind", ""))
-		if kind == "MAIN":
-			st["step_execution_status"] = "EXISTING_ACTION" if existing != "" else "FUTURE_CAPABILITY"
-			if existing != "":
-				st["existing_action"] = existing
-		elif kind == "SUBGOAL":
-			st["step_execution_status"] = "BLOCKED"
-		else:
-			st["step_execution_status"] = "FUTURE_CAPABILITY"
-
+	AgencyActionBridge.annotate_steps([p])
 func _top_goal_id(actor: Dictionary) -> String:
 	var gm = actor.get("goal_manager", null)
 	if gm == null:

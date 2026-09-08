@@ -43,7 +43,8 @@ $suites = @(
     @{ Name = "p5_spatial"; Script = "res://test/p5_spatial.gd"; Expected = 15 },
     @{ Name = "p4_3_thread_renderer"; Script = "res://test/p4_3_thread_renderer.gd"; Expected = 15 },
     @{ Name = "p6_world_knowledge"; Script = "res://test/p6_world_knowledge.gd"; Expected = 15 },
-    @{ Name = "p6_1_runtime_agency_shadow"; Script = "res://test/p6_1_runtime_agency_shadow.gd"; Expected = 15 }
+    @{ Name = "p6_1_runtime_agency_shadow"; Script = "res://test/p6_1_runtime_agency_shadow.gd"; Expected = 15 },
+    @{ Name = "p6_2_agency_action_bridge"; Script = "res://test/p6_2_agency_action_bridge.gd"; Expected = 33 }
 )
 
 $failures = [Collections.Generic.List[string]]::new()

@@ -17,6 +17,13 @@ var world := {}  # 环境状态（资源/天气/火/庇护所）
 var relationships := RelationshipStore.new()
 var obligations: Array = []
 var _encounters := {}
+
+# P6.2 AgencyActionBridge 运行模式：OFF（默认，旧行为逐位不变）/ SHADOW（只记录）/ LIVE_BRIDGE（salient 进考虑集）
+var agency_mode := "OFF"
+var _agency_store: WorldKnowledgeStore = null
+var _agency_cache := {}  # actor_id -> {hash, problems, proposals}
+var agency_planner_calls := 0
+var agency_cache_hits := 0
 var institutions: Array = []  # P2c-1: InstitutionRecord（客观层）   # P1.7c: dyad -> {co_presence, interactions, voluntary}  # P1.6: 承诺台账 {debtor, creditor, object, made_tick, due_tick, repaid}  # P1: 有向信任（A 信 B ≠ B 信 A）
 var map_query
 
@@ -338,7 +345,9 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 
 	# P0: DecisionEngine v2（Goal→Intention→Softmax + Trace）
 	var actor_view := _build_actor_view(id, a)
-	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng)
+	# P6.2：决策边界提供主观 proposals/bridge mode（OFF 时不做任何事——旧行为逐位不变）
+	var agency_extra := _agency_prepare(id, a) if str(agency_mode) != "OFF" else {}
+	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["activity"] = str(decision.get("desc", "？"))
@@ -354,6 +363,31 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 		if a["tile"] != target:
 			_move_toward(a, target)
 			a["visited_tiles"][str(a["tile"])] = true
+
+## P6.2：决策边界协调器——构造/缓存主观 ctx+proposals（bounded：hash 缓存，不每 tick 重规划）
+func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
+	if _agency_store == null:
+		_agency_store = KnowledgePack.load_island_pack()
+	var ctx := AgencyContextBuilder.build(self, a)
+	var h := AgencyContextBuilder.context_hash(ctx)
+	var problems: Array = ctx.get("activated_problems", [])
+	var cached: Dictionary = _agency_cache.get(id, {})
+	var proposals: Array = []
+	if not cached.is_empty() and str(cached.get("hash", "")) == h and str(cached.get("problems", "")) == str(problems):
+		proposals = cached.get("proposals", [])
+		agency_cache_hits += 1
+	else:
+		for problem in problems:
+			for p in MeansEndsPlanner.propose_plans(str(problem), _agency_store, ctx):
+				proposals.append(p)
+		_agency_planner_slim(proposals)
+		_agency_cache[id] = {"hash": h, "problems": str(problems), "proposals": proposals}
+		agency_planner_calls += 1
+	return {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
+		"problems": problems, "proposals": proposals}
+
+func _agency_planner_slim(proposals: Array) -> void:
+	AgencyActionBridge.annotate_steps(proposals)
 
 func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 	var action: Dictionary = a.get("current_action", {})
