@@ -1,0 +1,14 @@
+{
+  "pack_id": "island_recipes_v1",
+  "recipes": [
+    {
+      "recipe_id": "recipe_fish_spear",
+      "knowledge_refs": ["kf_spear_recipe", "kf_spear_materials"],
+      "ingredients": {"shells": 1, "wood": 1},
+      "outputs": {"fish_spear": 1},
+      "required_capabilities": [],
+      "duration_ticks": 2,
+      "compat_action": "craft_fish_spear"
+    }
+  ]
+}

@@ -24,7 +24,7 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a4 != null: actions.append(a4)
 	var a5 = _shelter(p, phys, inv, pos, world)
 	if a5 != null: actions.append(a5)
-	var a6 = _craft(p, phys, inv, pos, world)
+	var a6 = _craft(p, phys, inv, pos, world, actor)
 	if a6 != null: actions.append(a6)
 	var a7 = _fire(p, phys, inv, pos, world)
 	if a7 != null: actions.append(a7)
@@ -94,7 +94,9 @@ static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, worl
 	return {"action": "drink_water", "target": nearest, "utility": score, "desc": "去喝水", "duration": 1}
 
 static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
-	if int(inv.get("fish_spear", 0)) < 1:
+	_craft_catalogs()
+	# P6.3A：FISH 能力由 ItemCatalog 派生（不再硬编码 fish_spear 字段名）
+	if not InventoryOps.capabilities_of_inventory(inv, _craft_items).has("FISH"):
 		return null
 	var spots: Array = _known_sources(actor, "fish_spots")
 	if spots.is_empty():
@@ -135,13 +137,42 @@ static func _shelter(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, p
 	var score := 0.3 + prag * 0.3 + caution * 0.2 + fear * 0.3
 	return {"action": "build_shelter", "target": pos, "utility": score, "desc": "搭建庇护所", "duration": 3}
 
-static func _craft(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
-	if int(inv.get("shells", 0)) < 1 or int(inv.get("wood", 0)) < 1 or int(inv.get("fish_spear", 0)) > 0:
+static var _craft_items: ItemCatalog = null
+static var _craft_recipes: RecipeCatalog = null
+
+static func _craft_catalogs() -> void:
+	if _craft_items == null:
+		_craft_items = ItemCatalog.load_default()
+		_craft_recipes = RecipeCatalog.load_default(_craft_items)
+
+## P6.3A：制作候选经 CraftingResolver（主观已知 refs + 库存 + 能力）——数据驱动，鱼叉不再是硬编码
+static func _craft(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
+	_craft_catalogs()
+	var known_refs: Array = actor.get("known_recipe_refs", [])
+	var caps: Array = actor.get("possessed_capabilities", [])
+	var candidates: Array = CraftingResolver.craft_candidates(inv, known_refs, caps, _craft_recipes, _craft_items)
+	# P6.3A-R2 §二：已拥有非 stackable 产出→不重复制作；primary_output 稳定排序；描述从 ItemCatalog 生成
+	var first := {}
+	for c in candidates:
+		var out_item := _craft_recipes.primary_output(_craft_recipes.spec(str(c.get("recipe_id", ""))))
+		if out_item == "":
+			continue
+		if int(inv.get(out_item, 0)) > 0 and not bool(_craft_items.spec(out_item).get("stackable", true)):
+			continue
+		first = c
+		break
+	if first.is_empty():
 		return null
 	var prag := p.effective_trait("pragmatism", phys)
 	var curiosity := p.effective_trait("curiosity", phys)
 	var score := 0.3 + prag * 0.3 + curiosity * 0.2
-	return {"action": "craft_fish_spear", "target": pos, "utility": score, "desc": "制作鱼叉", "duration": 2}
+	var craft_rid := str(first.get("recipe_id", ""))
+	var craft_recipe := _craft_recipes.spec(craft_rid)
+	var craft_out := _craft_recipes.primary_output(craft_recipe)
+	var craft_name := str(_craft_items.spec(craft_out).get("display_name", craft_out))
+	return {"action": str(first.get("compat_action", "craft")), "target": pos, "utility": score,
+		"desc": "制作" + craft_name, "duration": int(first.get("duration_ticks", 2)),
+		"recipe_id": craft_rid}
 
 static func _fire(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
 	if int(inv.get("wood", 0)) < 1:
@@ -586,6 +617,10 @@ static func _nearest(pos: Vector2i, resources: Array) -> Vector2i:
 				best_d = d
 				best = r
 	return best
+
+static func _tool_shell_equivalent(inv: Dictionary) -> int:
+	# P6.3A 前原语义：每把已制鱼叉计 2 个贝壳当量（防止已满足时过度捡拾）——非配方派生，保留原始数值直到 P6.3B
+	return int(inv.get("fish_spear", 0)) * 2
 
 static func _pick_unvisited(pos: Vector2i, visited: Dictionary, wide: bool = false) -> Vector2i:
 	var fallback := Vector2i(-1, -1)

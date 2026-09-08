@@ -20,6 +20,8 @@ var _encounters := {}
 
 # P6.2 AgencyActionBridge 运行模式：OFF（默认，旧行为逐位不变）/ SHADOW（只记录）/ LIVE_BRIDGE（salient 进考虑集）
 var agency_mode := "OFF"
+var _item_catalog: ItemCatalog = null
+var _recipe_catalog: RecipeCatalog = null
 var _agency_store: WorldKnowledgeStore = null
 var _agency_cache := {}  # actor_id -> {hash, problems, proposals}
 var agency_planner_calls := 0
@@ -410,7 +412,7 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 		"build_shelter":
 			_do_shelter(id, a, new_events)
 		"craft_fish_spear":
-			_do_craft(id, a, new_events)
+			_do_craft(id, a, new_events, action)
 		"make_fire":
 			_do_fire(id, a, new_events)
 		"socialize":
@@ -526,13 +528,55 @@ func _do_shelter(id: String, a: Dictionary, ev: Array) -> void:
 		_emit("shelter_built", id, "%s 搭建了一个简易庇护所" % a["display_name"], {"pos": str(a["tile"])})
 		AuthoritySystem.self_identity(a, "shelter_built")
 
-func _do_craft(id: String, a: Dictionary, ev: Array) -> void:
-	if int(a["inventory"].get("shells", 0)) >= 1 and int(a["inventory"].get("wood", 0)) >= 1:
-		a["inventory"]["shells"] = int(a["inventory"]["shells"]) - 1
-		a["inventory"]["wood"] = int(a["inventory"]["wood"]) - 1
-		a["inventory"]["fish_spear"] = 1
-		_emit("crafted", id, "%s 制作了一把鱼叉" % a["display_name"], {"tool": "fish_spear"})
-		AuthoritySystem.self_identity(a, "crafted")
+## P6.3A-R2 §一：recipe_id 执行契约——严格 fail-closed
+## 1) action 无 recipe_id 字段 → 走 legacy alias（compat_action 唯一索引）
+## 2) action 有 recipe_id → 必须非空 String 且存在于 catalog，绝不回退 alias
+## 3) recipe 的 compat_action 非空时必须与 action.action 一致，不一致拒绝
+## 所有拒绝：库存不变、无事件、无能力变化、安静返回
+func _do_craft(id: String, a: Dictionary, ev: Array, action: Dictionary = {}) -> void:
+	_ensure_catalogs()
+	var recipe: Dictionary = {}
+	if not action.has("recipe_id"):
+		# 1) 字段不存在 → legacy alias（compat_action 唯一索引）
+		recipe = _recipe_catalog.by_compat_action(str(action.get("action", "")))
+	else:
+		var rid_val = action["recipe_id"]
+		if typeof(rid_val) != TYPE_STRING or str(rid_val) == "":
+			# 2a) 字段存在但 null/非 String/空 → 拒绝（不回退）
+			return
+		# 2b) 有效 String → 查 catalog；不存在则拒绝（不回退）
+		recipe = _recipe_catalog.spec(str(rid_val))
+		if recipe.is_empty():
+			return
+		# 3) compat_action 一致性检查
+		var compat := str(recipe.get("compat_action", ""))
+		if compat != "" and compat != str(action.get("action", "")):
+			return
+	if recipe.is_empty():
+		return  # legacy alias 也找不到 → fail-closed
+	var caps_before: Array = InventoryOps.capabilities_of_inventory(a["inventory"], _item_catalog)
+	var txn: Dictionary = InventoryOps.consume_and_grant(a["inventory"], recipe, _item_catalog)
+	if not bool(txn.get("ok", false)):
+		return  # 原子失败：材料不足时库存逐位不变
+	a["inventory"] = txn["inventory"]
+	var caps_after: Array = InventoryOps.capabilities_of_inventory(a["inventory"], _item_catalog)
+	var out_item := _recipe_catalog.primary_output(recipe)
+	var out_name := str(_item_catalog.spec(out_item).get("display_name", out_item))
+	_emit("crafted", id, "%s 制作了一把%s" % [a["display_name"], out_name],
+			{"tool": out_item, "recipe_id": str(recipe.get("recipe_id", "")),
+			"consumed_items": txn.get("consumed_items", {}), "produced_items": txn.get("produced_items", {}),
+			"capabilities_before": caps_before, "capabilities_after": caps_after})
+	AuthoritySystem.self_identity(a, "crafted")
+## P6.3A-R1 §4：窄方法暴露只读知识 store（不进 actor Dictionary——首/后续 tick 同语义）
+func agency_knowledge_store() -> WorldKnowledgeStore:
+	if _agency_store == null:
+		_agency_store = KnowledgePack.load_island_pack()
+	return _agency_store
+
+func _ensure_catalogs() -> void:
+	if _item_catalog == null:
+		_item_catalog = ItemCatalog.load_default()
+		_recipe_catalog = RecipeCatalog.load_default(_item_catalog)
 
 func _do_fire(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("wood", 0)) >= 1:
@@ -1180,9 +1224,27 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"social_stance": a.get("social_stance", {}),
 		"grudges": a.get("grudges", {}),
 		# P5（SN 资源修复）：决策只看自己见过的资源；饥饿感知只看自己 ToM 的判断
+		"known_recipe_refs": _known_recipe_refs_view(a),
 		"known_resources": _known_resources_view(a),
 		"appears_hungry_nearby": bool(world.get("appears_hungry_" + id, false)),
 	}
+
+## P6.3A：主观已知配方 refs（经世界包知识 ∩ RecipeCatalog——AgencyContextBuilder 同源）
+func _known_recipe_refs_view(a: Dictionary) -> Array:
+	_ensure_catalogs()
+	return RecipeKnowledgeAdapter.known_recipe_refs(_expertise_tags_of(a), agency_knowledge_store(), _recipe_catalog)
+
+func _expertise_tags_of(a: Dictionary) -> Array:
+	# 与 AgencyContextBuilder 同语义：自己的 LifeHistory 文本关键词
+	var tags: Array = []
+	var life = a.get("life_history", null)
+	if life != null:
+		for ev in life.events:
+			var desc := str(ev.get("desc", ""))
+			for pair in [["房", "WOODWORKING"], ["修", "WOODWORKING"], ["工", "WOODWORKING"], ["船", "NAVIGATION"], ["海难", "NAVIGATION"], ["航海", "NAVIGATION"], ["粮", "FOODHANDLING"], ["饥", "FOODHANDLING"], ["厨", "FOODHANDLING"]]:
+				if desc.find(str(pair[0])) != -1 and not tags.has(str(pair[1])):
+					tags.append(str(pair[1]))
+	return tags
 
 ## P5：从空间信念导出决策用资源视图（只含 believed_available 的）
 func _known_resources_view(a: Dictionary) -> Dictionary:

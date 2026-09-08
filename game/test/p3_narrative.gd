@@ -170,7 +170,7 @@ func _make_sim(ticks: int):
 		var cfg = ac.duplicate()
 		cfg["spawn"] = spot
 		configs.append(cfg)
-	var sim := IslandSimulation.new(mq, 43009, configs)
+	var sim := IslandSimulation.new(mq, 43010, configs)
 	for i in ticks:
 		sim.step()
 	return sim

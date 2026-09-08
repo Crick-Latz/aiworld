@@ -1,0 +1,14 @@
+{
+  "pack_id": "island_items_v1",
+  "items": [
+    {"item_id": "food", "display_name": "食物", "tags": ["FOOD_ITEM", "CONSUMABLE"], "provides_capabilities": [], "stackable": true},
+    {"item_id": "water", "display_name": "淡水", "tags": ["WATER_ITEM", "CONSUMABLE"], "provides_capabilities": [], "stackable": true},
+    {"item_id": "wood", "display_name": "木料", "tags": ["WOOD", "MATERIAL"], "provides_capabilities": [], "stackable": true},
+    {"item_id": "shells", "display_name": "贝壳", "tags": ["SHELL", "MATERIAL"], "provides_capabilities": [], "stackable": true},
+    {"item_id": "fish_spear", "display_name": "鱼叉", "tags": ["SPEAR", "TOOL"], "provides_capabilities": ["PIERCE", "FISH", "HUNT_MEDIUM"], "stackable": false},
+    {"item_id": "knife", "display_name": "小刀", "tags": ["KNIFE", "TOOL"], "provides_capabilities": ["CUT"], "stackable": false},
+    {"item_id": "rope", "display_name": "绳索", "tags": ["BINDING", "TOOL"], "provides_capabilities": ["BIND"], "stackable": true},
+    {"item_id": "flint", "display_name": "燧石", "tags": ["FLINT", "MATERIAL"], "provides_capabilities": [], "stackable": true},
+    {"item_id": "wine", "display_name": "酒", "tags": ["WATER_ITEM", "CONSUMABLE"], "provides_capabilities": [], "stackable": true}
+  ]
+}

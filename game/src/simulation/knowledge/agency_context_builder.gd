@@ -8,14 +8,16 @@ extends RefCounted
 ##   peer 能力只经 PerceivedCapabilityAdapter（自己的证据，非真值，RC 门）；
 ##   expertise 从自己的 LifeHistory 文本关键词派生（数据驱动，无角色名分支）。
 
-const ITEM_TAGS := {
-	"knife": ["KNIFE"], "rope": ["BINDING"], "flint": ["FLINT"], "wood": ["WOOD"],
-	"shells": ["SHELL"], "fish_spear": ["SPEAR"], "food": ["FOOD_ITEM"], "water": ["WATER_ITEM"],
-	"wine": ["WATER_ITEM"],
-}
-const ITEM_CAPABILITIES := {
-	"knife": ["CUT"], "rope": ["BIND"], "fish_spear": ["PIERCE", "FISH", "HUNT_MEDIUM"],
-}
+## P6.3A：物品标签/能力一律由 ItemCatalog 派生（旧硬编码表已删；fish_spear 的
+## SPEAR 标签与 PIERCE/FISH/HUNT_MEDIUM 能力现来自 data/items/items.json）
+static var _catalog: ItemCatalog = null
+static var _recipes: RecipeCatalog = null
+
+static func _ensure_catalogs() -> void:
+	if _catalog == null:
+		_catalog = ItemCatalog.load_default()
+		_recipes = RecipeCatalog.load_default(_catalog)
+
 const SOURCE_KIND_TAGS := {
 	"berry": "BERRY", "water": "SPRING", "fish": "FISH", "tree": "WOOD",
 	"shell": "SHELL", "ruin": "RUIN", "fire": "FIRE",
@@ -34,20 +36,19 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 		"known_sources": [],
 		"known_source_tags": [],
 		"expertise_tags": [],
+		"known_recipe_refs": [],
 		"known_peers": [],
 		"activated_problems": [],
 		"context_refs": [],
 		"flags": [],
 	}
-	# 1) 持有：只来自自己的 inventory
+	# 1) 持有：只来自自己的 inventory——经 ItemCatalog/InventoryOps 派生（P6.3A）
+	_ensure_catalogs()
 	var inv: Dictionary = actor.get("inventory", {})
-	for item in inv:
-		if int(inv[item]) <= 0:
-			continue
-		for tag in ITEM_TAGS.get(str(item), []):
-			_add_unique(ctx["possessed_tags"], tag)
-		for cap in ITEM_CAPABILITIES.get(str(item), []):
-			_add_unique(ctx["possessed_capabilities"], cap)
+	for tag in InventoryOps.tags_of_inventory(inv, _catalog):
+		_add_unique(ctx["possessed_tags"], tag)
+	for cap in InventoryOps.capabilities_of_inventory(inv, _catalog):
+		_add_unique(ctx["possessed_capabilities"], cap)
 	# 2) 已知来源：只来自 SpatialBeliefMap（P5 的主观空间记忆）
 	var belief = actor.get("spatial", null)
 	if belief == null or not (belief is SpatialBeliefMap):
@@ -75,6 +76,13 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 			for pair in EXPERTISE_KEYWORDS:
 				if desc.find(str(pair[0])) != -1:
 					_add_unique(ctx["expertise_tags"], str(pair[1]))
+	# P6.3A：主观已知配方 refs（世界包知识 ∩ 配方 knowledge_refs——经 WorldKnowledgeStore 唯一权威）
+	# P6.3A-R1 §5：知识侧 adapter（items 不再依赖 WorldKnowledgeStore）；sim 为 null 时走
+	# 兼容路径（单元测试用——known_recipe_refs 经参数注入）
+	if sim is IslandSimulation:
+		for rr in RecipeKnowledgeAdapter.known_recipe_refs(ctx.get("expertise_tags", []), (sim as IslandSimulation).agency_knowledge_store(), _recipes):
+			_add_unique(ctx["known_recipe_refs"], rr)
+
 	# 4) 伙伴能力：只经感知适配器（自己的证据）
 	for other_id in sim.actors:
 		if str(other_id) == str(ctx["actor_id"]):
@@ -95,6 +103,7 @@ static func context_hash(ctx: Dictionary) -> String:
 		_join_sorted(ctx.get("possessed_capabilities", [])),
 		_join_sorted(ctx.get("known_source_tags", [])),
 		_join_sorted(ctx.get("expertise_tags", [])),
+		_join_sorted(ctx.get("known_recipe_refs", [])),
 	]
 	for p in ctx.get("known_peers", []):
 		parts.append(str(p.get("id", "")) + ":" + _join_sorted(p.get("expertise_tags", [])))
