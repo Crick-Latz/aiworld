@@ -271,7 +271,8 @@
       ],
       "test_entrypoints": [
         "game/test/p6_1*.gd",
-        "game/test/p6_2*.gd"
+        "game/test/p6_2*.gd",
+        "game/test/p6_3b_execution_pilot.gd (--self-test or fixed paired pilot)"
       ],
       "legacy_exceptions": []
     }
