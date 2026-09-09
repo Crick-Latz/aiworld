@@ -37,6 +37,7 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 		"known_source_tags": [],
 		"expertise_tags": [],
 		"known_recipe_refs": [],
+		"possessed_items": {},
 		"known_peers": [],
 		"activated_problems": [],
 		"context_refs": [],
@@ -49,6 +50,8 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 		_add_unique(ctx["possessed_tags"], tag)
 	for cap in InventoryOps.capabilities_of_inventory(inv, _catalog):
 		_add_unique(ctx["possessed_capabilities"], cap)
+	# P6.3B-0-R1 §二：possessed_items = 自己库存的规范化快照（item_id -> int quantity）
+	ctx["possessed_items"] = InventoryOps.normalize(inv)
 	# 2) 已知来源：只来自 SpatialBeliefMap（P5 的主观空间记忆）
 	var belief = actor.get("spatial", null)
 	if belief == null or not (belief is SpatialBeliefMap):
@@ -104,6 +107,7 @@ static func context_hash(ctx: Dictionary) -> String:
 		_join_sorted(ctx.get("known_source_tags", [])),
 		_join_sorted(ctx.get("expertise_tags", [])),
 		_join_sorted(ctx.get("known_recipe_refs", [])),
+		_items_hash(ctx.get("possessed_items", {})),
 	]
 	for p in ctx.get("known_peers", []):
 		parts.append(str(p.get("id", "")) + ":" + _join_sorted(p.get("expertise_tags", [])))
@@ -114,6 +118,14 @@ static func context_hash(ctx: Dictionary) -> String:
 static func _add_unique(arr: Array, value: String) -> void:
 	if not arr.has(value):
 		arr.append(value)
+
+static func _items_hash(d: Dictionary) -> String:
+	var keys: Array = d.keys()
+	keys.sort()
+	var parts: Array = []
+	for k in keys:
+		parts.append(str(k) + ":" + str(int(d[k])))
+	return ",".join(parts)
 
 static func _join_sorted(arr: Array) -> String:
 	var d := (arr as Array).duplicate()

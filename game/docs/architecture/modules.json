@@ -125,6 +125,7 @@
         "game/src/simulation/knowledge/agency_measure.gd", "game/src/simulation/knowledge/agency_shadow_runner.gd",
         "game/src/simulation/knowledge/perceived_capability_adapter.gd", "game/src/simulation/knowledge/problem_activation_adapter.gd",
         "game/src/simulation/knowledge/recipe_knowledge_adapter.gd",
+        "game/src/simulation/knowledge/plan_step_spec.gd",
         "game/data/knowledge/common_human.json", "game/data/knowledge/island_survival.json"],
       "public_entrypoints": ["WorldKnowledgeStore.available_for", "MeansEndsPlanner.propose_plans", "AgencyContextBuilder.build", "AgencyActionBridge.ground", "RecipeKnowledgeAdapter.known_recipe_refs"],
       "allowed_dependencies": ["m09_shared_capability", "m10_items_crafting"],

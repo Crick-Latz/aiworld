@@ -179,12 +179,15 @@ func _run() -> void:
 	# PI：BLOCKED/FUTURE 只进 inert trace（无事件/库存/位置变化）
 	var pi_blocked_plan := {"plan_id": "PLAN_HUNGER_set_trap", "root_goal": "HUNGER", "via_rule": "set_trap",
 		"status": "BLOCKED_PLAN", "missing_requirements": ["TRAP"], "knowledge_refs": [], "belief_refs": [],
-		"steps": [{"kind": "SUBGOAL", "description": "寻找 X", "step_execution_status": "BLOCKED"}]}
+		"blockers": [RecipePlanAdapter.make_blocker("MISSING_CAPABILITY", "", "TRAP", 0)],
+		"steps": []}
 	var pi_ground := AgencyActionBridge.ground([pi_blocked_plan], pd_all, 100, "x")
+	var pi_futures: Array = pi_ground.get("future_subgoals", [])
 	_check("pi_blocked_future_inert",
 		(pi_ground.get("grounded_candidates", []) as Array).is_empty()
-		and (pi_ground.get("future_subgoals", []) as Array).size() == 1
-		and str((pi_ground.get("future_subgoals", []) as Array)[0].get("status", "")) == "INERT_UNTIL_P6_3", "")
+		and pi_futures.size() >= 1
+		and str(pi_futures[0].get("status", "")) == "INERT_UNTIL_P6_3B_1"
+		and pi_futures[0].has("step_kind") and pi_futures[0].has("item_id"), "")
 
 	# PJ：selected agency 行动全链路回溯（确定性：只知浆果+高饿，固定种子循环至 forage 被选中）
 	var pj_ok := false

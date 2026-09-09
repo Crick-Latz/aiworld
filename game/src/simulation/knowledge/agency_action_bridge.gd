@@ -58,10 +58,26 @@ static func ground(proposals: Array, valid_actions: Array, tick: int, actor_id: 
 				"reason_code": "NOT_READY",
 				"missing_requirements": p.get("missing_requirements", []),
 				"knowledge_refs": refs_k, "belief_refs": refs_b})
-			# BLOCKED → inert subgoal（缺项即子目标方向）
-			for m in p.get("missing_requirements", []):
-				futures.append({"problem_id": problem_id, "plan_id": plan_id,
-					"capability_or_requirement": str(m), "status": "INERT_UNTIL_P6_3"})
+			# R3 §三：从结构化 blockers 构造 future_subgoals（不解析字符串）
+			var blockers: Array = p.get("blockers", [])
+			for blk in blockers:
+				# R4 §四：validate_blocker 为唯一判据——畸形/reason 不变量违反 → fail-closed 跳过
+				if not RecipePlanAdapter.validate_blocker(blk):
+					continue
+				var rc := str(blk.get("reason_code", ""))
+				var b_item := str(blk.get("item_id", ""))
+				var b_cap := str(blk.get("capability", ""))
+				var b_qty := int(blk.get("quantity", 0))
+				futures.append({
+					"problem_id": problem_id, "plan_id": plan_id,
+					"step_id": PlanStepSpec.step_id_for("SUBGOAL", rc, b_item if b_item != "" else b_cap),
+					"step_kind": "SUBGOAL", "action_name": "",
+					"item_id": b_item, "quantity": b_qty, "recipe_id": "",
+					"capability": b_cap,
+					"knowledge_refs": _sorted_unique(blk.get("knowledge_refs", [])),
+					"belief_refs": _sorted_unique(blk.get("belief_refs", [])),
+					"reason_code": rc, "status": "INERT_UNTIL_P6_3B_1"
+				})
 			continue
 		var action_name := str(RULE_TO_ACTION.get(str(p.get("via_rule", "")), ""))
 		if action_name == "":
@@ -95,12 +111,21 @@ static func ground(proposals: Array, valid_actions: Array, tick: int, actor_id: 
 			"utility_source": "ACTION_REGISTRY",
 			"original_utility": float(matched.get("utility", 0.0)),
 		})
-		# READY 计划中的 FUTURE_CAPABILITY 步骤也进 inert（§4：只入 trace）
+		# P6.3B-0 §四：READY 计划中的非 MAIN 步骤也进 inert（结构化，不依赖 description）
 		for st in p.get("steps", []):
-			if str(st.get("step_execution_status", "")) == "FUTURE_CAPABILITY":
-				futures.append({"problem_id": problem_id, "plan_id": plan_id,
-					"capability_or_requirement": str(st.get("description", "")).substr(0, 40),
-					"status": "INERT_UNTIL_P6_3"})
+			var st_kind := str(st.get("kind", ""))
+			if st_kind == "MAIN" or str(st.get("step_execution_status", "")) == "EXISTING_ACTION":
+				continue
+			futures.append({
+				"problem_id": problem_id, "plan_id": plan_id,
+				"step_id": str(st.get("step_id", "")),
+				"step_kind": st_kind, "action_name": str(st.get("action_name", "")),
+				"item_id": str(st.get("item_id", "")), "quantity": int(st.get("quantity", 0)),
+				"recipe_id": str(st.get("recipe_id", "")), "capability": str(st.get("capability", "")),
+				"knowledge_refs": PlanStepSpec._sorted_unique(st.get("knowledge_refs", [])),
+				"belief_refs": PlanStepSpec._sorted_unique(st.get("belief_refs", [])),
+				"reason_code": "FUTURE_CAPABILITY", "status": "INERT_UNTIL_P6_3B_1"
+			})
 	# 稳定排序（与输入顺序无关）
 	grounded.sort_custom(func(a, b): return str(a["candidate_key"]) < str(b["candidate_key"]))
 	return {"tick": tick, "actor_id": actor_id,

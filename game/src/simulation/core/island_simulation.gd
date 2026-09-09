@@ -367,6 +367,14 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 			a["visited_tiles"][str(a["tile"])] = true
 
 ## P6.2：决策边界协调器——构造/缓存主观 ctx+proposals（bounded：hash 缓存，不每 tick 重规划）
+func _recipe_catalog_if_any() -> RecipeCatalog:
+	_ensure_catalogs()
+	return _recipe_catalog
+
+func _item_catalog_if_any() -> ItemCatalog:
+	_ensure_catalogs()
+	return _item_catalog
+
 func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 	if _agency_store == null:
 		_agency_store = KnowledgePack.load_island_pack()
@@ -380,7 +388,7 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 		agency_cache_hits += 1
 	else:
 		for problem in problems:
-			for p in MeansEndsPlanner.propose_plans(str(problem), _agency_store, ctx):
+			for p in MeansEndsPlanner.propose_plans(str(problem), _agency_store, ctx, _recipe_catalog_if_any(), _item_catalog_if_any()):
 				proposals.append(p)
 		_agency_planner_slim(proposals)
 		_agency_cache[id] = {"hash": h, "problems": str(problems), "proposals": proposals}

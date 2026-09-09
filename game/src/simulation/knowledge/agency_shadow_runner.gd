@@ -18,8 +18,17 @@ var planner_calls := 0
 var cache_hits := 0
 var shadow_plans_generated := 0
 var _last_activated := {} # actor_id -> problems
+var _catalog: RecipeCatalog = null
+var _catalog_items: ItemCatalog = null
+
+## P6.3B-0-R2 §二：窄参数注入（由 sim 提供同一套 Catalog，不自行创建权威）
+func set_catalogs(catalog: RecipeCatalog, items: ItemCatalog) -> void:
+	_catalog = catalog
+	_catalog_items = items
 
 func observe(sim) -> void:
+	if _catalog == null and sim is IslandSimulation:
+		set_catalogs(sim._recipe_catalog_if_any(), sim._item_catalog_if_any())
 	for id in sim.actors:
 		var actor: Dictionary = sim.actors[id]
 		var problems: Array = ProblemActivationAdapter.activate(actor)
@@ -52,7 +61,7 @@ func _plan_with_ctx(sim, id: String, actor: Dictionary, ctx: Dictionary, problem
 	var knowledge_refs: Array = []
 	var belief_refs: Array = []
 	for problem in problems:
-		var plans: Array = MeansEndsPlanner.propose_plans(str(problem), store, ctx)
+		var plans: Array = MeansEndsPlanner.propose_plans(str(problem), store, ctx, _catalog, _catalog_items)
 		var trace: Dictionary = MeansEndsPlanner.last_trace
 		for k in trace.get("retrieved_knowledge", []):
 			if not knowledge_refs.has(k):
@@ -91,7 +100,7 @@ func _plan_with_ctx(sim, id: String, actor: Dictionary, ctx: Dictionary, problem
 func _slim_proposals(problems: Array, store: WorldKnowledgeStore, ctx: Dictionary) -> Array:
 	var out: Array = []
 	for problem in problems:
-		for p in MeansEndsPlanner.propose_plans(str(problem), store, ctx):
+		for p in MeansEndsPlanner.propose_plans(str(problem), store, ctx, _catalog, _catalog_items):
 			_annotate_steps(p)
 			out.append({
 				"plan_id": p.get("plan_id", ""), "root_goal": p.get("root_goal", ""),

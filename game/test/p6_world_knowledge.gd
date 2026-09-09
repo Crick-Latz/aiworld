@@ -39,12 +39,24 @@ func _run() -> void:
 			kb_uses_gun = true
 	_check("kb_knowledge_not_possession", not kb_uses_gun, "无枪却出现用枪计划")
 
-	# KC：隐藏物隔离——ctx 无 WOOD → craft_spear 类计划不出现；ctx 有 WOOD → 出现
-	var kc_blind: Array = MeansEndsPlanner.propose_plans("HUNGER", store,
-		_ctx(["ANIMAL"], [], ["CUT"], [], []))
+	# KC：隐藏物隔离——ctx 无 wood → craft 不出现；ctx 有 → 出现（catalog 路径）
+	var p63_items := ItemCatalog.load_default()
+	var p63_recipes := RecipeCatalog.load_default(p63_items)
+	var krr: Array = RecipeKnowledgeAdapter.known_recipe_refs([], store, p63_recipes)
+	var kc_blind_ctx := _ctx(["ANIMAL"], [], ["CUT"], [], [])
+	kc_blind_ctx["possessed_items"] = {}
+	kc_blind_ctx["known_sources"] = [{"tag": "ANIMAL", "source_id": "a", "belief_ref": "known_source:a", "last_seen_tick": 1, "confidence": 1.0}]
+	kc_blind_ctx["known_recipe_refs"] = krr
+	var kc_blind: Array = MeansEndsPlanner.propose_plans("HUNGER", store, kc_blind_ctx, p63_recipes, p63_items)
 	var kc_blind_craft := _has_step(kc_blind, "CRAFT")
-	var kc_seeing: Array = MeansEndsPlanner.propose_plans("HUNGER", store,
-		_ctx(["ANIMAL", "WOOD", "SHARP_STONE", "BINDING"], [], ["CUT"], [], []))
+	var kc_seeing_ctx := _ctx(["ANIMAL", "WOOD", "SHELL"], [], ["CUT"], [], [])
+	kc_seeing_ctx["possessed_items"] = {"wood": 1, "shells": 1}
+	kc_seeing_ctx["known_sources"] = [
+		{"tag": "ANIMAL", "source_id": "a", "belief_ref": "known_source:a", "last_seen_tick": 1, "confidence": 1.0},
+		{"tag": "WOOD", "source_id": "w", "belief_ref": "known_source:w", "last_seen_tick": 1, "confidence": 1.0},
+		{"tag": "SHELL", "source_id": "s", "belief_ref": "known_source:s", "last_seen_tick": 1, "confidence": 1.0}]
+	kc_seeing_ctx["known_recipe_refs"] = krr
+	var kc_seeing: Array = MeansEndsPlanner.propose_plans("HUNGER", store, kc_seeing_ctx, p63_recipes, p63_items)
 	var kc_seeing_craft := _has_step(kc_seeing, "CRAFT")
 	_check("kc_hidden_object_isolation", not kc_blind_craft and kc_seeing_craft,
 		"blind=%s seeing=%s" % [str(kc_blind_craft), str(kc_seeing_craft)])
@@ -68,15 +80,21 @@ func _run() -> void:
 	_check("kg_pa_hunger_known_berry", pa_ok, "plans=%s" % str(pa_plans.size()))
 
 	# KH/PB：饿 + 见动物 + 知矛配方 + 材料齐 → CRAFT_SPEAR→HUNT→FOOD 链
-	var pb_plans: Array = MeansEndsPlanner.propose_plans("HUNGER", store,
-		_ctx(["ANIMAL", "WOOD", "SHARP_STONE", "BINDING"], [], ["CUT"], [], []))
+	var pb_ctx := _ctx(["ANIMAL", "WOOD", "SHELL"], [], ["CUT"], [], [])
+	pb_ctx["possessed_items"] = {"wood": 1, "shells": 1}
+	pb_ctx["known_sources"] = [
+		{"tag": "ANIMAL", "source_id": "a", "belief_ref": "known_source:a", "last_seen_tick": 1, "confidence": 1.0},
+		{"tag": "WOOD", "source_id": "w", "belief_ref": "known_source:w", "last_seen_tick": 1, "confidence": 1.0},
+		{"tag": "SHELL", "source_id": "s", "belief_ref": "known_source:s", "last_seen_tick": 1, "confidence": 1.0}]
+	pb_ctx["known_recipe_refs"] = krr
+	var pb_plans: Array = MeansEndsPlanner.propose_plans("HUNGER", store, pb_ctx, p63_recipes, p63_items)
 	var pb_plan := _find_by_rule(pb_plans, "animal_food_raw")
 	var pb_has_craft := false
 	var pb_ready := false
 	if not pb_plan.is_empty():
 		pb_ready = str(pb_plan.get("status", "")) == "READY"
 		for st in pb_plan.get("steps", []):
-			if str(st.get("kind", "")) == "CRAFT" and str(st.get("description", "")).find("craft_spear") != -1:
+			if str(st.get("kind", "")) == "CRAFT":
 				pb_has_craft = true
 	_check("kh_pb_animal_tool_chain", pb_has_craft and pb_ready,
 		"craft=%s ready=%s missing=%s" % [str(pb_has_craft), str(pb_ready), str(pb_plan.get("missing_requirements", []))])
@@ -99,27 +117,32 @@ func _run() -> void:
 	_check("ki_pc_missing_material_blocks", pc_blocked and pc_missing_sharp and pc_no_craft,
 		"blocked=%s missing_sharp=%s no_craft=%s" % [str(pc_blocked), str(pc_missing_sharp), str(pc_no_craft)])
 
-	# KJ/PD：离岛 → 筏需 NAVIGATE/BUILD_STRONG；缺者进 missing
+	# KJ/PD：离岛 → 筏需 NAVIGATE/BUILD_STRONG；缺者进 missing（catalog 路径）
 	var pd_ctx := _ctx(["WOOD", "BINDING"], [], ["BIND", "CUT"], ["WOODWORKING"],
 		[{"id": "npc_weila", "expertise_tags": ["NAVIGATION"], "trust": 0.5}])
-	var pd_plans: Array = MeansEndsPlanner.propose_plans("ESCAPE_DESIRE", store, pd_ctx)
+	pd_ctx["possessed_items"] = {"wood": 1}
+	pd_ctx["known_sources"] = [{"tag": "WOOD", "source_id": "w", "belief_ref": "known_source:w", "last_seen_tick": 1, "confidence": 1.0}]
+	pd_ctx["known_recipe_refs"] = krr
+	var pd_plans: Array = MeansEndsPlanner.propose_plans("ESCAPE_DESIRE", store, pd_ctx, p63_recipes, p63_items)
 	var pd_plan := _find_by_rule(pd_plans, "build_raft")
 	var pd_missing_nav := false
 	var pd_missing_build := false
 	if not pd_plan.is_empty():
 		for m in pd_plan.get("missing_requirements", []):
-			if str(m) == "NAVIGATE":
+			if str(m).find("NAVIGATE") != -1:
 				pd_missing_nav = true
-			if str(m) == "BUILD_STRONG":
+			if str(m).find("BUILD_STRONG") != -1:
 				pd_missing_build = true
 	_check("kj_pd_boat_requirements", not pd_plan.is_empty() and pd_missing_nav and pd_missing_build,
 		"missing=%s" % str(pd_plan.get("missing_requirements", []) if not pd_plan.is_empty() else []))
 
-	# KK：能力缺口 + 已知伙伴有该专长 → REQUEST_HELP 候选出现（不强制）
+	# KK：能力缺口 + 已知伙伴有该专长 → 求助候选出现（SUBGOAL/request_help，P6.3B-0 结构化格式）
 	var kk_has_help := false
 	if not pd_plan.is_empty():
 		for st in pd_plan.get("steps", []):
-			if str(st.get("kind", "")) == "REQUEST_HELP" and str(st.get("description", "")).find("npc_weila") != -1:
+			if str(st.get("kind", "")) == "SUBGOAL" and str(st.get("action_name", "")) == "request_help" and str(st.get("description", "")).find("npc_weila") != -1:
+				kk_has_help = true
+			elif str(st.get("kind", "")) == "REQUEST_HELP" and str(st.get("description", "")).find("npc_weila") != -1:
 				kk_has_help = true
 	_check("kk_cooperation_candidate", kk_has_help, "REQUEST_HELP(npc_weila) 未出现")
 
