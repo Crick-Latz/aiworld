@@ -1,137 +1,287 @@
 {
   "format_version": "1",
-  "updated": "2026-09-08",
+  "updated": "2026-09-09",
   "note": "实际存在文件的归属登记（OBS-01/23-A 基线）。新目录 src/simulation 等随 OBS 包长出，不把未来目录当已实现模块。",
   "modules": [
     {
       "module_id": "m01_entry_assembly",
       "owner_role": "integrator",
       "owned_paths": [
-        "game/scenes/main/main.gd", "game/scenes/main/main.tscn",
-        "game/scenes/observer/observer_main.gd", "game/scenes/observer/observer_main.tscn",
-        "game/src/autoload/app_config.gd", "game/src/autoload/contract_registry.gd",
-        "game/src/autoload/event_hub.gd", "game/src/autoload/game_session.gd",
-        "game/src/autoload/simulation.gd", "game/src/autoload/save_manager.gd", "game/src/autoload/ai_client.gd"
+        "game/scenes/main/main.gd",
+        "game/scenes/main/main.tscn",
+        "game/scenes/observer/observer_main.gd",
+        "game/scenes/observer/observer_main.tscn",
+        "game/src/autoload/app_config.gd",
+        "game/src/autoload/contract_registry.gd",
+        "game/src/autoload/event_hub.gd",
+        "game/src/autoload/game_session.gd",
+        "game/src/autoload/simulation.gd",
+        "game/src/autoload/save_manager.gd",
+        "game/src/autoload/ai_client.gd"
       ],
-      "public_entrypoints": ["场景装配与生命周期；不计算 NPC 目标/事件文案/库存"],
-      "allowed_dependencies": ["m04_map_navigation", "m05_simulation_core", "m06_behavior", "m13_presentation", "m15_ui", "m16_camera_input"],
-      "test_entrypoints": ["game/test/run_all.gd(旧回归)", "game/test/player_physics.gd", "game/test/player_soak.gd", "game/test/camera_rotation.gd", "game/test/observer_sim.gd"],
-      "legacy_exceptions": ["main.gd 含 HUD 文本/Toast/截图自动驾驶（WP-04 历史结构，观察版不复制的对象）"]
+      "public_entrypoints": [
+        "场景装配与生命周期；不计算 NPC 目标/事件文案/库存"
+      ],
+      "allowed_dependencies": [
+        "m04_map_navigation",
+        "m05_simulation_core",
+        "m06_behavior",
+        "m13_presentation",
+        "m15_ui",
+        "m16_camera_input"
+      ],
+      "test_entrypoints": [
+        "game/test/run_all.gd(旧回归)",
+        "game/test/player_physics.gd",
+        "game/test/player_soak.gd",
+        "game/test/camera_rotation.gd",
+        "game/test/observer_sim.gd"
+      ],
+      "legacy_exceptions": [
+        "main.gd 含 HUD 文本/Toast/截图自动驾驶（WP-04 历史结构，观察版不复制的对象）"
+      ]
     },
     {
       "module_id": "m04_map_navigation",
       "owner_role": "world",
       "owned_paths": [
-        "game/src/map/seed_deriver.gd", "game/src/map/grid_coord.gd", "game/src/map/generated_map.gd",
-        "game/src/map/map_generator.gd", "game/src/map/map_snapshot_codec.gd", "game/src/map/map_navigator.gd",
-        "game/src/map/map_controller.gd", "game/src/map/map_boundary_builder.gd"
+        "game/src/map/seed_deriver.gd",
+        "game/src/map/grid_coord.gd",
+        "game/src/map/generated_map.gd",
+        "game/src/map/map_generator.gd",
+        "game/src/map/map_snapshot_codec.gd",
+        "game/src/map/map_navigator.gd",
+        "game/src/map/map_controller.gd",
+        "game/src/map/map_boundary_builder.gd"
       ],
-      "public_entrypoints": ["MapController 窄接口", "MapNavigator.find_path", "GridCoord"],
+      "public_entrypoints": [
+        "MapController 窄接口",
+        "MapNavigator.find_path",
+        "GridCoord"
+      ],
       "allowed_dependencies": [],
-      "test_entrypoints": ["game/test/run_all.gd(地图部分)"],
+      "test_entrypoints": [
+        "game/test/run_all.gd(地图部分)"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m05_simulation_core",
       "owner_role": "sim",
-      "owned_paths": ["game/src/simulation/core/simulation_core.gd", "game/src/simulation/core/island_simulation.gd"],
-      "public_entrypoints": ["step/submit/query/快照与事件（OBS-01 起为唯一运行时状态拥有者）"],
-      "allowed_dependencies": ["m04_map_navigation", "m06_behavior", "m09_shared_capability", "m10_items_crafting", "m11_knowledge_agency"],
-      "test_entrypoints": ["game/test/observer_sim.gd"],
+      "owned_paths": [
+        "game/src/simulation/core/simulation_core.gd",
+        "game/src/simulation/core/island_simulation.gd"
+      ],
+      "public_entrypoints": [
+        "step/submit/query/快照与事件（OBS-01 起为唯一运行时状态拥有者）"
+      ],
+      "allowed_dependencies": [
+        "m04_map_navigation",
+        "m06_behavior",
+        "m09_shared_capability",
+        "m10_items_crafting",
+        "m11_knowledge_agency"
+      ],
+      "test_entrypoints": [
+        "game/test/observer_sim.gd"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m06_behavior",
       "owner_role": "sim",
-      "owned_paths": ["game/src/simulation/behavior/agent_brain.gd", "game/src/simulation/decision/action_registry.gd", "game/src/simulation/decision/decision_engine.gd"],
-      "public_entrypoints": ["每 tick 的 CommandProposal（目标选择/状态推进）"],
-      "allowed_dependencies": ["m04_map_navigation", "m09_shared_capability", "m10_items_crafting"],
-      "test_entrypoints": ["game/test/observer_sim.gd"],
+      "owned_paths": [
+        "game/src/simulation/behavior/agent_brain.gd",
+        "game/src/simulation/decision/action_registry.gd",
+        "game/src/simulation/decision/decision_engine.gd"
+      ],
+      "public_entrypoints": [
+        "每 tick 的 CommandProposal（目标选择/状态推进）"
+      ],
+      "allowed_dependencies": [
+        "m04_map_navigation",
+        "m09_shared_capability",
+        "m10_items_crafting"
+      ],
+      "test_entrypoints": [
+        "game/test/observer_sim.gd"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m13_presentation",
       "owner_role": "presentation",
       "owned_paths": [
-        "game/src/map/prototype_mesh_library.gd", "game/src/map/map_projector.gd",
-        "game/scenes/actors/npc.tscn", "game/src/presentation/npc_visual.gd"
+        "game/src/map/prototype_mesh_library.gd",
+        "game/src/map/map_projector.gd",
+        "game/scenes/actors/npc.tscn",
+        "game/src/presentation/npc_visual.gd"
       ],
-      "public_entrypoints": ["投影/视觉；动画完成不决定故事结果"],
-      "allowed_dependencies": ["m04_map_navigation", "m09_shared_capability", "m10_items_crafting"],
-      "test_entrypoints": ["game/test/run_all.gd(MeshLibrary 部分)"],
-      "legacy_exceptions": ["prototype_mesh_library 同时构建材质/Mesh/碰撞（22 号已登记的历史耦合点，美术替换前按 D 处理）"]
+      "public_entrypoints": [
+        "投影/视觉；动画完成不决定故事结果"
+      ],
+      "allowed_dependencies": [
+        "m04_map_navigation",
+        "m09_shared_capability",
+        "m10_items_crafting"
+      ],
+      "test_entrypoints": [
+        "game/test/run_all.gd(MeshLibrary 部分)"
+      ],
+      "legacy_exceptions": [
+        "prototype_mesh_library 同时构建材质/Mesh/碰撞（22 号已登记的历史耦合点，美术替换前按 D 处理）"
+      ]
     },
     {
       "module_id": "m15_ui",
       "owner_role": "ui",
       "owned_paths": [
-        "game/scenes/observer/observer_hud.gd", "game/scenes/observer/observer_hud.tscn",
-        "game/scenes/ui/ui_preview.gd", "game/scenes/ui/ui_preview.tscn", "game/src/ui/pause_controller.gd"
+        "game/scenes/observer/observer_hud.gd",
+        "game/scenes/observer/observer_hud.tscn",
+        "game/scenes/ui/ui_preview.gd",
+        "game/scenes/ui/ui_preview.tscn",
+        "game/src/ui/pause_controller.gd"
       ],
-      "public_entrypoints": ["render(ViewModel) + 意图信号（actor_selected/pause_requested/speed_requested）"],
+      "public_entrypoints": [
+        "render(ViewModel) + 意图信号（actor_selected/pause_requested/speed_requested）"
+      ],
       "allowed_dependencies": [],
-      "test_entrypoints": ["game/test/observer_sim.gd(HUD 夹具部分)"],
-      "legacy_exceptions": ["pause_controller.gd 属旧玩家场景 UI（legacy），观察版不用整树暂停"]
+      "test_entrypoints": [
+        "game/test/observer_sim.gd(HUD 夹具部分)"
+      ],
+      "legacy_exceptions": [
+        "pause_controller.gd 属旧玩家场景 UI（legacy），观察版不用整树暂停"
+      ]
     },
     {
       "module_id": "m16_camera_input",
       "owner_role": "client",
       "owned_paths": [
-        "game/src/camera/isometric_camera_controller.gd", "game/src/camera/observer_camera.gd",
-        "game/src/player/player_controller.gd", "game/src/player/player_interactor.gd",
-        "game/src/player/interaction_target_selector.gd", "game/scenes/actors/player.tscn"
+        "game/src/camera/isometric_camera_controller.gd",
+        "game/src/camera/observer_camera.gd",
+        "game/src/player/player_controller.gd",
+        "game/src/player/player_interactor.gd",
+        "game/src/player/interaction_target_selector.gd",
+        "game/scenes/actors/player.tscn"
       ],
-      "public_entrypoints": ["镜头/输入/拾取；观察输入不消耗模拟 RNG"],
-      "allowed_dependencies": ["m04_map_navigation", "m09_shared_capability", "m10_items_crafting"],
-      "test_entrypoints": ["game/test/camera_rotation.gd", "game/test/player_physics.gd"],
+      "public_entrypoints": [
+        "镜头/输入/拾取；观察输入不消耗模拟 RNG"
+      ],
+      "allowed_dependencies": [
+        "m04_map_navigation",
+        "m09_shared_capability",
+        "m10_items_crafting"
+      ],
+      "test_entrypoints": [
+        "game/test/camera_rotation.gd",
+        "game/test/player_physics.gd"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m20_test_tools",
       "owner_role": "platform",
-      "owned_paths": ["scripts/check-module-boundaries.mjs", "scripts/test/check-boundaries.test.mjs", "scripts/test/fixtures/boundaries"],
-      "public_entrypoints": ["可重复验证；不成为第二模拟器"],
+      "owned_paths": [
+        "scripts/check-module-boundaries.mjs",
+        "scripts/test/check-boundaries.test.mjs",
+        "scripts/test/fixtures/boundaries"
+      ],
+      "public_entrypoints": [
+        "可重复验证；不成为第二模拟器"
+      ],
       "allowed_dependencies": [],
-      "test_entrypoints": ["node scripts/test/check-boundaries.test.mjs"],
+      "test_entrypoints": [
+        "node scripts/test/check-boundaries.test.mjs"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m09_shared_capability",
       "owner_role": "shared",
-      "owned_paths": ["game/src/simulation/knowledge/capability_spec.gd"],
-      "public_entrypoints": ["CapabilitySpec 常量表——低层共享契约，无依赖"],
+      "owned_paths": [
+        "game/src/simulation/knowledge/capability_spec.gd"
+      ],
+      "public_entrypoints": [
+        "CapabilitySpec 常量表——低层共享契约，无依赖"
+      ],
       "allowed_dependencies": [],
-      "test_entrypoints": ["game/test/p6_3_items.gd(间接)"],
+      "test_entrypoints": [
+        "game/test/p6_3_items.gd(间接)"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m10_items_crafting",
       "owner_role": "items",
-      "owned_paths": ["game/src/simulation/items/item_catalog.gd", "game/src/simulation/items/recipe_catalog.gd",
-        "game/src/simulation/items/inventory_ops.gd", "game/src/simulation/items/crafting_resolver.gd",
-        "game/data/items/items.json", "game/data/items/recipes.json"],
-      "public_entrypoints": ["ItemCatalog.load_default", "RecipeCatalog.load_default", "InventoryOps", "CraftingResolver.craft_candidates"],
-      "allowed_dependencies": ["m09_shared_capability"],
-      "test_entrypoints": ["game/test/p6_3_items.gd"],
+      "owned_paths": [
+        "game/src/simulation/items/item_catalog.gd",
+        "game/src/simulation/items/recipe_catalog.gd",
+        "game/src/simulation/items/inventory_ops.gd",
+        "game/src/simulation/items/crafting_resolver.gd",
+        "game/data/items/items.json",
+        "game/data/items/recipes.json"
+      ],
+      "public_entrypoints": [
+        "ItemCatalog.load_default",
+        "RecipeCatalog.load_default",
+        "InventoryOps",
+        "CraftingResolver.craft_candidates"
+      ],
+      "allowed_dependencies": [
+        "m09_shared_capability"
+      ],
+      "test_entrypoints": [
+        "game/test/p6_3_items.gd"
+      ],
       "legacy_exceptions": []
     },
     {
       "module_id": "m11_knowledge_agency",
       "owner_role": "knowledge",
-      "owned_paths": ["game/src/simulation/knowledge/world_knowledge_store.gd", "game/src/simulation/knowledge/knowledge_fact.gd",
-        "game/src/simulation/knowledge/affordance_rule.gd", "game/src/simulation/knowledge/problem_spec.gd",
-        "game/src/simulation/knowledge/knowledge_pack.gd", "game/src/simulation/knowledge/means_ends_planner.gd",
-        "game/src/simulation/knowledge/agency_context_builder.gd", "game/src/simulation/knowledge/agency_action_bridge.gd",
-        "game/src/simulation/knowledge/agency_measure.gd", "game/src/simulation/knowledge/agency_shadow_runner.gd",
-        "game/src/simulation/knowledge/perceived_capability_adapter.gd", "game/src/simulation/knowledge/problem_activation_adapter.gd",
-        "game/src/simulation/knowledge/recipe_knowledge_adapter.gd",
+      "owned_paths": [
+        "game/data/knowledge/common_human.json",
+        "game/data/knowledge/island_survival.json",
+        "game/src/simulation/knowledge/affordance_rule.gd",
+        "game/src/simulation/knowledge/agency_action_bridge.gd",
+        "game/src/simulation/knowledge/agency_context_builder.gd",
+        "game/src/simulation/knowledge/agency_measure.gd",
+        "game/src/simulation/knowledge/agency_shadow_runner.gd",
+        "game/src/simulation/knowledge/knowledge_fact.gd",
+        "game/src/simulation/knowledge/knowledge_pack.gd",
+        "game/src/simulation/knowledge/means_ends_planner.gd",
+        "game/src/simulation/knowledge/perceived_capability_adapter.gd",
+        "game/src/simulation/knowledge/plan_execution_tracker.gd",
+        "game/src/simulation/knowledge/plan_step_action_adapter.gd",
         "game/src/simulation/knowledge/plan_step_spec.gd",
-        "game/data/knowledge/common_human.json", "game/data/knowledge/island_survival.json"],
-      "public_entrypoints": ["WorldKnowledgeStore.available_for", "MeansEndsPlanner.propose_plans", "AgencyContextBuilder.build", "AgencyActionBridge.ground", "RecipeKnowledgeAdapter.known_recipe_refs"],
-      "allowed_dependencies": ["m09_shared_capability", "m10_items_crafting"],
-      "test_entrypoints": ["game/test/p6_1*.gd", "game/test/p6_2*.gd"],
+        "game/src/simulation/knowledge/problem_activation_adapter.gd",
+        "game/src/simulation/knowledge/problem_spec.gd",
+        "game/src/simulation/knowledge/recipe_knowledge_adapter.gd",
+        "game/src/simulation/knowledge/world_knowledge_store.gd"
+      ],
+      "public_entrypoints": [
+        "WorldKnowledgeStore.available_for",
+        "MeansEndsPlanner.propose_plans",
+        "AgencyContextBuilder.build",
+        "AgencyActionBridge.ground",
+        "RecipeKnowledgeAdapter.known_recipe_refs"
+      ],
+      "allowed_dependencies": [
+        "m09_shared_capability",
+        "m10_items_crafting"
+      ],
+      "test_entrypoints": [
+        "game/test/p6_1*.gd",
+        "game/test/p6_2*.gd"
+      ],
       "legacy_exceptions": []
     }
   ],
-  "protected_paths": ["game/project.godot", "game/contracts", "game/config/runtime.defaults.json", "game/data/demo_world/world_spec.json", "package.json", ".gitignore"]
+  "protected_paths": [
+    "game/project.godot",
+    "game/contracts",
+    "game/config/runtime.defaults.json",
+    "game/data/demo_world/world_spec.json",
+    "package.json",
+    ".gitignore"
+  ]
 }

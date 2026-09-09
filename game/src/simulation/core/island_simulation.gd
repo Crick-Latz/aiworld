@@ -20,6 +20,12 @@ var _encounters := {}
 
 # P6.2 AgencyActionBridge 运行模式：OFF（默认，旧行为逐位不变）/ SHADOW（只记录）/ LIVE_BRIDGE（salient 进考虑集）
 var agency_mode := "OFF"
+# P6.3B-1 §三：计划执行开关（默认 false——不改变任何现有行为）。
+# true 时仅在 LIVE_BRIDGE 下允许计划步骤候选参与考虑集；其他模式只观察不执行。
+var agency_plan_execution_enabled := false
+# P6.3B-1 §七：无进展超时（tick）——以真实进展续期，重规划不刷新
+var agency_no_progress_timeout := 16
+var _plan_tracker: PlanExecutionTracker = null
 var _item_catalog: ItemCatalog = null
 var _recipe_catalog: RecipeCatalog = null
 var _agency_store: WorldKnowledgeStore = null
@@ -358,6 +364,8 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if actor_view.has("last_decision_trace"):
 		a["last_decision_trace"] = actor_view["last_decision_trace"]
 	_enrich_trace(a, decision, gm)
+	# P6.3B-1：决策后通知执行 tracker（选中/暂停/前提失效）
+	_plan_execution_on_decision(id, a, decision)
 
 	# 如果目标不是当前位置，先移动（每 tick 1 格）
 	var target = decision.get("target", null)
@@ -393,8 +401,61 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 		_agency_planner_slim(proposals)
 		_agency_cache[id] = {"hash": h, "problems": str(problems), "proposals": proposals}
 		agency_planner_calls += 1
-	return {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
+	var out := {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
 		"problems": problems, "proposals": proposals}
+	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
+	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
+		var tracker := _execution_tracker()
+		var prep: Dictionary = tracker.prepare_decision(id, proposals, ctx, tick)
+		# R1 §五：decision_tick = sim 真实决策 tick（world["tick"] 在 step 末才更新，
+		# trace["tick"] 会滞后一位——新鲜性校验必须用显式携带的 decision_tick）
+		out["decision_tick"] = tick
+		if not prep.is_empty():
+			out["execution_step"] = prep
+			out["catalog"] = _recipe_catalog_if_any()
+			out["items"] = _item_catalog_if_any()
+	return out
+
+## P6.3B-1：tracker 访问器（超时配置同步）+ 只读 trace/run 暴露
+func _execution_tracker() -> PlanExecutionTracker:
+	if _plan_tracker == null:
+		_plan_tracker = PlanExecutionTracker.new()
+	_plan_tracker.no_progress_timeout = agency_no_progress_timeout
+	return _plan_tracker
+
+func agency_execution_trace() -> Array:
+	if _plan_tracker == null:
+		return []
+	return _plan_tracker.traces.duplicate(true)
+
+func agency_plan_run(actor_id: String) -> Dictionary:
+	if _plan_tracker == null:
+		return {}
+	return (_plan_tracker.runs.get(actor_id, {}) as Dictionary).duplicate(true)
+
+## P6.3B-1 §六 + R1 §五：决策后通知 tracker。证据必须是【本次决策】的 trace——
+## 意图坚持早退不产生新 trace（tick 陈旧）→ 不重挂 pending、不串 run（延续已有尝试）。
+## 选中时把行动身份存到 actor（不污染共享 Registry 候选对象），完成时原样带回。
+func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary) -> void:
+	if not agency_plan_execution_enabled or str(agency_mode) != "LIVE_BRIDGE":
+		return
+	var tr: Dictionary = a.get("last_decision_trace", {})
+	var ex: Dictionary = tr.get("agency_execution", {})
+	# R1 §五：新鲜性校验——agency_execution 必须携带本次决策的 decision_tick。
+	# 意图坚持早退不写新 trace（陈旧 tick）→ 不重挂 pending、不串 run（延续已有尝试）。
+	if int(ex.get("decision_tick", -1)) != tick:
+		return
+	var ident: Dictionary = _execution_tracker().on_decision(id, decision, ex, tick)
+	a["_plan_exec_inflight"] = ident
+
+## P6.3B-1 §六 + R1 §四：行动完成回调——事件段 + 实际库存 + 行动身份；
+## tracker 核对 run_id/attempt_id/step_id/candidate_key 与实际结果
+func _plan_execution_on_complete(id: String, a: Dictionary, action: Dictionary, event_segment: Array) -> void:
+	if not agency_plan_execution_enabled or str(agency_mode) != "LIVE_BRIDGE":
+		return
+	var identity: Dictionary = a.get("_plan_exec_inflight", {})
+	a.erase("_plan_exec_inflight")
+	_execution_tracker().on_action_complete(id, action, event_segment, a["inventory"], tick, identity)
 
 func _agency_planner_slim(proposals: Array) -> void:
 	AgencyActionBridge.annotate_steps(proposals)
@@ -403,6 +464,8 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 	var action: Dictionary = a.get("current_action", {})
 	var action_name := str(action.get("action", "wait"))
 	a["current_action"] = null
+	# P6.3B-1：本次行动产生的事件段（_emit 写 sim.events——按序号切片，供执行完成判定）
+	var _ev_idx := events.size()
 
 	match action_name:
 		"forage_berries":
@@ -457,6 +520,8 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			pass  # wait / ask_for_help / offer_help 暂为占位
 
 	a["activity"] = "刚完成" + str(action.get("desc", action_name))
+	# P6.3B-1 §六：行动完成通知（核对 run/step/candidate 标识 + 实际结果；幂等）
+	_plan_execution_on_complete(id, a, action, events.slice(_ev_idx))
 
 # ── 行动执行 ──
 

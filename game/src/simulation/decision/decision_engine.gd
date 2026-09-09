@@ -27,6 +27,26 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	if agency_mode != "OFF" and not (agency.get("proposals", []) as Array).is_empty():
 		agency_ground = AgencyActionBridge.ground(agency.get("proposals", []), all_actions, tick, str(actor.get("id", "")))
 
+	# P6.3B-1 §五：当前执行步骤的合法候选（PlanStepActionAdapter 匹配）——
+	# 与 grounded 候选共用 salient 机制：保留原 utility/target/duration/recipe_id，
+	# 不加分、不保证选中、不绕过 softmax；不要求 MAIN 已可执行（缺鱼叉时 ACQUIRE/CRAFT
+	# 正是本轮要接通的缺口）。开关关闭（无 execution_step）时代码路径逐位不变。
+	var exec_salient: Array = []
+	var exec_match: Dictionary = {}
+	var exec_step_info: Dictionary = agency.get("execution_step", {})
+	if agency_mode == "LIVE_BRIDGE" and typeof(exec_step_info) == TYPE_DICTIONARY and not exec_step_info.is_empty():
+		exec_match = PlanStepActionAdapter.match_candidates(
+			exec_step_info.get("step", {}), all_actions, agency.get("ctx", {}),
+			agency.get("catalog", null), agency.get("items", null))
+		for c in exec_match.get("candidates", []):
+			exec_salient.append({
+				"candidate_key": AgencyActionBridge.candidate_key(c),
+				"original_utility": float(c.get("utility", 0.0)),
+				"plan_id": str(exec_step_info.get("plan_id", "")),
+				"problem_id": str(exec_step_info.get("root_goal", "")),
+				"execution": true,
+			})
+
 	# 意图坚持 vs 机会成本：承诺强度决定"懒得重想"的概率，
 	# 但当前最优效用远超在执行意图（紧迫差距）时强制重估——
 	# 饿到极限的人不会因为"决定过要休息"就饿死在存粮上。
@@ -64,11 +84,14 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	var agency_swapped_keys: Array = []
 	var agency_evicted_keys: Array = []
 	var agency_candidate_status: Array = []
-	if agency_mode == "LIVE_BRIDGE" and not (agency_ground["grounded_candidates"] as Array).is_empty():
+	# P6.3B-1：salient 池 = grounded 候选 + 当前执行步骤候选（同一挤位/驱逐规则）
+	var salient_pool: Array = (agency_ground["grounded_candidates"] as Array).duplicate()
+	salient_pool.append_array(exec_salient)
+	if agency_mode == "LIVE_BRIDGE" and not salient_pool.is_empty():
 		var salient := {}
-		for gc in agency_ground["grounded_candidates"]:
+		for gc in salient_pool:
 			salient[str(gc["candidate_key"])] = gc
-		var wanted: Array = (agency_ground["grounded_candidates"] as Array).duplicate()
+		var wanted: Array = salient_pool.duplicate()
 		wanted.sort_custom(func(a, b):
 			if float(a["original_utility"]) != float(b["original_utility"]):
 				return float(a["original_utility"]) > float(b["original_utility"])
@@ -181,6 +204,26 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 		trace["agency_swapped_in_keys"] = agency_swapped_keys
 		trace["agency_evicted_keys"] = agency_evicted_keys
 		trace["agency_candidate_status"] = agency_candidate_status
+		# P6.3B-1 §八：执行步骤匹配留痕（selected=false 时带 blocker_reason）。
+		# decision_tick 显式携带本次决策的 sim tick——新鲜性校验用（trace["tick"] 来自
+		# world["tick"]，在 step 末更新，决策时会滞后一位）
+		if not exec_step_info.is_empty():
+			var chosen_key2 := AgencyActionBridge.candidate_key(chosen)
+			var exec_selected := false
+			for e2 in exec_salient:
+				if str(e2["candidate_key"]) == chosen_key2:
+					exec_selected = true
+			trace["agency_execution"] = {
+				"run_id": str(exec_step_info.get("run_id", "")),
+				"plan_id": str(exec_step_info.get("plan_id", "")),
+				"step_id": str((exec_step_info.get("step", {}) as Dictionary).get("step_id", "")),
+				"candidate_keys": exec_salient.map(func(e3): return str(e3["candidate_key"])),
+				"selected": exec_selected,
+				"candidate_key": chosen_key2 if exec_selected else "",
+				"blocker_reason": str(exec_match.get("blocker_reason", "")),
+				"skip": bool(exec_match.get("skip", false)),
+				"decision_tick": int(agency.get("decision_tick", tick)),
+			}
 	var lt4: Dictionary = actor.get("last_transition", {})
 	trace["evidence_for"] = lt4.get("belief_updates", {})
 	trace["belief_change"] = lt4.get("relationship_delta", {})
