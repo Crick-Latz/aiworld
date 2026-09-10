@@ -8,7 +8,7 @@ extends RefCounted
 ## ── run 状态机（R1 §三）──
 ## ACTIVE    ──其他行动被选──→ SUSPENDED（保留 run/步骤/pending 清空）
 ## SUSPENDED ──本步骤候选再次被选──→ ACTIVE（同一 run_id/root_goal；先转态再挂 pending）
-## ACTIVE    ──无进展超时──→ CANCELLED(NO_PROGRESS_TIMEOUT) + 计划进冷却
+## ACTIVE/SUSPENDED ──连续错过执行机会超限──→ CANCELLED(NO_PROGRESS_TIMEOUT) + 计划进冷却
 ## ACTIVE/SUSPENDED ──计划从 proposals 消失──→ CANCELLED(PLAN_DISAPPEARED)
 ## ACTIVE    ──决策时前提类 blocker──→ BLOCKED(reason) + 计划进冷却
 ## ACTIVE    ──MAIN 成功事件──→ COMPLETED(GOAL_ACTION_SUCCEEDED)
@@ -22,24 +22,18 @@ const PREMISE_BLOCKERS := ["MATERIALS_MISSING", "MISSING_CAPABILITY_FOR_CRAFT",
 	"RECIPE_NOT_KNOWN", "UNKNOWN_RECIPE", "SUBGOAL_INERT", "UNKNOWN_KIND",
 	"MALFORMED_STEP", "NO_ITEM_ACTION_MAPPING", "CAPABILITY_MISSING"]
 
-var no_progress_timeout := 16
+var no_progress_timeout := 16  # missed decision opportunities; also cooldown ticks after cancellation
 var runs := {}          # actor_id -> run state（每 actor 只留最新 run；历史在 traces）
 var traces: Array = []  # 执行 trace（§八 schema）
 var _run_seq := {}      # actor_id -> 已创建 run 数
 var _cooldown := {}     # actor_id -> {plan_id: 可重选 tick}（§七 避免超时/阻断后同计划立即重选=忙等）
 
-## 决策前调用：超时裁决 → 有效 run 延续 / 终态重选 → 自动推进已满足步骤。
+## 决策前调用：有效 run 延续 / 终态重选 → 自动推进已满足步骤。
 ## SUSPENDED 与 ACTIVE 同样提供当前步骤（暂停≠退出考虑集——真实恢复入口）。
 ## 返回 {run_id, plan_id, root_goal, step}（无可执行步骤时为空）。
 func prepare_decision(actor_id: String, proposals: Array, ctx: Dictionary, tick: int) -> Dictionary:
 	var run: Dictionary = runs.get(actor_id, {})
 	var prefer_goal := ""
-	# §七 无进展超时：计时以真实进展更新（last_progress_tick 只在推进/完成时写）
-	if not run.is_empty() and str(run.get("state", "")) in ["ACTIVE", "SUSPENDED"]:
-		if tick - int(run.get("last_progress_tick", 0)) > no_progress_timeout:
-			prefer_goal = str(run.get("root_goal", ""))
-			_transition(run, tick, "CANCELLED", "NO_PROGRESS_TIMEOUT", run.get("current_step_id", ""), "")
-			_set_cooldown(actor_id, str(run.get("plan_id", "")), tick)
 	# 有效 run = ACTIVE/SUSPENDED；终态（CANCELLED/BLOCKED/COMPLETED）每次决策都尝试重选
 	var valid := not run.is_empty() and str(run.get("state", "")) in ["ACTIVE", "SUSPENDED"]
 	if valid and not _plan_still_proposed(run, proposals):
@@ -84,6 +78,7 @@ func on_decision(actor_id: String, decision: Dictionary, exec_info: Dictionary, 
 		var was := str(run.get("state", ""))
 		var attempt := int(run.get("attempt_seq", 0)) + 1
 		run["attempt_seq"] = attempt
+		run["missed_opportunities"] = 0
 		if was == "SUSPENDED":
 			# R1 §二：先转态（_transition 会清 pending），再写入本次身份——顺序不可反
 			_transition(run, tick, "ACTIVE", "RUN_RESUMED", step_id, ckey)
@@ -108,9 +103,20 @@ func on_decision(actor_id: String, decision: Dictionary, exec_info: Dictionary, 
 		if PREMISE_BLOCKERS.has(reason):
 			_transition(run, tick, "BLOCKED", reason, step_id, "")
 			_set_cooldown(actor_id, str(run.get("plan_id", "")), tick)
-	elif str(run.get("state", "")) == "ACTIVE":
-		_transition(run, tick, "SUSPENDED", "OTHER_ACTION_CHOSEN", step_id,
-			AgencyActionBridge.candidate_key(decision))
+	else:
+		# Count actual decision opportunities, not elapsed world ticks. A long
+		# unrelated action can span many ticks without giving this plan a chance.
+		var missed := int(run.get("missed_opportunities", 0)) + 1
+		run["missed_opportunities"] = missed
+		if missed > no_progress_timeout:
+			_transition(run, tick, "CANCELLED", "NO_PROGRESS_TIMEOUT", step_id, "")
+			_set_cooldown(actor_id, str(run.get("plan_id", "")), tick)
+		elif str(run.get("state", "")) == "ACTIVE":
+			_transition(run, tick, "SUSPENDED", "OTHER_ACTION_CHOSEN", step_id,
+				AgencyActionBridge.candidate_key(decision))
+		else:
+			_note(run, tick, "STEP_CANDIDATE_NOT_SELECTED", step_id,
+				AgencyActionBridge.candidate_key(decision), "missed_opportunities=%d" % missed)
 	return {}
 
 ## 行动完成回调（R1 §四）：核对行动身份（actor 内的 in-flight 身份由 sim 在行动启动时
@@ -258,6 +264,7 @@ func _select_new_run(actor_id: String, proposals: Array, ctx: Dictionary, tick: 
 		"reason_code": "",
 		"pending": {},
 		"attempt_seq": 0,
+		"missed_opportunities": 0,
 		"baseline_items": (ctx.get("possessed_items", {}) as Dictionary).duplicate(true),
 	}
 	runs[actor_id] = run
@@ -317,11 +324,13 @@ func _advance(run: Dictionary, tick: int) -> void:
 		return
 	run["current_step_id"] = next_id
 	run["last_progress_tick"] = tick
+	run["missed_opportunities"] = 0
 	run["pending"] = {}
 	_note(run, tick, "STEP_ADVANCED", next_id, "")
 
 func _step_done(run: Dictionary, step: Dictionary, tick: int, refs: Array) -> void:
 	run["last_progress_tick"] = tick
+	run["missed_opportunities"] = 0
 	_trace(run, tick, "STEP_COMPLETED", str(run.get("state", "")), str(run.get("state", "")),
 		str(step.get("step_id", "")), str(run.get("selected_candidate_key", "")) if not refs.is_empty() else "", refs)
 

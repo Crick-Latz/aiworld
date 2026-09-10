@@ -244,6 +244,9 @@ func _run() -> void:
 	m_tracker.prepare_decision("u", [_fish_plan(1)], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), 1)
 	var m_run1: Dictionary = m_tracker.runs["u"]
 	var m_old_run_id := str(m_run1.get("run_id", ""))
+	for tk in range(2, 5):
+		m_tracker.prepare_decision("u", [_fish_plan(1)], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), tk)
+		_miss_opportunity(m_tracker, "u", tk)
 	m_tracker.prepare_decision("u", [_fish_plan(1), _berry_plan()], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), 5)
 	var m_run2: Dictionary = m_tracker.runs["u"]
 	var m_stale: Dictionary = m_tracker.on_action_complete("u", {"action": "gather_wood", "target": Vector2i(4, 4)},
@@ -315,6 +318,8 @@ func _run() -> void:
 	var sr2_run_at := {}
 	for tk in range(2, 12):
 		sr2.prepare_decision("u", [_fish_plan(1)], sr2_ctx, tk)
+		if tk <= 6:
+			_miss_opportunity(sr2, "u", tk)
 		var pr2: Dictionary = sr2.runs.get("u", {})
 		if not pr2.is_empty():
 			sr2_run_at[tk] = str(pr2.get("run_id", ""))
@@ -362,19 +367,22 @@ func _run() -> void:
 	sr4.prepare_decision("u", [_fish_plan(1)], sr4_ctx, 1)
 	var sr4_ident1: Dictionary = _decide(sr4, "u", {"action": "gather_wood", "target": Vector2i(4, 4)},
 		{"step_id": "ACQUIRE:item:wood", "selected": true, "candidate_key": "gather_wood@4,4", "blocker_reason": ""}, 1)
-	# t5 超时取消（5-1=4>2），冷却到 t7；t8 重启同一计划 → run2 选同一候选
-	sr4.prepare_decision("u", [_fish_plan(1)], sr4_ctx, 5)
-	sr4.prepare_decision("u", [_fish_plan(1)], sr4_ctx, 8)
+	# 三次真正未选择该步骤才取消；其间流逝多少世界 tick 不计作机会。
+	for tk in [5, 6, 7]:
+		sr4.prepare_decision("u", [_fish_plan(1)], sr4_ctx, tk)
+		_miss_opportunity(sr4, "u", tk)
+	# t7 取消、冷却到 t9；t10 重启同一计划 → run2 选同一候选
+	sr4.prepare_decision("u", [_fish_plan(1)], sr4_ctx, 10)
 	var sr4_run2: Dictionary = sr4.runs["u"]
 	var sr4_ident2: Dictionary = _decide(sr4, "u", {"action": "gather_wood", "target": Vector2i(4, 4)},
-		{"step_id": "ACQUIRE:item:wood", "selected": true, "candidate_key": "gather_wood@4,4", "blocker_reason": ""}, 8)
+		{"step_id": "ACQUIRE:item:wood", "selected": true, "candidate_key": "gather_wood@4,4", "blocker_reason": ""}, 10)
 	var sr4_old: Dictionary = sr4.on_action_complete("u", {"action": "gather_wood", "target": Vector2i(4, 4)},
-		[_ev(4, "gathered_wood", "u")], {"wood": 1}, 8, sr4_ident1)
+		[_ev(4, "gathered_wood", "u")], {"wood": 1}, 10, sr4_ident1)
 	var sr4_step_after_old := str(sr4_run2.get("current_step_id", ""))
 	var sr4_new: Dictionary = sr4.on_action_complete("u", {"action": "gather_wood", "target": Vector2i(4, 4)},
-		[_ev(5, "gathered_wood", "u")], {"wood": 1}, 9, sr4_ident2)
+		[_ev(5, "gathered_wood", "u")], {"wood": 1}, 11, sr4_ident2)
 	var sr4_dup: Dictionary = sr4.on_action_complete("u", {"action": "gather_wood", "target": Vector2i(4, 4)},
-		[_ev(6, "gathered_wood", "u")], {"wood": 1}, 9, sr4_ident2)
+		[_ev(6, "gathered_wood", "u")], {"wood": 1}, 11, sr4_ident2)
 	_check("sr4_attempt_identity_collision", sr4_old.is_empty() and sr4_step_after_old == "ACQUIRE:item:wood"
 		and bool(sr4_new.get("advanced", false)) and sr4_dup.is_empty()
 		and str(sr4_ident1.get("run_id", "")) != str(sr4_ident2.get("run_id", "")),
@@ -408,22 +416,28 @@ func _run() -> void:
 	else:
 		_check("sr5_stale_trace_no_rehook", false, "no map")
 
-	# ── P：无进展超时——不因重规划续期 ──
+	# ── P：无进展按真实决策机会计数，不按世界 tick 流逝 ──
 	var p_tracker := PlanExecutionTracker.new()
 	p_tracker.no_progress_timeout = 4
 	var p_plan := _fish_plan(1)
 	p_tracker.prepare_decision("u", [p_plan], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), 1)
+	# 从 t1 跳到 t100，但期间没有 on_decision：不得把忙碌时间伪装成 99 次机会。
+	p_tracker.prepare_decision("u", [p_plan], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), 100)
+	_check("p_elapsed_time_without_opportunity_not_timeout",
+		str(p_tracker.runs["u"].get("state", "")) == "ACTIVE"
+		and str(p_tracker.runs["u"].get("run_id", "")) == "u#1")
 	var p_last_progress := -1
 	var p_cancel_tick := -1
-	for tk in range(2, 9):
+	for tk in range(101, 108):
 		p_tracker.prepare_decision("u", [_fish_plan(1)], _ctx({"wood": 0}, [], ["WOOD", "SHELL", "FISH"], [], ["recipe_fish_spear"]), tk)
+		_miss_opportunity(p_tracker, "u", tk)
 		var pr: Dictionary = p_tracker.runs.get("u", {})
 		if p_last_progress < 0 and not pr.is_empty():
 			p_last_progress = int(pr.get("last_progress_tick", -1))
 		if p_cancel_tick < 0 and str(pr.get("reason_code", "")) == "NO_PROGRESS_TIMEOUT":
 			p_cancel_tick = tk
-	_check("p_no_progress_timeout", p_last_progress == 1 and p_cancel_tick == 6,
-		"last_progress=%d cancel_at=%d（重规划每 tick 新实例——未续期）" % [p_last_progress, p_cancel_tick])
+	_check("p_no_progress_timeout", p_last_progress == 1 and p_cancel_tick == 105,
+		"last_progress=%d cancel_at=%d（第 5 次真实错失机会取消）" % [p_last_progress, p_cancel_tick])
 
 	# ── Q：同 seed 同输入双跑——执行 trace 与结果一致 ──
 	if mq != null:
@@ -584,6 +598,15 @@ func _decide(tracker: PlanExecutionTracker, actor_id: String, action: Dictionary
 	var current := info.duplicate(true)
 	current["run_id"] = tracker.runs[actor_id]["run_id"]
 	return tracker.on_decision(actor_id, action, current, tick)
+
+func _miss_opportunity(tracker: PlanExecutionTracker, actor_id: String, tick: int) -> void:
+	var run: Dictionary = tracker.runs.get(actor_id, {})
+	if run.is_empty() or str(run.get("state", "")) not in ["ACTIVE", "SUSPENDED"]:
+		return
+	_decide(tracker, actor_id, {"action": "do_nothing", "target": null}, {
+		"step_id": str(run.get("current_step_id", "")), "selected": false,
+		"candidate_key": "", "blocker_reason": "",
+	}, tick)
 
 ## 手造鱼链计划（ACQUIRE wood×gap → ACQUIRE shells×gap → CRAFT → MAIN）
 func _fish_plan(wood_gap: int) -> Dictionary:

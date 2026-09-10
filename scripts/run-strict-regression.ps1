@@ -47,7 +47,7 @@ $suites = @(
     @{ Name = "p6_2_agency_action_bridge"; Script = "res://test/p6_2_agency_action_bridge.gd"; Expected = 33 },
     @{ Name = "p6_3_items"; Script = "res://test/p6_3_items.gd"; Expected = 45 },
     @{ Name = "p6_3b_plan_steps"; Script = "res://test/p6_3b_plan_steps.gd"; Expected = 23 },
-    @{ Name = "p6_3b_execution"; Script = "res://test/p6_3b_execution.gd"; Expected = 27 },
+    @{ Name = "p6_3b_execution"; Script = "res://test/p6_3b_execution.gd"; Expected = 28 },
     @{ Name = "intention_revalidation"; Script = "res://test/intention_revalidation.gd"; Expected = 14 }
     @{ Name = "intention_utility"; Script = "res://test/intention_utility.gd"; Expected = 6 }
     @{ Name = "execution_receipt"; Script = "res://test/execution_receipt.gd"; Expected = 6 }

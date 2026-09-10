@@ -27,7 +27,7 @@ var agency_mode := "OFF"
 # P6.3B-1 §三：计划执行开关（默认 false——不改变任何现有行为）。
 # true 时仅在 LIVE_BRIDGE 下允许计划步骤候选参与考虑集；其他模式只观察不执行。
 var agency_plan_execution_enabled := false
-# P6.3B-1 §七：无进展超时（tick）——以真实进展续期，重规划不刷新
+# P6.3B-3：无进展上限按真正错失的决策机会计数；同值继续作为取消后的冷却 tick 数。
 var agency_no_progress_timeout := 16
 var _plan_tracker: PlanExecutionTracker = null
 var _item_catalog: ItemCatalog = null
