@@ -325,6 +325,12 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 		# 带地点目标的行动（采集/打水/伐木/探废墟）同样边走边执行——
 		# 否则 2-tick 行动总在半路完成（67 次伐木 0 成功的死因）
 		var cur_action: Dictionary = a.get("current_action", {})
+		# P6.3B-2: if the actor's latest perception explicitly disconfirms the
+		# resource target that justified this action, stop before further travel or
+		# work. This reads the actor knowledge view, never world resource truth.
+		if ActionTargetContract.is_disconfirmed(cur_action, _known_resources_view(a)):
+			_abort_invalidated_action(id, a, new_events)
+			return
 		if cur_action.has("target_actor") and actors.has(str(cur_action["target_actor"])):
 			# P5（SN-B 修复）：目标在视野内 → 实时追踪合法并刷新 last_seen；
 			# 不在视野内 → 只用记忆位置（扑空是真实结果）。不再读真坐标当 GPS。
@@ -574,6 +580,24 @@ func _abort_unreachable_action(id: String, a: Dictionary, _new_events: Array) ->
 	_emit("action_target_unreachable", id, "%s 找不到通往行动地点的路" % a["display_name"],
 		{"action": str(action.get("action", "")), "target": str(action.get("target", "")), "actual": str(a["tile"])})
 	a["activity"] = "无法抵达" + str(action.get("desc", action.get("action", "目标")))
+	_plan_execution_on_complete(id, a, action, events.slice(event_start))
+
+func _abort_invalidated_action(id: String, a: Dictionary, _new_events: Array) -> void:
+	var action: Dictionary = a.get("current_action", {}).duplicate(true)
+	var event_start := events.size()
+	a["current_action"] = null
+	a["action_ticks_left"] = 0
+	a.erase("action_travel_stall_ticks")
+	var intention: IntentionManager = a.get("intentions", null)
+	if intention != null:
+		intention.force_interrupt("TARGET_INVALIDATED")
+	_emit("action_target_invalidated", id,
+		"%s 发现目标地点已无法提供所需资源" % a["display_name"], {
+			"action": str(action.get("action", "")),
+			"target": str(action.get("target", "")),
+			"target_source_key": str(action.get(ActionTargetContract.SOURCE_KEY_FIELD, "")),
+		})
+	a["activity"] = "重新考虑" + str(action.get("desc", action.get("action", "目标")))
 	_plan_execution_on_complete(id, a, action, events.slice(event_start))
 
 # ── 行动执行 ──

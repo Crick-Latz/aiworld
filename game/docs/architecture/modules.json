@@ -94,6 +94,7 @@
       "owned_paths": [
         "game/src/simulation/behavior/agent_brain.gd",
         "game/src/simulation/cognition/intention_manager.gd",
+        "game/src/simulation/decision/action_target_contract.gd",
         "game/src/simulation/decision/action_registry.gd",
         "game/src/simulation/decision/decision_engine.gd"
       ],
@@ -114,7 +115,8 @@
         "game/test/intention_utility.gd",
         "game/test/intention_utility_probe.gd (read-only utility audit)",
         "game/test/plan_completion_audit.gd (read-only completion identity audit)",
-        "game/test/execution_receipt.gd"
+        "game/test/execution_receipt.gd",
+        "game/test/resource_target_revalidation.gd"
       ],
       "legacy_exceptions": []
     },

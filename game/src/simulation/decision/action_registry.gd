@@ -80,7 +80,9 @@ static func _forage(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, p
 	var hunger := _n(needs.get("hunger", 0), 200, 800)
 	var prag := p.effective_trait("pragmatism", needs)
 	var score := UtilityCurves.quadratic(hunger) * (0.6 + prag * 0.4) * _dp(pos, nearest)
-	return {"action": "forage_berries", "target": nearest, "utility": score, "desc": "去采浆果", "duration": 1}
+	return ActionTargetContract.with_source(
+		{"action": "forage_berries", "target": nearest, "utility": score, "desc": "去采浆果", "duration": 1},
+		"berry_bushes")
 
 static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	var springs: Array = _known_sources(actor, "water_springs")
@@ -91,7 +93,9 @@ static func _drink(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, worl
 		return null
 	var thirst := _n(needs.get("thirst", 0), 300, 800)
 	var score := UtilityCurves.exponential(thirst, 6.0) * _dp(pos, nearest)
-	return {"action": "drink_water", "target": nearest, "utility": score, "desc": "去喝水", "duration": 1}
+	return ActionTargetContract.with_source(
+		{"action": "drink_water", "target": nearest, "utility": score, "desc": "去喝水", "duration": 1},
+		"water_springs")
 
 static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	_craft_catalogs()
@@ -107,7 +111,9 @@ static func _fish(p: PersonalityProfile, needs: Dictionary, inv: Dictionary, pos
 	var hunger := _n(needs.get("hunger", 0), 300, 800)
 	var action := p.effective_trait("action_bias", needs)
 	var score := UtilityCurves.quadratic(hunger) * (0.7 + action * 0.3) * _dp(pos, nearest)
-	return {"action": "fish", "target": nearest, "utility": score, "desc": "去捕鱼", "duration": 2}
+	return ActionTargetContract.with_source(
+		{"action": "fish", "target": nearest, "utility": score, "desc": "去捕鱼", "duration": 2},
+		"fish_spots")
 
 static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):
 	var beaches: Array = _known_sources(actor, "shell_beaches")
@@ -124,7 +130,9 @@ static func _shells(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, wor
 	if saturation <= 0.0:
 		return null
 	var score := (0.3 + curiosity * 0.4 + hunger * 0.12) * _dp(pos, nearest) * saturation
-	return {"action": "gather_shells", "target": nearest, "utility": score, "desc": "去捡贝壳", "duration": 1}
+	return ActionTargetContract.with_source(
+		{"action": "gather_shells", "target": nearest, "utility": score, "desc": "去捡贝壳", "duration": 1},
+		"shell_beaches")
 
 static func _shelter(p: PersonalityProfile, phys: Dictionary, inv: Dictionary, pos: Vector2i, world: Dictionary):
 	if int(inv.get("wood", 0)) < 2:
@@ -240,7 +248,9 @@ static func _ruins(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, worl
 	var curiosity := p.effective_trait("curiosity", needs)
 	var caution := p.effective_trait("caution", needs)
 	var score := (0.3 + curiosity * 0.5 - caution * 0.2) * _dp(pos, nearest)
-	return {"action": "search_ruins", "target": nearest, "utility": score, "desc": "搜索废弃营地", "duration": 2}
+	return ActionTargetContract.with_source(
+		{"action": "search_ruins", "target": nearest, "utility": score, "desc": "搜索废弃营地", "duration": 2},
+		"ruins")
 
 ## 社交：孤独时主动走向同伴（不是原地干聊）——人的聚集是一切社交剧情的前提。
 static func _socialize(p: PersonalityProfile, needs: Dictionary, actor: Dictionary, world: Dictionary):
@@ -533,7 +543,9 @@ static func _gather_wood(p: PersonalityProfile, needs: Dictionary, inv: Dictiona
 		return null
 	var prag := p.effective_trait("pragmatism", needs)
 	var score := (0.25 + prag * 0.35) * _dp(pos, nearest)
-	return {"action": "gather_wood", "target": nearest, "utility": score, "desc": "去收集木头", "duration": 2}
+	return ActionTargetContract.with_source(
+		{"action": "gather_wood", "target": nearest, "utility": score, "desc": "去收集木头", "duration": 2},
+		"trees")
 
 ## 火边休憩：篝火是营地的心脏——人会聚到火边，社交与分享在这里发生
 static func _sit_by_fire(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary = {}):

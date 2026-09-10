@@ -52,6 +52,7 @@ $suites = @(
     @{ Name = "intention_utility"; Script = "res://test/intention_utility.gd"; Expected = 6 }
     @{ Name = "execution_receipt"; Script = "res://test/execution_receipt.gd"; Expected = 6 }
     @{ Name = "action_travel"; Script = "res://test/action_travel_lifecycle.gd"; Expected = 11 }
+    @{ Name = "resource_target_revalidation"; Script = "res://test/resource_target_revalidation.gd"; Expected = 15 }
 )
 
 $failures = [Collections.Generic.List[string]]::new()
