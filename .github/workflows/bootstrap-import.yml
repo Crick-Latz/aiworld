@@ -5,6 +5,7 @@ on:
     branches:
       - bootstrap/p6-4-local-integrated
     paths:
+      - AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
       - .bootstrap/AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
 
 permissions:
@@ -23,7 +24,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive=.bootstrap/AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
+          archive=AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
+          if [[ ! -f "${archive}" ]]; then
+            archive=.bootstrap/AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
+          fi
           echo "cc04d2c4d05808a27b85ef469b5c680d47c9e8d4a533baba59440cab39b77578  ${archive}" | sha256sum -c -
           rm -rf /tmp/aiworld-import
           mkdir -p /tmp/aiworld-import
