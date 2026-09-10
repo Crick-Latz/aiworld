@@ -25,12 +25,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Assemble Git bundle
+      - name: Validate marker and assemble Git bundle
         shell: bash
         run: |
           set -euo pipefail
 
+          expected_imported_sha=dff3b5de1483f9b863dc698c7ab48d2488740923
+          expected_bundle_sha=a6bc56b9311bf84b88edfa30cf24c8ba51a4bcfcfdb661b9159af4a6666e6c0e
+          expected_bundle_bytes=1264114
+          marker=AIWORLD_GITHUB_BOOTSTRAP.ready
           bundle=/tmp/AIWORLD_GITHUB_BOOTSTRAP.bundle
+
+          test -f "${marker}"
+          tr -d '\r' < "${marker}" > /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+          grep -Fx "checkpoint=${expected_imported_sha}" /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+          grep -Fx "bundle_sha256=${expected_bundle_sha}" /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+          grep -Fx "bundle_bytes=${expected_bundle_bytes}" /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+          grep -Fx "upload_mode=single" /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+          grep -Fx "upload_files=1" /tmp/AIWORLD_GITHUB_BOOTSTRAP.ready
+
           if [[ -f AIWORLD_GITHUB_BOOTSTRAP.bundle ]]; then
             cp AIWORLD_GITHUB_BOOTSTRAP.bundle "${bundle}"
           else
@@ -40,12 +53,15 @@ jobs:
               echo "No Git bundle or bundle parts were uploaded." >&2
               exit 1
             fi
-            printf '%s\n' "${parts[@]}" | sort
-            cat $(printf '%s\n' "${parts[@]}" | sort) > "${bundle}"
+            mapfile -t sorted_parts < <(printf '%s\n' "${parts[@]}" | sort)
+            cat "${sorted_parts[@]}" > "${bundle}"
           fi
 
           test -s "${bundle}"
-          sha256sum "${bundle}"
+          actual_bytes=$(stat -c '%s' "${bundle}")
+          echo "Bundle bytes: ${actual_bytes}"
+          test "${actual_bytes}" = "${expected_bundle_bytes}"
+          echo "${expected_bundle_sha}  ${bundle}" | sha256sum -c -
           git bundle verify "${bundle}"
 
       - name: Import and validate local checkpoint
