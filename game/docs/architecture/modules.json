@@ -1,6 +1,6 @@
 {
   "format_version": "1",
-  "updated": "2026-09-09",
+  "updated": "2026-09-10",
   "note": "实际存在文件的归属登记（OBS-01/23-A 基线）。新目录 src/simulation 等随 OBS 包长出，不把未来目录当已实现模块。",
   "modules": [
     {
@@ -17,7 +17,11 @@
         "game/src/autoload/game_session.gd",
         "game/src/autoload/simulation.gd",
         "game/src/autoload/save_manager.gd",
-        "game/src/autoload/ai_client.gd"
+        "game/src/autoload/ai_client.gd",
+        "game/src/runtime/simulation_bootstrap.gd",
+        "game/src/runtime/simulation_audit.gd",
+        "game/src/runtime/simulation_cli.gd",
+        "game/config/simulation_profiles.json"
       ],
       "public_entrypoints": [
         "场景装配与生命周期；不计算 NPC 目标/事件文案/库存"
@@ -28,14 +32,16 @@
         "m06_behavior",
         "m13_presentation",
         "m15_ui",
-        "m16_camera_input"
+        "m16_camera_input",
+        "m11_knowledge_agency"
       ],
       "test_entrypoints": [
         "game/test/run_all.gd(旧回归)",
         "game/test/player_physics.gd",
         "game/test/player_soak.gd",
         "game/test/camera_rotation.gd",
-        "game/test/observer_sim.gd"
+        "game/test/observer_sim.gd",
+        "game/test/framework_runtime.gd"
       ],
       "legacy_exceptions": [
         "main.gd 含 HUD 文本/Toast/截图自动驾驶（WP-04 历史结构，观察版不复制的对象）"
@@ -52,7 +58,8 @@
         "game/src/map/map_snapshot_codec.gd",
         "game/src/map/map_navigator.gd",
         "game/src/map/map_controller.gd",
-        "game/src/map/map_boundary_builder.gd"
+        "game/src/map/map_boundary_builder.gd",
+        "game/src/map/headless_map_query.gd"
       ],
       "public_entrypoints": [
         "MapController 窄接口",
@@ -96,7 +103,8 @@
         "game/src/simulation/cognition/intention_manager.gd",
         "game/src/simulation/decision/action_target_contract.gd",
         "game/src/simulation/decision/action_registry.gd",
-        "game/src/simulation/decision/decision_engine.gd"
+        "game/src/simulation/decision/decision_engine.gd",
+        "game/src/simulation/decision/plan_step_value_model.gd"
       ],
       "public_entrypoints": [
         "每 tick 的 CommandProposal（目标选择/状态推进）"
@@ -116,7 +124,9 @@
         "game/test/intention_utility_probe.gd (read-only utility audit)",
         "game/test/plan_completion_audit.gd (read-only completion identity audit)",
         "game/test/execution_receipt.gd",
-        "game/test/resource_target_revalidation.gd"
+        "game/test/resource_target_revalidation.gd",
+        "game/test/plan_step_value.gd",
+        "game/test/p6_3b_causal_value_pilot.gd (paired natural experiment; non-acceptance)"
       ],
       "legacy_exceptions": []
     },
@@ -268,14 +278,19 @@
         "game/src/simulation/knowledge/problem_activation_adapter.gd",
         "game/src/simulation/knowledge/problem_spec.gd",
         "game/src/simulation/knowledge/recipe_knowledge_adapter.gd",
-        "game/src/simulation/knowledge/world_knowledge_store.gd"
+        "game/src/simulation/knowledge/world_knowledge_store.gd",
+        "game/src/simulation/knowledge/plan_adoption_policy.gd",
+        "game/src/simulation/knowledge/cognitive_case_library.gd",
+        "game/data/knowledge/cases/engineering_fixture.json"
       ],
       "public_entrypoints": [
         "WorldKnowledgeStore.available_for",
         "MeansEndsPlanner.propose_plans",
         "AgencyContextBuilder.build",
         "AgencyActionBridge.ground",
-        "RecipeKnowledgeAdapter.known_recipe_refs"
+        "RecipeKnowledgeAdapter.known_recipe_refs",
+        "PlanAdoptionPolicy.deliberate",
+        "CognitiveCaseLibrary.load_pack/retrieve (ADVISORY_ONLY)"
       ],
       "allowed_dependencies": [
         "m09_shared_capability",
@@ -285,7 +300,11 @@
         "game/test/p6_1*.gd",
         "game/test/p6_2*.gd",
         "game/test/p6_3b_execution_pilot.gd (--self-test or fixed paired pilot)",
-        "game/test/p6_3b_execution_diagnosis.gd (--self-test or fixed diagnostic replay)"
+        "game/test/p6_3b_execution_diagnosis.gd (--self-test or fixed diagnostic replay)",
+        "game/test/plan_adoption.gd",
+        "game/test/cognitive_cases.gd",
+        "game/test/p6_4_adoption_pilot.gd",
+        "game/test/agency_funnel_probe.gd"
       ],
       "legacy_exceptions": []
     }

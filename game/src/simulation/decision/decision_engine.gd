@@ -28,21 +28,37 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	if agency_mode != "OFF" and not (agency.get("proposals", []) as Array).is_empty():
 		agency_ground = AgencyActionBridge.ground(agency.get("proposals", []), all_actions, tick, str(actor.get("id", "")))
 
-	# P6.3B-1 §五：当前执行步骤的合法候选（PlanStepActionAdapter 匹配）——
-	# 与 grounded 候选共用 salient 机制：保留原 utility/target/duration/recipe_id，
-	# 不加分、不保证选中、不绕过 softmax；不要求 MAIN 已可执行（缺鱼叉时 ACQUIRE/CRAFT
-	# 正是本轮要接通的缺口）。开关关闭（无 execution_step）时代码路径逐位不变。
+	# P6.3B-1 §五：当前执行步骤的合法候选（PlanStepActionAdapter 匹配）。
+	# 默认仍保持 Registry utility 原值；P6.3B-4 的独立开关开启后，PlanStepValueModel
+	# 才允许根问题的因果价值有限度地补足当前步骤 utility。候选身份/target/duration/
+	# recipe_id 不变，也仍需经过原 Consideration Set + softmax。
 	var exec_salient: Array = []
+	var exec_value_rows: Array = []
 	var exec_match: Dictionary = {}
 	var exec_step_info: Dictionary = agency.get("execution_step", {})
+	var causal_step_value_enabled := bool(agency.get("causal_step_value_enabled", false))
 	if agency_mode == "LIVE_BRIDGE" and typeof(exec_step_info) == TYPE_DICTIONARY and not exec_step_info.is_empty():
 		exec_match = PlanStepActionAdapter.match_candidates(
 			exec_step_info.get("step", {}), all_actions, agency.get("ctx", {}),
 			agency.get("catalog", null), agency.get("items", null))
 		for c in exec_match.get("candidates", []):
+			var key := AgencyActionBridge.candidate_key(c)
+			var original_utility := float(c.get("utility", 0.0))
+			var effective_utility := original_utility
+			if causal_step_value_enabled:
+				var valuation := PlanStepValueModel.assess(actor, exec_step_info, c)
+				effective_utility = float(valuation.get("effective_utility", original_utility))
+				var value_row := valuation.duplicate(true)
+				value_row["candidate_key"] = key
+				exec_value_rows.append(value_row)
+				if not is_equal_approx(effective_utility, original_utility):
+					var effective_candidate: Dictionary = c.duplicate(true)
+					effective_candidate["utility"] = effective_utility
+					_replace_candidate_by_key(all_actions, key, effective_candidate)
 			exec_salient.append({
-				"candidate_key": AgencyActionBridge.candidate_key(c),
-				"original_utility": float(c.get("utility", 0.0)),
+				"candidate_key": key,
+				"original_utility": original_utility,
+				"effective_utility": effective_utility,
 				"plan_id": str(exec_step_info.get("plan_id", "")),
 				"problem_id": str(exec_step_info.get("root_goal", "")),
 				"execution": true,
@@ -231,6 +247,8 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 				"blocker_reason": str(exec_match.get("blocker_reason", "")),
 				"skip": bool(exec_match.get("skip", false)),
 				"decision_tick": int(agency.get("decision_tick", tick)),
+				"utility_mode": "CAUSAL_STEP_VALUE" if causal_step_value_enabled else "REGISTRY_ONLY",
+				"candidate_values": exec_value_rows.duplicate(true),
 			}
 	var lt4: Dictionary = actor.get("last_transition", {})
 	trace["evidence_for"] = lt4.get("belief_updates", {})
@@ -258,6 +276,12 @@ static func _write_execution_receipt(actor: Dictionary, agency: Dictionary, matc
 		"selected": selected, "candidate_key": key if selected else "",
 		"chosen_key": key, "selection_mode": selection_mode,
 		"blocker_reason": matched.get("blocker_reason", "")}
+
+static func _replace_candidate_by_key(actions: Array, key: String, replacement: Dictionary) -> void:
+	for i in range(actions.size()):
+		if AgencyActionBridge.candidate_key(actions[i]) == key:
+			actions[i] = replacement
+			return
 
 ## 不行动是合法行为：观察、发呆、任由事情发生
 static func _do_nothing() -> Dictionary:

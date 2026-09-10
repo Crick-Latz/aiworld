@@ -20,6 +20,12 @@ node_modules/
 # 基线约定的本地文件（WP-01 起）
 .tmp/
 .env
+.env.*
+!.env.example
 config/runtime.local.json
 game/config/runtime.local.json
 game/config/ai.local.json
+
+# Python validation caches
+__pycache__/
+*.pyc

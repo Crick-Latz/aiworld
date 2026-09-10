@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "suites": [
+    {
+      "name": "run_all",
+      "script": "res://test/run_all.gd",
+      "expected": 199
+    },
+    {
+      "name": "player_physics",
+      "script": "res://test/player_physics.gd",
+      "expected": 28
+    },
+    {
+      "name": "camera_rotation",
+      "script": "res://test/camera_rotation.gd",
+      "expected": 10,
+      "fixed_fps": 60
+    },
+    {
+      "name": "observer_sim",
+      "script": "res://test/observer_sim.gd",
+      "expected": 13
+    },
+    {
+      "name": "story_causal",
+      "script": "res://test/story_causal.gd",
+      "expected": 15
+    },
+    {
+      "name": "story_dynamic",
+      "script": "res://test/story_dynamic.gd",
+      "expected": 11
+    },
+    {
+      "name": "story_save",
+      "script": "res://test/story_save.gd",
+      "expected": 6
+    },
+    {
+      "name": "ai_mock",
+      "script": "res://test/ai_mock.gd",
+      "expected": 10
+    },
+    {
+      "name": "island_sim",
+      "script": "res://test/island_sim.gd",
+      "expected": 8
+    },
+    {
+      "name": "p0_cognition",
+      "script": "res://test/p0_cognition.gd",
+      "expected": 9
+    },
+    {
+      "name": "p1_social",
+      "script": "res://test/p1_social.gd",
+      "expected": 33
+    },
+    {
+      "name": "p1_5_cognition",
+      "script": "res://test/p1_5_cognition.gd",
+      "expected": 24
+    },
+    {
+      "name": "p1_6_cognition",
+      "script": "res://test/p1_6_cognition.gd",
+      "expected": 27
+    },
+    {
+      "name": "p1_7_ecology",
+      "script": "res://test/p1_7_ecology.gd",
+      "expected": 10
+    },
+    {
+      "name": "p2_institution",
+      "script": "res://test/p2_institution.gd",
+      "expected": 44
+    },
+    {
+      "name": "narrative_ir",
+      "script": "res://test/narrative_ir.gd",
+      "expected": 24
+    },
+    {
+      "name": "p3_narrative",
+      "script": "res://test/p3_narrative.gd",
+      "expected": 78,
+      "allowed_engine_errors": [
+        "ERROR: Parse JSON failed. Error at line 0: Unexpected character"
+      ],
+      "expected_engine_errors": [
+        "ERROR: Parse JSON failed. Error at line 0: Unexpected character"
+      ]
+    },
+    {
+      "name": "p4_threads",
+      "script": "res://test/p4_threads.gd",
+      "expected": 17
+    },
+    {
+      "name": "p5_spatial",
+      "script": "res://test/p5_spatial.gd",
+      "expected": 15
+    },
+    {
+      "name": "p4_3_thread_renderer",
+      "script": "res://test/p4_3_thread_renderer.gd",
+      "expected": 15,
+      "allowed_engine_errors": [
+        "ERROR: Parse JSON failed. Error at line 0: Expected 'true', 'false', or 'null', got 'not'",
+        "ERROR: Parse JSON failed. Error at line 0: Expected 'true', 'false', or 'null', got 'garbage'"
+      ],
+      "expected_engine_errors": [
+        "ERROR: Parse JSON failed. Error at line 0: Expected 'true', 'false', or 'null', got 'not'",
+        "ERROR: Parse JSON failed. Error at line 0: Expected 'true', 'false', or 'null', got 'garbage'"
+      ]
+    },
+    {
+      "name": "p6_world_knowledge",
+      "script": "res://test/p6_world_knowledge.gd",
+      "expected": 15
+    },
+    {
+      "name": "p6_1_runtime_agency_shadow",
+      "script": "res://test/p6_1_runtime_agency_shadow.gd",
+      "expected": 15
+    },
+    {
+      "name": "p6_2_agency_action_bridge",
+      "script": "res://test/p6_2_agency_action_bridge.gd",
+      "expected": 33
+    },
+    {
+      "name": "p6_3_items",
+      "script": "res://test/p6_3_items.gd",
+      "expected": 45
+    },
+    {
+      "name": "p6_3b_plan_steps",
+      "script": "res://test/p6_3b_plan_steps.gd",
+      "expected": 23
+    },
+    {
+      "name": "p6_3b_execution",
+      "script": "res://test/p6_3b_execution.gd",
+      "expected": 28
+    },
+    {
+      "name": "plan_step_value",
+      "script": "res://test/plan_step_value.gd",
+      "expected": 18
+    },
+    {
+      "name": "intention_revalidation",
+      "script": "res://test/intention_revalidation.gd",
+      "expected": 14
+    },
+    {
+      "name": "intention_utility",
+      "script": "res://test/intention_utility.gd",
+      "expected": 6
+    },
+    {
+      "name": "execution_receipt",
+      "script": "res://test/execution_receipt.gd",
+      "expected": 6
+    },
+    {
+      "name": "action_travel",
+      "script": "res://test/action_travel_lifecycle.gd",
+      "expected": 11
+    },
+    {
+      "name": "resource_target_revalidation",
+      "script": "res://test/resource_target_revalidation.gd",
+      "expected": 15
+    },
+    {
+      "name": "plan_adoption",
+      "script": "res://test/plan_adoption.gd",
+      "expected": 36
+    },
+    {
+      "name": "framework_runtime",
+      "script": "res://test/framework_runtime.gd",
+      "expected": 17
+    },
+    {
+      "name": "cognitive_cases",
+      "script": "res://test/cognitive_cases.gd",
+      "expected": 21
+    }
+  ]
+}

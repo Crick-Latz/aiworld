@@ -1,0 +1,9 @@
+{
+  "path": "tests/cognition/test_compile_cases.py",
+  "change": "Remove one trailing blank line at EOF; AST unchanged.",
+  "before_sha256": "313afe02a76e3912927049e9a4b25e500d6028935322de03039ce0000c35d1ae",
+  "after_sha256": "430b6fc49968d8c02d262765c7fa195efb78dd5603969469f990f4a686b2ca7c",
+  "ast_equal": true,
+  "python_tests_rerun": 18,
+  "python_exit": 0
+}

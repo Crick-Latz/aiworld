@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "scope": "FULL_MANIFEST",
+  "source_sha256_before": "d52eef98d6d0e0e34ab53370d4cc9b4c5eed649dbb32791cf717038300bde8fb",
+  "expected_suites": 35,
+  "expected_assertions": 899,
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "gates": [
+    {
+      "name": "engine_version",
+      "exit": 0,
+      "seconds": 0.023,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "editor_import",
+      "exit": 0,
+      "seconds": 4.46,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "module_boundaries",
+      "exit": 0,
+      "seconds": 0.042,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "cognitive_import_python",
+      "exit": 0,
+      "seconds": 0.639,
+      "errors": [],
+      "ok": true
+    }
+  ],
+  "suites": [
+    {
+      "name": "run_all",
+      "exit": 0,
+      "seconds": 5.756,
+      "errors": [],
+      "ok": true,
+      "expected": 199,
+      "passed": 199,
+      "failed": 0
+    },
+    {
+      "name": "player_physics",
+      "exit": 0,
+      "seconds": 129.536,
+      "errors": [],
+      "ok": true,
+      "expected": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "camera_rotation",
+      "exit": 0,
+      "seconds": 0.625,
+      "errors": [],
+      "ok": true,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "name": "observer_sim",
+      "exit": 0,
+      "seconds": 3.325,
+      "errors": [],
+      "ok": true,
+      "expected": 13,
+      "passed": 13,
+      "failed": 0
+    },
+    {
+      "name": "story_causal",
+      "exit": 0,
+      "seconds": 1.092,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "story_dynamic",
+      "exit": 0,
+      "seconds": 1.183,
+      "errors": [],
+      "ok": true,
+      "expected": 11,
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "story_save",
+      "exit": 0,
+      "seconds": 1.184,
+      "errors": [],
+      "ok": true,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "ai_mock",
+      "exit": 0,
+      "seconds": 0.159,
+      "errors": [],
+      "ok": true,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "name": "island_sim",
+      "exit": 0,
+      "seconds": 5.278,
+      "errors": [],
+      "ok": true,
+      "expected": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "p0_cognition",
+      "exit": 0,
+      "seconds": 8.529,
+      "errors": [],
+      "ok": true,
+      "expected": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "name": "p1_social",
+      "exit": 0,
+      "seconds": 42.763,
+      "errors": [],
+      "ok": true,
+      "expected": 33,
+      "passed": 33,
+      "failed": 0
+    },
+    {
+      "name": "p1_5_cognition",
+      "exit": 0,
+      "seconds": 32.532,
+      "errors": [],
+      "ok": true,
+      "expected": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "name": "p1_6_cognition",
+      "exit": 0,
+      "seconds": 6.963,
+      "errors": [],
+      "ok": true,
+      "expected": 27,
+      "passed": 27,
+      "failed": 0
+    },
+    {
+      "name": "p1_7_ecology",
+      "exit": 0,
+      "seconds": 8.624,
+      "errors": [],
+      "ok": true,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "name": "p2_institution",
+      "exit": 0,
+      "seconds": 7.693,
+      "errors": [],
+      "ok": true,
+      "expected": 44,
+      "passed": 44,
+      "failed": 0
+    },
+    {
+      "name": "narrative_ir",
+      "exit": 0,
+      "seconds": 0.257,
+      "errors": [],
+      "ok": true,
+      "expected": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "name": "p3_narrative",
+      "exit": 0,
+      "seconds": 142.103,
+      "errors": [],
+      "ok": true,
+      "expected": 78,
+      "passed": 78,
+      "failed": 0
+    },
+    {
+      "name": "p4_threads",
+      "exit": 0,
+      "seconds": 16.443,
+      "errors": [],
+      "ok": true,
+      "expected": 17,
+      "passed": 17,
+      "failed": 0
+    },
+    {
+      "name": "p5_spatial",
+      "exit": 0,
+      "seconds": 5.091,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "p4_3_thread_renderer",
+      "exit": 0,
+      "seconds": 7.514,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "p6_world_knowledge",
+      "exit": 0,
+      "seconds": 2.765,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "p6_1_runtime_agency_shadow",
+      "exit": 0,
+      "seconds": 12.818,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "p6_2_agency_action_bridge",
+      "exit": 0,
+      "seconds": 31.778,
+      "errors": [],
+      "ok": true,
+      "expected": 33,
+      "passed": 33,
+      "failed": 0
+    },
+    {
+      "name": "p6_3_items",
+      "exit": 0,
+      "seconds": 8.635,
+      "errors": [],
+      "ok": true,
+      "expected": 45,
+      "passed": 45,
+      "failed": 0
+    },
+    {
+      "name": "p6_3b_plan_steps",
+      "exit": 0,
+      "seconds": 5.934,
+      "errors": [],
+      "ok": true,
+      "expected": 23,
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "name": "p6_3b_execution",
+      "exit": 0,
+      "seconds": 7.975,
+      "errors": [],
+      "ok": true,
+      "expected": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "plan_step_value",
+      "exit": 0,
+      "seconds": 0.253,
+      "errors": [],
+      "ok": true,
+      "expected": 18,
+      "passed": 18,
+      "failed": 0
+    },
+    {
+      "name": "intention_revalidation",
+      "exit": 0,
+      "seconds": 1.181,
+      "errors": [],
+      "ok": true,
+      "expected": 14,
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "name": "intention_utility",
+      "exit": 0,
+      "seconds": 0.252,
+      "errors": [],
+      "ok": true,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "execution_receipt",
+      "exit": 0,
+      "seconds": 1.373,
+      "errors": [],
+      "ok": true,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "action_travel",
+      "exit": 0,
+      "seconds": 1.184,
+      "errors": [],
+      "ok": true,
+      "expected": 11,
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "resource_target_revalidation",
+      "exit": 0,
+      "seconds": 1.095,
+      "errors": [],
+      "ok": true,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "plan_adoption",
+      "exit": 0,
+      "seconds": 0.252,
+      "errors": [],
+      "ok": true,
+      "expected": 36,
+      "passed": 36,
+      "failed": 0
+    },
+    {
+      "name": "framework_runtime",
+      "exit": 0,
+      "seconds": 4.725,
+      "errors": [],
+      "ok": true,
+      "expected": 17,
+      "passed": 17,
+      "failed": 0
+    },
+    {
+      "name": "cognitive_cases",
+      "exit": 0,
+      "seconds": 0.255,
+      "errors": [],
+      "ok": true,
+      "expected": 21,
+      "passed": 21,
+      "failed": 0
+    }
+  ],
+  "ok": true,
+  "python_tests": 18,
+  "source_sha256_after": "d52eef98d6d0e0e34ab53370d4cc9b4c5eed649dbb32791cf717038300bde8fb",
+  "source_unchanged": true,
+  "passed_assertions": 899
+}

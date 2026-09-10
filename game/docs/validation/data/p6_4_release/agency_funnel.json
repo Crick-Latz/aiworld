@@ -1,0 +1,6253 @@
+{
+	"meta": {
+		"count_unit": "actor decision opportunities unless field says actor_ticks",
+		"economy_overrides": {},
+		"first_seed": 61000,
+		"note": "Read-only diagnosis; repeated cached proposals are counted at each decision opportunity.",
+		"profile": "framework",
+		"seeds": 10,
+		"ticks": 1000
+	},
+	"rows": [
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 356
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 332,
+				"DEFER_OUTCOMPETED_PLANS": 3,
+				"NO_ELIGIBLE_PLAN": 1059,
+				"SUBJECTIVE_VALUE_SELECTION": 24
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 420,
+				"UNKNOWN_SOURCE:shells:": 196
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 786
+			},
+			"decision_opportunities": 1418,
+			"examples": [
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3977800453",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 276
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|9,43",
+							"known_source:fish|14,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|6,29",
+							"known_source:tree|4,26",
+							"known_source:fish|9,43",
+							"known_source:water|18,51",
+							"known_source:fish|14,56"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|6,29",
+								"confidence": 1.0,
+								"last_seen_tick": 247,
+								"source_id": "tree|6,29",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|4,26",
+								"confidence": 1.0,
+								"last_seen_tick": 243,
+								"source_id": "tree|4,26",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|9,43",
+								"confidence": 1.0,
+								"last_seen_tick": 257,
+								"source_id": "fish|9,43",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:water|18,51",
+								"confidence": 1.0,
+								"last_seen_tick": 276,
+								"source_id": "water|18,51",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:fish|14,56",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fish|14,56",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"water": 2,
+							"wood": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"MATERIAL",
+							"WATER_ITEM",
+							"WOOD"
+						]
+					},
+					"tick": 276
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3977800453",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 278
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|9,43",
+							"known_source:fish|14,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|6,29",
+							"known_source:tree|4,26",
+							"known_source:fish|9,43",
+							"known_source:water|18,51",
+							"known_source:fish|14,56"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|6,29",
+								"confidence": 1.0,
+								"last_seen_tick": 247,
+								"source_id": "tree|6,29",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|4,26",
+								"confidence": 1.0,
+								"last_seen_tick": 243,
+								"source_id": "tree|4,26",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|9,43",
+								"confidence": 1.0,
+								"last_seen_tick": 257,
+								"source_id": "fish|9,43",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:water|18,51",
+								"confidence": 1.0,
+								"last_seen_tick": 278,
+								"source_id": "water|18,51",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:fish|14,56",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fish|14,56",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"water": 2,
+							"wood": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"MATERIAL",
+							"WATER_ITEM",
+							"WOOD"
+						]
+					},
+					"tick": 278
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3977800453",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 280
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|9,43",
+							"known_source:fish|14,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|6,29",
+							"known_source:tree|4,26",
+							"known_source:fish|9,43",
+							"known_source:water|18,51",
+							"known_source:fish|14,56"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|6,29",
+								"confidence": 1.0,
+								"last_seen_tick": 247,
+								"source_id": "tree|6,29",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|4,26",
+								"confidence": 1.0,
+								"last_seen_tick": 243,
+								"source_id": "tree|4,26",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|9,43",
+								"confidence": 1.0,
+								"last_seen_tick": 257,
+								"source_id": "fish|9,43",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:water|18,51",
+								"confidence": 1.0,
+								"last_seen_tick": 280,
+								"source_id": "water|18,51",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:fish|14,56",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fish|14,56",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"water": 2,
+							"wood": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"MATERIAL",
+							"WATER_ITEM",
+							"WOOD"
+						]
+					},
+					"tick": 280
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "-2105918304489901489",
+					"npc_oun": "-4393452871713022748",
+					"npc_weila": "-8046541724460760136"
+				},
+				"adoption_sha256": "68cf66dda38f175979966f9a08174f13ccda31357d8f931fc8fd8a0e96bf4d49",
+				"events_sha256": "b144f8ecb12d311dd882df0fba58acc731f03d3eb801500ce05d0434586a9c25",
+				"execution_sha256": "ecfc7c1463dede765388881316e0e98c0ed2e2f30396f6c4b4ed9e5dcb8d625e",
+				"state_sha256": "b9c83eb69e6b8215c93b65229cdb7b12755e58c5539e34a23c20c5c9c4587542"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 52,
+				"100": 162,
+				"200": 642,
+				"300": 731,
+				"400": 678,
+				"500": 340,
+				"600": 178,
+				"700": 150,
+				"800": 63,
+				"900": 4
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1418
+			},
+			"known_source_opportunities": {
+				"BERRY": 457,
+				"FIRE": 788,
+				"FISH": 351,
+				"SHELL": 491,
+				"SPRING": 343,
+				"WOOD": 927
+			},
+			"plan_switches": 1,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 268,
+				"fish_food:BLOCKED_PLAN": 196,
+				"set_trap:BLOCKED_PLAN": 420,
+				"spring_water:READY": 211
+			},
+			"seed": 61000
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 528
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 488,
+				"DEFER_OUTCOMPETED_PLANS": 6,
+				"NO_ELIGIBLE_PLAN": 873,
+				"RECONSIDERED": 1,
+				"SUBJECTIVE_VALUE_SELECTION": 39
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 284
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 1195
+			},
+			"decision_opportunities": 1407,
+			"examples": [],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "1428253882792173339",
+					"npc_oun": "8002583471567201872",
+					"npc_weila": "-7621322577704142360"
+				},
+				"adoption_sha256": "23b4ee6ace1e0d303a87fa4f4898dd36791a264ddd7173f4e6864109fa9f49da",
+				"events_sha256": "47645a219fa4533b5d1210d65a172658cee8d03593cfd4550c9a97c41870b4c7",
+				"execution_sha256": "aa61ce30a86df9e21013c30d809e253c5c6a593f8097368d8e73a307f3c06fb9",
+				"state_sha256": "186057eadfef8c1cf603b5c809638253dc1b08311594be1fe0e68e403c13627e"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 66,
+				"100": 223,
+				"200": 691,
+				"300": 912,
+				"400": 754,
+				"500": 345,
+				"600": 9
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1407
+			},
+			"known_source_opportunities": {
+				"BERRY": 1351,
+				"FIRE": 384,
+				"RUIN": 496,
+				"SPRING": 412,
+				"WOOD": 767
+			},
+			"plan_switches": 7,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 527,
+				"set_trap:BLOCKED_PLAN": 284,
+				"spring_water:READY": 180
+			},
+			"seed": 61001
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 371
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 336,
+				"DEFER_OUTCOMPETED_PLANS": 4,
+				"NO_ELIGIBLE_PLAN": 885,
+				"RECONSIDERED": 4,
+				"SUBJECTIVE_VALUE_SELECTION": 31
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 336,
+				"UNKNOWN_SOURCE:shells:": 131
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 868
+			},
+			"decision_opportunities": 1260,
+			"examples": [
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1096287627",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 101
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|14,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|10,36",
+									"known_source:tree|9,37"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|9,37",
+							"known_source:tree|10,36",
+							"known_source:fish|14,29"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|9,37",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "tree|9,37",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|10,36",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "tree|10,36",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|14,29",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "fish|14,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM"
+						]
+					},
+					"tick": 101
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3902714715",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 109
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|14,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|9,37",
+							"known_source:tree|10,36",
+							"known_source:fish|14,29"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|9,37",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "tree|9,37",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|10,36",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "tree|10,36",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|14,29",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|14,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2,
+							"wood": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"MATERIAL",
+							"WOOD"
+						]
+					},
+					"tick": 109
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "4191582044",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 112
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|14,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|9,37",
+							"known_source:tree|10,36",
+							"known_source:fish|14,29"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|9,37",
+								"confidence": 1.0,
+								"last_seen_tick": 112,
+								"source_id": "tree|9,37",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|10,36",
+								"confidence": 1.0,
+								"last_seen_tick": 112,
+								"source_id": "tree|10,36",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|14,29",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|14,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2,
+							"wood": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"MATERIAL",
+							"WOOD"
+						]
+					},
+					"tick": 112
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "3033149345082454456",
+					"npc_oun": "6625598086466423626",
+					"npc_weila": "-7179472094631105609"
+				},
+				"adoption_sha256": "699579d6c8a0d65212fbde0b69960797c333d4597478e0656aee5c1a80392181",
+				"events_sha256": "44287785146d55c7cc36e2810f3cb1319e8293b73d6a80ee2365d426277757bb",
+				"execution_sha256": "f453adbc518fce31633a0740d75bece921a7f5ceb4fd9ab2cc1d641a407dc09a",
+				"state_sha256": "44ca94bd6498defcd27a338cc683fc4caaf1daf49fb152350726abb3395ff7c9"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 242,
+				"100": 511,
+				"200": 733,
+				"300": 664,
+				"400": 595,
+				"500": 146,
+				"600": 62,
+				"700": 47
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1260
+			},
+			"known_source_opportunities": {
+				"BERRY": 914,
+				"FIRE": 1072,
+				"FISH": 461,
+				"RUIN": 332,
+				"SPRING": 822,
+				"WOOD": 1151
+			},
+			"plan_switches": 10,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 190,
+				"fish_food:BLOCKED_PLAN": 131,
+				"set_trap:BLOCKED_PLAN": 336,
+				"spring_water:READY": 330
+			},
+			"seed": 61002
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 134
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 120,
+				"DEFER_OUTCOMPETED_PLANS": 1,
+				"NO_ELIGIBLE_PLAN": 1187,
+				"SUBJECTIVE_VALUE_SELECTION": 14
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 190,
+				"UNKNOWN_SOURCE:shells:": 144
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 651
+			},
+			"decision_opportunities": 1322,
+			"examples": [
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.844070412977027,
+								"problem_pressure": 0.404,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.117495074798793
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1017817090",
+						"decision": "ADOPT",
+						"defer_probability": 0.155929587022973,
+						"defer_value": 0.03812,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.418118357658386,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.0601,
+						"temperature": 0.047,
+						"tick": 102
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,59"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:berry|49,57",
+							"known_source:tree|43,56",
+							"known_source:fish|37,59",
+							"known_source:fire|43,56",
+							"known_source:fire|41,56"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|49,57",
+								"confidence": 1.0,
+								"last_seen_tick": 102,
+								"source_id": "berry|49,57",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 102,
+								"source_id": "tree|43,56",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|37,59",
+								"confidence": 1.0,
+								"last_seen_tick": 102,
+								"source_id": "fish|37,59",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 102,
+								"source_id": "fire|43,56",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,56",
+								"confidence": 1.0,
+								"last_seen_tick": 102,
+								"source_id": "fire|41,56",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"wood": 1
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"WOOD"
+						]
+					},
+					"tick": 102
+				},
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.41,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.119240051157191
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1854324483",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.0601,
+						"tick": 105
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,59"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:berry|49,57",
+							"known_source:tree|43,56",
+							"known_source:fish|37,59",
+							"known_source:fire|43,56",
+							"known_source:fire|41,56"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|49,57",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "berry|49,57",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "tree|43,56",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|37,59",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|37,59",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fire|43,56",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,56",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fire|41,56",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"wood": 2
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"WOOD"
+						]
+					},
+					"tick": 105
+				},
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.518,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.150649625608353
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1854324483",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.0601,
+						"tick": 109
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,59"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:berry|49,57",
+							"known_source:tree|43,56",
+							"known_source:fish|37,59",
+							"known_source:fire|43,56",
+							"known_source:fire|41,56"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|49,57",
+								"confidence": 1.0,
+								"last_seen_tick": 107,
+								"source_id": "berry|49,57",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "tree|43,56",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|37,59",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|37,59",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|43,56",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "fire|43,56",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,56",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "fire|41,56",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"wood": 2
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"WOOD"
+						]
+					},
+					"tick": 109
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "-2416624454781370675",
+					"npc_oun": "-8093407489096987132",
+					"npc_weila": "-3034011867783315540"
+				},
+				"adoption_sha256": "85c587c4bea4a78a4849adac361b2329c3321919b99623bce7fef787e862a3b7",
+				"events_sha256": "0a98e8d7fddda86a313eadfb6f94bed3e13fac01d32e08bbb80481bc89c7973d",
+				"execution_sha256": "65717b5eeb0fb2537aed3eff9d293dcedd38a56b3554bd09942914b2ef5212b6",
+				"state_sha256": "ae9d5bf05d2517caf0cc9adf0a2c8a17e36f997049990d5442e36cedc25a4a8f"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 120,
+				"100": 347,
+				"200": 767,
+				"300": 906,
+				"400": 549,
+				"500": 251,
+				"600": 53,
+				"700": 7
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1322
+			},
+			"known_source_opportunities": {
+				"BERRY": 636,
+				"FIRE": 641,
+				"FISH": 649,
+				"RUIN": 450,
+				"SHELL": 389,
+				"WOOD": 824
+			},
+			"plan_switches": 5,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 161,
+				"fish_food:BLOCKED_PLAN": 144,
+				"set_trap:BLOCKED_PLAN": 190
+			},
+			"seed": 61003
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 166
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 151,
+				"DEFER_OUTCOMPETED_PLANS": 1,
+				"NO_ELIGIBLE_PLAN": 1205,
+				"RECONSIDERED": 3,
+				"SUBJECTIVE_VALUE_SELECTION": 12
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 297,
+				"UNKNOWN_SOURCE:shells:": 85,
+				"UNKNOWN_SOURCE:wood:": 28
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 355
+			},
+			"decision_opportunities": 1372,
+			"examples": [
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.842015312978559,
+								"problem_pressure": 0.402,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0865857026032709
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1824925601",
+						"decision": "ADOPT",
+						"defer_probability": 0.157984687021441,
+						"defer_value": 0.03806,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.155571937561035,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"temperature": 0.029,
+						"tick": 101
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|36,23"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|46,35",
+							"known_source:berry|44,29",
+							"known_source:fish|36,23"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 100,
+								"source_id": "berry|46,35",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|44,29",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "berry|44,29",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|36,23",
+								"confidence": 1.0,
+								"last_seen_tick": 100,
+								"source_id": "fish|36,23",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 101
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.406,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0874472518829055
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1824925601",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 103
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|36,23"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|46,35",
+							"known_source:berry|44,29",
+							"known_source:fish|36,23"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "berry|46,35",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|44,29",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "berry|44,29",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|36,23",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "fish|36,23",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 103
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.41,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.08830880116254
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1824925601",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 105
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|36,23"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|46,35",
+							"known_source:berry|44,29",
+							"known_source:fish|36,23"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "berry|46,35",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|44,29",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "berry|44,29",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|36,23",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|36,23",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 105
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "6600543248916782316",
+					"npc_oun": "-3388598118331842373",
+					"npc_weila": "-4862339729985757608"
+				},
+				"adoption_sha256": "4a9e09eb0b904211e1d0343f0579ae281bf1406c1dd34936b45a5a8a6d6938d4",
+				"events_sha256": "4c148c53b144988cad1fea8e35ba53f53c1f54f94eea4b09e45f462012538872",
+				"execution_sha256": "3e57b9d30e982841e7dacc12b0bcbc314942da006548963573f4b75d5a0a2c40",
+				"state_sha256": "4479dd2002723ae1adaa92e37e89b58299ede4a09ddc6850d6aa83848ce95265"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 161,
+				"100": 487,
+				"200": 881,
+				"300": 762,
+				"400": 603,
+				"500": 91,
+				"600": 4,
+				"700": 11
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1372
+			},
+			"known_source_opportunities": {
+				"BERRY": 405,
+				"FIRE": 772,
+				"FISH": 405,
+				"RUIN": 760,
+				"SPRING": 318,
+				"WOOD": 627
+			},
+			"plan_switches": 4,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 85,
+				"fish_food:BLOCKED_PLAN": 85,
+				"set_trap:BLOCKED_PLAN": 297,
+				"spring_water:READY": 159
+			},
+			"seed": 61004
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 536
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 498,
+				"DEFER_OUTCOMPETED_PLANS": 6,
+				"NO_ELIGIBLE_PLAN": 867,
+				"SUBJECTIVE_VALUE_SELECTION": 38
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 565,
+				"UNKNOWN_SOURCE:shells:": 307,
+				"UNKNOWN_SOURCE:wood:": 29
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 1268
+			},
+			"decision_opportunities": 1409,
+			"examples": [
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.842015312978559,
+								"problem_pressure": 0.402,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0865857026032709
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "841640296",
+						"decision": "ADOPT",
+						"defer_probability": 0.157984687021441,
+						"defer_value": 0.03806,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.698940932750702,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"temperature": 0.029,
+						"tick": 101
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|37,30",
+							"known_source:fish|37,29"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|37,30",
+								"confidence": 1.0,
+								"last_seen_tick": 99,
+								"source_id": "berry|37,30",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|37,29",
+								"confidence": 1.0,
+								"last_seen_tick": 99,
+								"source_id": "fish|37,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 101
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.406,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0874472518829055
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "841640296",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 103
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|37,30",
+							"known_source:fish|37,29"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|37,30",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "berry|37,30",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|37,29",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "fish|37,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 103
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.41,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.08830880116254
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "841640296",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 105
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|37,29"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:berry|37,30",
+							"known_source:fish|37,29"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"BERRY",
+							"FISH"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:berry|37,30",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "berry|37,30",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fish|37,29",
+								"confidence": 1.0,
+								"last_seen_tick": 105,
+								"source_id": "fish|37,29",
+								"tag": "FISH"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 3,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 105
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "1153145740094192675",
+					"npc_oun": "8241198070124994550",
+					"npc_weila": "5641220290745970531"
+				},
+				"adoption_sha256": "368fc8436c77c01f341576b4167740249c80d12b6a85dc30c9a5de81d946aa8c",
+				"events_sha256": "a2eda507024e7e42f707707dd56ca37ce73d519cc6374a6578ebfad10a8ea983",
+				"execution_sha256": "2b410dc7afd376f2521bd73176919c9598a7836e048120178341d6214c4cff05",
+				"state_sha256": "10b765a119e6b7f64cf5c6db9b1e6914e9d80ca5b4b141cc5dcd055b951d7c3a"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 93,
+				"100": 252,
+				"200": 670,
+				"300": 744,
+				"400": 656,
+				"500": 362,
+				"600": 142,
+				"700": 62,
+				"800": 19
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1409
+			},
+			"known_source_opportunities": {
+				"BERRY": 966,
+				"FIRE": 725,
+				"FISH": 494,
+				"SPRING": 443,
+				"WOOD": 1301
+			},
+			"plan_switches": 7,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 499,
+				"fish_food:BLOCKED_PLAN": 307,
+				"set_trap:BLOCKED_PLAN": 565,
+				"spring_water:READY": 217
+			},
+			"seed": 61005
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 384
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 358,
+				"DEFER_OUTCOMPETED_PLANS": 4,
+				"NO_ELIGIBLE_PLAN": 1073,
+				"SUBJECTIVE_VALUE_SELECTION": 26
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 366,
+				"UNKNOWN_SOURCE:shells:": 146
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 810
+			},
+			"decision_opportunities": 1461,
+			"examples": [
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "4012523671",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 275
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|25,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|12,57",
+									"known_source:tree|20,54"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|12,57",
+							"known_source:tree|20,54",
+							"known_source:fish|25,56",
+							"known_source:fire|20,54",
+							"known_source:water|35,55",
+							"known_source:ruin|37,55",
+							"known_source:fire|45,55"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING",
+							"RUIN"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|12,57",
+								"confidence": 1.0,
+								"last_seen_tick": 225,
+								"source_id": "tree|12,57",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "tree|20,54",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|25,56",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fish|25,56",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "fire|20,54",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:water|35,55",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "water|35,55",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:ruin|37,55",
+								"confidence": 1.0,
+								"last_seen_tick": 267,
+								"source_id": "ruin|37,55",
+								"tag": "RUIN"
+							},
+							{
+								"belief_ref": "known_source:fire|45,55",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fire|45,55",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"BIND",
+							"CUT"
+						],
+						"possessed_items": {
+							"flint": 1,
+							"food": 3,
+							"knife": 1,
+							"rope": 1,
+							"water": 2
+						},
+						"possessed_tags": [
+							"BINDING",
+							"CONSUMABLE",
+							"FLINT",
+							"FOOD_ITEM",
+							"KNIFE",
+							"MATERIAL",
+							"TOOL",
+							"WATER_ITEM"
+						]
+					},
+					"tick": 275
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "4012523671",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 277
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|25,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|12,57",
+									"known_source:tree|20,54"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|12,57",
+							"known_source:tree|20,54",
+							"known_source:fish|25,56",
+							"known_source:fire|20,54",
+							"known_source:water|35,55",
+							"known_source:ruin|37,55",
+							"known_source:fire|45,55"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING",
+							"RUIN"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|12,57",
+								"confidence": 1.0,
+								"last_seen_tick": 225,
+								"source_id": "tree|12,57",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "tree|20,54",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|25,56",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fish|25,56",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "fire|20,54",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:water|35,55",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "water|35,55",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:ruin|37,55",
+								"confidence": 1.0,
+								"last_seen_tick": 267,
+								"source_id": "ruin|37,55",
+								"tag": "RUIN"
+							},
+							{
+								"belief_ref": "known_source:fire|45,55",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fire|45,55",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"BIND",
+							"CUT"
+						],
+						"possessed_items": {
+							"flint": 1,
+							"food": 3,
+							"knife": 1,
+							"rope": 1,
+							"water": 2
+						},
+						"possessed_tags": [
+							"BINDING",
+							"CONSUMABLE",
+							"FLINT",
+							"FOOD_ITEM",
+							"KNIFE",
+							"MATERIAL",
+							"TOOL",
+							"WATER_ITEM"
+						]
+					},
+					"tick": 277
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "4012523671",
+						"decision": "DEFER",
+						"mode": "SUBJECTIVE",
+						"reason": "NO_ELIGIBLE_PLAN",
+						"rng_consumed": false,
+						"selected_plan_id": "",
+						"tick": 279
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|25,56"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|12,57",
+									"known_source:tree|20,54"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:tree|12,57",
+							"known_source:tree|20,54",
+							"known_source:fish|25,56",
+							"known_source:fire|20,54",
+							"known_source:water|35,55",
+							"known_source:ruin|37,55",
+							"known_source:fire|45,55"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING",
+							"RUIN"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:tree|12,57",
+								"confidence": 1.0,
+								"last_seen_tick": 225,
+								"source_id": "tree|12,57",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "tree|20,54",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|25,56",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fish|25,56",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|20,54",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "fire|20,54",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:water|35,55",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "water|35,55",
+								"tag": "SPRING"
+							},
+							{
+								"belief_ref": "known_source:ruin|37,55",
+								"confidence": 1.0,
+								"last_seen_tick": 267,
+								"source_id": "ruin|37,55",
+								"tag": "RUIN"
+							},
+							{
+								"belief_ref": "known_source:fire|45,55",
+								"confidence": 1.0,
+								"last_seen_tick": 273,
+								"source_id": "fire|45,55",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"BIND",
+							"CUT"
+						],
+						"possessed_items": {
+							"flint": 1,
+							"food": 3,
+							"knife": 1,
+							"rope": 1,
+							"water": 2
+						},
+						"possessed_tags": [
+							"BINDING",
+							"CONSUMABLE",
+							"FLINT",
+							"FOOD_ITEM",
+							"KNIFE",
+							"MATERIAL",
+							"TOOL",
+							"WATER_ITEM"
+						]
+					},
+					"tick": 279
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "1152181851665444567",
+					"npc_oun": "6218920415659565745",
+					"npc_weila": "2185044537877896200"
+				},
+				"adoption_sha256": "b37e2eff616e96b04b0a6156328690080957cf1860d3e27b3d46df0325eecad5",
+				"events_sha256": "a1c0bed110c5b13c52f118d21b2bf9f61ef3b76e83fd965761a5dede041ebde3",
+				"execution_sha256": "99a5c26569f40521337de7a71440369bf3310e262a15eba4f1f81695d10a83da",
+				"state_sha256": "d956a97eb73e97b8b1d883fea7e3185c5c71aae5daae7b9a17ba9477c8063825"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 108,
+				"100": 261,
+				"200": 790,
+				"300": 804,
+				"400": 659,
+				"500": 306,
+				"600": 53,
+				"700": 19
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1461
+			},
+			"known_source_opportunities": {
+				"BERRY": 479,
+				"FIRE": 794,
+				"FISH": 381,
+				"RUIN": 373,
+				"SPRING": 373,
+				"WOOD": 866
+			},
+			"plan_switches": 3,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 220,
+				"fish_food:BLOCKED_PLAN": 146,
+				"set_trap:BLOCKED_PLAN": 366,
+				"spring_water:READY": 307
+			},
+			"seed": 61006
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 459
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 426,
+				"DEFER_OUTCOMPETED_PLANS": 5,
+				"NO_ELIGIBLE_PLAN": 1000,
+				"RECONSIDERED": 3,
+				"SUBJECTIVE_VALUE_SELECTION": 30
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 589,
+				"UNKNOWN_SOURCE:shells:": 193,
+				"UNKNOWN_SOURCE:wood:": 193
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 912
+			},
+			"decision_opportunities": 1464,
+			"examples": [
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.0,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.837199262916956,
+								"problem_pressure": 0.402,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.1,
+								"root_goal": "HUNGER",
+								"value": 0.126422248259943
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3847851531",
+						"decision": "DEFER",
+						"defer_probability": 0.162800737083044,
+						"defer_value": 0.02162,
+						"mode": "SUBJECTIVE",
+						"reason": "DEFER_OUTCOMPETED_PLANS",
+						"rng_consumed": true,
+						"roll": 0.914725124835968,
+						"selected_plan_id": "",
+						"switch_margin": 0.0588,
+						"temperature": 0.064,
+						"tick": 51
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|10,30"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:fish|10,30",
+							"known_source:berry|13,28"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"BERRY"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|10,30",
+								"confidence": 1.0,
+								"last_seen_tick": 51,
+								"source_id": "fish|10,30",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:berry|13,28",
+								"confidence": 1.0,
+								"last_seen_tick": 51,
+								"source_id": "berry|13,28",
+								"tag": "BERRY"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM"
+						]
+					},
+					"tick": 51
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.0,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.839608138972955,
+								"problem_pressure": 0.406,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.1,
+								"root_goal": "HUNGER",
+								"value": 0.12768018107845
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3847851531",
+						"decision": "ADOPT",
+						"defer_probability": 0.160391861027045,
+						"defer_value": 0.02174,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.184651628136635,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.0588,
+						"temperature": 0.064,
+						"tick": 53
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|10,30"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:fish|10,30",
+							"known_source:berry|13,28"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"BERRY"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|10,30",
+								"confidence": 1.0,
+								"last_seen_tick": 53,
+								"source_id": "fish|10,30",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:berry|13,28",
+								"confidence": 1.0,
+								"last_seen_tick": 53,
+								"source_id": "berry|13,28",
+								"tag": "BERRY"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM"
+						]
+					},
+					"tick": 53
+				},
+				{
+					"actor_id": "npc_weila",
+					"adoption": {
+						"actor_id": "npc_weila",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.0,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.41,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.1,
+								"root_goal": "HUNGER",
+								"value": 0.128938113896957
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "3847851531",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.0588,
+						"tick": 55
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|10,30"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							},
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "wood",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells",
+							"wood"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 wood",
+								"item_id": "wood",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER"
+						],
+						"actor_id": "npc_weila",
+						"context_refs": [
+							"known_source:fish|10,30",
+							"known_source:berry|13,28"
+						],
+						"expertise_tags": [
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"BERRY"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|10,30",
+								"confidence": 1.0,
+								"last_seen_tick": 55,
+								"source_id": "fish|10,30",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:berry|13,28",
+								"confidence": 1.0,
+								"last_seen_tick": 55,
+								"source_id": "berry|13,28",
+								"tag": "BERRY"
+							}
+						],
+						"possessed_capabilities": [],
+						"possessed_items": {
+							"food": 2
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM"
+						]
+					},
+					"tick": 55
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "-6341358556081317438",
+					"npc_oun": "-6222375764306924928",
+					"npc_weila": "-2683936081000699007"
+				},
+				"adoption_sha256": "2a1d1bfa4ea13723c0d010459bb084d75580630702b1fe5625bd1e61ccab6c87",
+				"events_sha256": "6f4fd3ed6975b5cd25f40e56a7d0d9d71ce2e6fd5d3a372229e8813a183c96f1",
+				"execution_sha256": "409a0e9d58608eda6f41b9034ac66dbb204cd0959a4a1d49ee5d5be7f1c96694",
+				"state_sha256": "63d697f99cd285ab4cd7c4b722941725a79df450e377a1cdfecb4c4db9cbdb41"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 56,
+				"100": 155,
+				"1000": 183,
+				"200": 454,
+				"300": 563,
+				"400": 519,
+				"500": 340,
+				"600": 296,
+				"700": 207,
+				"800": 122,
+				"900": 105
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1464
+			},
+			"known_source_opportunities": {
+				"BERRY": 985,
+				"FIRE": 472,
+				"FISH": 489,
+				"RUIN": 397,
+				"SPRING": 397,
+				"WOOD": 478
+			},
+			"plan_switches": 7,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 454,
+				"fish_food:BLOCKED_PLAN": 193,
+				"set_trap:BLOCKED_PLAN": 589,
+				"spring_water:READY": 204
+			},
+			"seed": 61007
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 0,
+			"adopted_step_kinds": {
+				"MAIN": 146
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 135,
+				"DEFER_OUTCOMPETED_PLANS": 5,
+				"NO_ELIGIBLE_PLAN": 1291,
+				"SUBJECTIVE_VALUE_SELECTION": 11
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 357,
+				"UNKNOWN_SOURCE:shells:": 199
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 354
+			},
+			"decision_opportunities": 1442,
+			"examples": [
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.779944391447729,
+								"problem_pressure": 0.4,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0861549279634537
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1468454710",
+						"decision": "ADOPT",
+						"defer_probability": 0.220055608552271,
+						"defer_value": 0.04946,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.5268914103508,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"temperature": 0.029,
+						"tick": 291
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|46,35"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|35,31",
+									"known_source:tree|39,34"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:fish|46,35",
+							"known_source:tree|39,34",
+							"known_source:tree|35,31",
+							"known_source:berry|32,36",
+							"known_source:fire|39,34",
+							"known_source:fire|37,34",
+							"known_source:fire|35,31",
+							"known_source:fire|37,31",
+							"known_source:fire|43,34",
+							"known_source:fire|41,34"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"WOOD",
+							"BERRY",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "fish|46,35",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:tree|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "tree|39,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "tree|35,31",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:berry|32,36",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "berry|32,36",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fire|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|39,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,34",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fire|35,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,31",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|43,34",
+								"confidence": 1.0,
+								"last_seen_tick": 254,
+								"source_id": "fire|43,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|41,34",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 1,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 291
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.404,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0870164772430882
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1468454710",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 293
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|46,35"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|35,31",
+									"known_source:tree|39,34"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:fish|46,35",
+							"known_source:tree|39,34",
+							"known_source:tree|35,31",
+							"known_source:berry|32,36",
+							"known_source:fire|39,34",
+							"known_source:fire|37,34",
+							"known_source:fire|35,31",
+							"known_source:fire|37,31",
+							"known_source:fire|43,34",
+							"known_source:fire|41,34"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"WOOD",
+							"BERRY",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "fish|46,35",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:tree|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "tree|39,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "tree|35,31",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:berry|32,36",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "berry|32,36",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fire|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|39,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,34",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fire|35,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,31",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|43,34",
+								"confidence": 1.0,
+								"last_seen_tick": 254,
+								"source_id": "fire|43,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|41,34",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 1,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 293
+				},
+				{
+					"actor_id": "npc_oun",
+					"adoption": {
+						"actor_id": "npc_oun",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.4,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 1.0,
+								"problem_pressure": 0.408,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 2.2,
+								"root_goal": "HUNGER",
+								"value": 0.0878780265227227
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							}
+						],
+						"context_hash": "1468454710",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_HUNGER_berry_patch_food",
+						"switch_margin": 0.065,
+						"tick": 295
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|46,35"
+						],
+						"blockers": [
+							{
+								"belief_refs": [],
+								"capability": "",
+								"item_id": "shells",
+								"knowledge_refs": [],
+								"quantity": 1,
+								"reason_code": "UNKNOWN_SOURCE"
+							}
+						],
+						"confidence": 0.7,
+						"estimated_cost": 4.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat",
+							"recipe_fish_spear"
+						],
+						"missing_requirements": [
+							"shells"
+						],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "BLOCKED_PLAN",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "",
+								"description": "寻找 shells",
+								"item_id": "shells",
+								"kind": "SUBGOAL",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"shells"
+								],
+								"status": "INERT_UNTIL_P6_3B_1",
+								"step_execution_status": "BLOCKED",
+								"step_id": "SUBGOAL:find:shells"
+							},
+							{
+								"action_name": "",
+								"belief_refs": [
+									"known_source:tree|35,31",
+									"known_source:tree|39,34"
+								],
+								"capability": "",
+								"description": "取得 wood ×1",
+								"item_id": "wood",
+								"kind": "ACQUIRE",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 1,
+								"recipe_id": "",
+								"requires": [
+									"wood"
+								],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "ACQUIRE:item:wood"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_oun",
+						"context_refs": [
+							"known_source:fish|46,35",
+							"known_source:tree|39,34",
+							"known_source:tree|35,31",
+							"known_source:berry|32,36",
+							"known_source:fire|39,34",
+							"known_source:fire|37,34",
+							"known_source:fire|35,31",
+							"known_source:fire|37,31",
+							"known_source:fire|43,34",
+							"known_source:fire|41,34"
+						],
+						"expertise_tags": [
+							"FOODHANDLING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"FISH",
+							"WOOD",
+							"BERRY",
+							"FIRE"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:fish|46,35",
+								"confidence": 1.0,
+								"last_seen_tick": 265,
+								"source_id": "fish|46,35",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:tree|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "tree|39,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:tree|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "tree|35,31",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:berry|32,36",
+								"confidence": 1.0,
+								"last_seen_tick": 246,
+								"source_id": "berry|32,36",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:fire|39,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|39,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,34",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|35,31",
+								"confidence": 1.0,
+								"last_seen_tick": 248,
+								"source_id": "fire|35,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|37,31",
+								"confidence": 1.0,
+								"last_seen_tick": 249,
+								"source_id": "fire|37,31",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|43,34",
+								"confidence": 1.0,
+								"last_seen_tick": 254,
+								"source_id": "fire|43,34",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|41,34",
+								"confidence": 1.0,
+								"last_seen_tick": 251,
+								"source_id": "fire|41,34",
+								"tag": "FIRE"
+							}
+						],
+						"possessed_capabilities": [
+							"CUT"
+						],
+						"possessed_items": {
+							"food": 1,
+							"knife": 1
+						},
+						"possessed_tags": [
+							"CONSUMABLE",
+							"FOOD_ITEM",
+							"KNIFE",
+							"TOOL"
+						]
+					},
+					"tick": 295
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "6865051574201835218",
+					"npc_oun": "-3679893341647398293",
+					"npc_weila": "1701971899436849957"
+				},
+				"adoption_sha256": "93c0d3575fae28726fffb4d25efa51b0494913eca64bf3add8953a0b964dd732",
+				"events_sha256": "27fa17e545d9d7ad2af2048ec34054d6bf15fee55962d571d2710f9d6fd65340",
+				"execution_sha256": "1a65ec1db724cfc75e1a46563f267a89c041263a703c9a69e2ef30891d2566d7",
+				"state_sha256": "c3918f1b1995ec71e1a30891a433e037caca3cc6ecff7a719a9382347a592238"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 104,
+				"100": 112,
+				"1000": 126,
+				"200": 576,
+				"300": 663,
+				"400": 567,
+				"500": 359,
+				"600": 162,
+				"700": 147,
+				"800": 100,
+				"900": 84
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1442
+			},
+			"known_source_opportunities": {
+				"BERRY": 461,
+				"FIRE": 899,
+				"FISH": 465,
+				"WOOD": 945
+			},
+			"plan_switches": 3,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 199,
+				"fish_food:BLOCKED_PLAN": 199,
+				"set_trap:BLOCKED_PLAN": 357
+			},
+			"seed": 61008
+		},
+		{
+			"acquire_craft_main_adopted_opportunities": 0,
+			"acquire_craft_main_ready_opportunities": 4,
+			"adopted_step_kinds": {
+				"MAIN": 514,
+				"USE": 67
+			},
+			"adoption_reasons": {
+				"COMMITMENT_RETAINED": 465,
+				"DEFER_OUTCOMPETED_PLANS": 4,
+				"NO_ELIGIBLE_PLAN": 537,
+				"RECONSIDERED": 13,
+				"SUBJECTIVE_VALUE_SELECTION": 36
+			},
+			"blocker_reasons": {
+				"UNKNOWN_RECIPE::TRAP": 390,
+				"UNKNOWN_SOURCE:shells:": 12
+			},
+			"causal_uplift_candidates": 0,
+			"current_step_kinds": {
+				"MAIN": 861
+			},
+			"decision_opportunities": 1055,
+			"examples": [
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.191712456074629,
+								"problem_pressure": 0.402,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.11691341601266
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0825537586351411,
+								"problem_pressure": 0.402,
+								"reason": "VALUED",
+								"remaining_cost": 2.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.0773137105890173
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "ADOPT",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_THIRST_spring_water",
+								"probability": 0.68992245366142,
+								"problem_pressure": 0.453,
+								"reason": "VALUED",
+								"remaining_cost": 0.5,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "THIRST",
+								"value": 0.177100797292484
+							}
+						],
+						"context_hash": "1934248176",
+						"decision": "ADOPT",
+						"defer_probability": 0.0358113316288098,
+						"defer_value": 0.03806,
+						"mode": "SUBJECTIVE",
+						"reason": "SUBJECTIVE_VALUE_SELECTION",
+						"rng_consumed": true,
+						"roll": 0.701762497425079,
+						"selected_plan_id": "PLAN_THIRST_spring_water",
+						"switch_margin": 0.0601,
+						"temperature": 0.047,
+						"tick": 101
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|35,40"
+						],
+						"blockers": [],
+						"confidence": 0.7,
+						"estimated_cost": 2.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat"
+						],
+						"missing_requirements": [],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "READY",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "FISH",
+								"description": "以现有能力 FISH",
+								"item_id": "",
+								"kind": "USE",
+								"knowledge_refs": [],
+								"provides": [
+									"FISH"
+								],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "USE:cap:FISH"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:shell|46,46",
+							"known_source:berry|43,42",
+							"known_source:berry|40,48",
+							"known_source:berry|39,50",
+							"known_source:tree|42,41",
+							"known_source:fish|35,40",
+							"known_source:fire|42,41",
+							"known_source:fire|46,41",
+							"known_source:tree|35,34",
+							"known_source:water|36,31"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"SHELL",
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:shell|46,46",
+								"confidence": 1.0,
+								"last_seen_tick": 100,
+								"source_id": "shell|46,46",
+								"tag": "SHELL"
+							},
+							{
+								"belief_ref": "known_source:berry|43,42",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "berry|43,42",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|40,48",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "berry|40,48",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|39,50",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "berry|39,50",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "tree|42,41",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|35,40",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "fish|35,40",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "fire|42,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|46,41",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "fire|46,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:tree|35,34",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "tree|35,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:water|36,31",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "water|36,31",
+								"tag": "SPRING"
+							}
+						],
+						"possessed_capabilities": [
+							"FISH",
+							"HUNT_MEDIUM",
+							"PIERCE"
+						],
+						"possessed_items": {
+							"fish_spear": 1,
+							"shells": 5
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"SHELL",
+							"SPEAR",
+							"TOOL"
+						]
+					},
+					"tick": 101
+				},
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.0,
+								"problem_pressure": 0.412,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.119821709943324
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"problem_pressure": 0.412,
+								"reason": "VALUED",
+								"remaining_cost": 2.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.0792369372205849
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_THIRST_spring_water",
+								"probability": 1.0,
+								"problem_pressure": 0.468,
+								"reason": "VALUED",
+								"remaining_cost": 0.5,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "THIRST",
+								"value": 0.182965062103493
+							}
+						],
+						"context_hash": "115747365",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_THIRST_spring_water",
+						"switch_margin": 0.0601,
+						"tick": 106
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|35,40"
+						],
+						"blockers": [],
+						"confidence": 0.7,
+						"estimated_cost": 2.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat"
+						],
+						"missing_requirements": [],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "READY",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "FISH",
+								"description": "以现有能力 FISH",
+								"item_id": "",
+								"kind": "USE",
+								"knowledge_refs": [],
+								"provides": [
+									"FISH"
+								],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "USE:cap:FISH"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:shell|46,46",
+							"known_source:berry|43,42",
+							"known_source:berry|40,48",
+							"known_source:berry|39,50",
+							"known_source:tree|42,41",
+							"known_source:fish|35,40",
+							"known_source:fire|42,41",
+							"known_source:fire|46,41",
+							"known_source:tree|35,34",
+							"known_source:water|36,31"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"SHELL",
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:shell|46,46",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "shell|46,46",
+								"tag": "SHELL"
+							},
+							{
+								"belief_ref": "known_source:berry|43,42",
+								"confidence": 1.0,
+								"last_seen_tick": 106,
+								"source_id": "berry|43,42",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|40,48",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "berry|40,48",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|39,50",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "berry|39,50",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 106,
+								"source_id": "tree|42,41",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|35,40",
+								"confidence": 1.0,
+								"last_seen_tick": 106,
+								"source_id": "fish|35,40",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 106,
+								"source_id": "fire|42,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|46,41",
+								"confidence": 1.0,
+								"last_seen_tick": 106,
+								"source_id": "fire|46,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:tree|35,34",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "tree|35,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:water|36,31",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "water|36,31",
+								"tag": "SPRING"
+							}
+						],
+						"possessed_capabilities": [
+							"FISH",
+							"HUNT_MEDIUM",
+							"PIERCE"
+						],
+						"possessed_items": {
+							"fish_spear": 1,
+							"shells": 5,
+							"wood": 1
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"SHELL",
+							"SPEAR",
+							"TOOL",
+							"WOOD"
+						]
+					},
+					"tick": 106
+				},
+				{
+					"actor_id": "npc_kadga",
+					"adoption": {
+						"actor_id": "npc_kadga",
+						"candidates": [
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_berry_patch_food",
+								"probability": 0.0,
+								"problem_pressure": 0.418,
+								"reason": "VALUED",
+								"remaining_cost": 1.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.121566686301721
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "DEFER",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_HUNGER_fish_food",
+								"probability": 0.0,
+								"problem_pressure": 0.418,
+								"reason": "VALUED",
+								"remaining_cost": 2.0,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "HUNGER",
+								"value": 0.0803908731995255
+							},
+							{
+								"disposition": "REJECT",
+								"eligible": false,
+								"plan_id": "PLAN_HUNGER_set_trap",
+								"probability": 0.0,
+								"reason": "PLAN_NOT_READY",
+								"root_goal": "HUNGER",
+								"value": 0.0
+							},
+							{
+								"confidence": 0.7,
+								"cost_weight": 1.05,
+								"disposition": "RETAIN",
+								"eligible": true,
+								"estimated_risk": 0.0,
+								"expected_benefit": 1.0,
+								"plan_id": "PLAN_THIRST_spring_water",
+								"probability": 1.0,
+								"problem_pressure": 0.477,
+								"reason": "VALUED",
+								"remaining_cost": 0.5,
+								"remaining_fraction": 1.0,
+								"risk_weight": 1.4,
+								"root_goal": "THIRST",
+								"value": 0.186483620990099
+							}
+						],
+						"context_hash": "625550470",
+						"decision": "RETAIN",
+						"mode": "SUBJECTIVE",
+						"reason": "COMMITMENT_RETAINED",
+						"rng_consumed": false,
+						"selected_plan_id": "PLAN_THIRST_spring_water",
+						"switch_margin": 0.0601,
+						"tick": 109
+					},
+					"plan": {
+						"belief_refs": [
+							"known_source:fish|35,40"
+						],
+						"blockers": [],
+						"confidence": 0.7,
+						"estimated_cost": 2.0,
+						"estimated_risk": 0.0,
+						"expected_benefit": 1.0,
+						"knowledge_refs": [
+							"kf_animal_meat"
+						],
+						"missing_requirements": [],
+						"plan_id": "PLAN_HUNGER_fish_food",
+						"root_goal": "HUNGER",
+						"status": "READY",
+						"steps": [
+							{
+								"action_name": "",
+								"belief_refs": [],
+								"capability": "FISH",
+								"description": "以现有能力 FISH",
+								"item_id": "",
+								"kind": "USE",
+								"knowledge_refs": [],
+								"provides": [
+									"FISH"
+								],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "FUTURE_CAPABILITY",
+								"step_id": "USE:cap:FISH"
+							},
+							{
+								"action_name": "fish",
+								"belief_refs": [],
+								"capability": "",
+								"description": "以 fish_food 缓解 HUNGER",
+								"existing_action": "fish",
+								"item_id": "",
+								"kind": "MAIN",
+								"knowledge_refs": [],
+								"provides": [],
+								"quantity": 0,
+								"recipe_id": "",
+								"requires": [],
+								"status": "PENDING",
+								"step_execution_status": "EXISTING_ACTION",
+								"step_id": "MAIN:rule:fish_food"
+							}
+						],
+						"target_resource": "FOOD",
+						"via_rule": "fish_food"
+					},
+					"subjective_context": {
+						"activated_problems": [
+							"HUNGER",
+							"THIRST"
+						],
+						"actor_id": "npc_kadga",
+						"context_refs": [
+							"known_source:shell|46,46",
+							"known_source:berry|43,42",
+							"known_source:berry|40,48",
+							"known_source:berry|39,50",
+							"known_source:tree|42,41",
+							"known_source:fish|35,40",
+							"known_source:fire|42,41",
+							"known_source:fire|46,41",
+							"known_source:tree|35,34",
+							"known_source:water|36,31"
+						],
+						"expertise_tags": [
+							"WOODWORKING",
+							"NAVIGATION"
+						],
+						"flags": [],
+						"known_peers": [],
+						"known_recipe_refs": [
+							"recipe_fish_spear"
+						],
+						"known_source_tags": [
+							"SHELL",
+							"BERRY",
+							"WOOD",
+							"FISH",
+							"FIRE",
+							"SPRING"
+						],
+						"known_sources": [
+							{
+								"belief_ref": "known_source:shell|46,46",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "shell|46,46",
+								"tag": "SHELL"
+							},
+							{
+								"belief_ref": "known_source:berry|43,42",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "berry|43,42",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|40,48",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "berry|40,48",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:berry|39,50",
+								"confidence": 1.0,
+								"last_seen_tick": 104,
+								"source_id": "berry|39,50",
+								"tag": "BERRY"
+							},
+							{
+								"belief_ref": "known_source:tree|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "tree|42,41",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:fish|35,40",
+								"confidence": 1.0,
+								"last_seen_tick": 107,
+								"source_id": "fish|35,40",
+								"tag": "FISH"
+							},
+							{
+								"belief_ref": "known_source:fire|42,41",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "fire|42,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:fire|46,41",
+								"confidence": 1.0,
+								"last_seen_tick": 109,
+								"source_id": "fire|46,41",
+								"tag": "FIRE"
+							},
+							{
+								"belief_ref": "known_source:tree|35,34",
+								"confidence": 1.0,
+								"last_seen_tick": 103,
+								"source_id": "tree|35,34",
+								"tag": "WOOD"
+							},
+							{
+								"belief_ref": "known_source:water|36,31",
+								"confidence": 1.0,
+								"last_seen_tick": 101,
+								"source_id": "water|36,31",
+								"tag": "SPRING"
+							}
+						],
+						"possessed_capabilities": [
+							"FISH",
+							"HUNT_MEDIUM",
+							"PIERCE"
+						],
+						"possessed_items": {
+							"fish_spear": 1,
+							"shells": 5,
+							"wood": 2
+						},
+						"possessed_tags": [
+							"MATERIAL",
+							"SHELL",
+							"SPEAR",
+							"TOOL",
+							"WOOD"
+						]
+					},
+					"tick": 109
+				}
+			],
+			"final_fingerprint": {
+				"adoption_rng_states": {
+					"npc_kadga": "-1558636769243864309",
+					"npc_oun": "160032951547630881",
+					"npc_weila": "4019681986793444155"
+				},
+				"adoption_sha256": "7f2b941434df4582b02954a541a9d3ae1a1eedb02c4f4ffa1ce3ef9188b22e25",
+				"events_sha256": "bdba374dd6071e98904618805f8b7647aa3895013a5a4fc60d5048d02f77c212",
+				"execution_sha256": "0f3166d9c360ce995ba912b1a12a5c65abf9ffa48e1625eae3f7e702a3d1b1e4",
+				"state_sha256": "948cc1377a5070b2df7209cded724fcd2b71542c7ca506a582d764b978aa3a74"
+			},
+			"hunger_buckets_actor_ticks": {
+				"0": 309,
+				"100": 423,
+				"1000": 311,
+				"200": 645,
+				"300": 593,
+				"400": 347,
+				"500": 104,
+				"600": 85,
+				"700": 78,
+				"800": 54,
+				"900": 51
+			},
+			"known_recipe_opportunities": {
+				"recipe_fish_spear": 1055
+			},
+			"known_source_opportunities": {
+				"BERRY": 934,
+				"FIRE": 884,
+				"FISH": 833,
+				"SHELL": 742,
+				"SPRING": 887,
+				"WOOD": 925
+			},
+			"plan_switches": 15,
+			"proposed_rule_status": {
+				"berry_patch_food:READY": 390,
+				"fish_food:BLOCKED_PLAN": 12,
+				"fish_food:READY": 364,
+				"set_trap:BLOCKED_PLAN": 390,
+				"spring_water:READY": 449
+			},
+			"seed": 61009
+		}
+	]
+}

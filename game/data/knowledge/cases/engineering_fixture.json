@@ -1,0 +1,169 @@
+{
+  "cases": [
+    {
+      "case_id": "fixture_material_dependency",
+      "cognition": {
+        "adaptation": [
+          "提出先帮助修棚"
+        ],
+        "available_resources": [
+          "持有两枚贝壳"
+        ],
+        "candidate_strategies": [
+          "直接索取木料",
+          "提供劳务换取木料"
+        ],
+        "chosen_strategy": [
+          "向周禾请求木料"
+        ],
+        "failure": [
+          "首次请求引起对方追问"
+        ],
+        "knowledge_used": [
+          "记得鱼叉需要木料和贝壳"
+        ],
+        "long_term_consequence": [
+          "后续合作可能受此次交换影响"
+        ],
+        "perceived_situation": [
+          "看见浅滩的鱼群"
+        ],
+        "prerequisites": [
+          "看见周禾持有木料"
+        ],
+        "problem": [
+          "获取食物"
+        ],
+        "risk": [
+          "对方修棚也需要材料"
+        ],
+        "social_dependency": [
+          "取得木料需要周禾同意"
+        ],
+        "tool_capability": [
+          "鱼叉提供捕鱼能力"
+        ]
+      },
+      "evidence": [
+        {
+          "end": 10,
+          "id": "E1",
+          "perspective": "NARRATOR",
+          "start": 0,
+          "subject_id": "cen_yuan"
+        },
+        {
+          "end": 33,
+          "id": "E2",
+          "perspective": "NARRATOR",
+          "start": 10,
+          "subject_id": "cen_yuan"
+        },
+        {
+          "end": 51,
+          "id": "E3",
+          "perspective": "NARRATOR",
+          "start": 33,
+          "subject_id": "cen_yuan"
+        },
+        {
+          "end": 73,
+          "id": "E4",
+          "perspective": "NARRATOR",
+          "start": 51,
+          "subject_id": "cen_yuan"
+        },
+        {
+          "end": 92,
+          "id": "E5",
+          "perspective": "NARRATOR",
+          "start": 73,
+          "subject_id": "zhou_he"
+        },
+        {
+          "end": 108,
+          "id": "E6",
+          "perspective": "NARRATOR",
+          "start": 92,
+          "subject_id": "cen_yuan"
+        },
+        {
+          "end": 123,
+          "id": "E7",
+          "perspective": "NARRATOR",
+          "start": 108,
+          "subject_id": "cen_yuan"
+        }
+      ],
+      "field_evidence": {
+        "adaptation": [
+          "E6"
+        ],
+        "available_resources": [
+          "E2"
+        ],
+        "candidate_strategies": [
+          "E4"
+        ],
+        "chosen_strategy": [
+          "E4"
+        ],
+        "failure": [
+          "E5"
+        ],
+        "knowledge_used": [
+          "E2"
+        ],
+        "long_term_consequence": [
+          "E7"
+        ],
+        "perceived_situation": [
+          "E1"
+        ],
+        "prerequisites": [
+          "E3"
+        ],
+        "problem": [
+          "E1"
+        ],
+        "risk": [
+          "E5"
+        ],
+        "social_dependency": [
+          "E4"
+        ],
+        "tool_capability": [
+          "E2"
+        ]
+      },
+      "inferred_fields": [
+        "problem",
+        "candidate_strategies",
+        "tool_capability",
+        "risk",
+        "long_term_consequence"
+      ],
+      "origin": "ENGINEERING_FIXTURE",
+      "retrieval": {
+        "candidate_rule_ids": [
+          "fish_food"
+        ],
+        "confidence": 0.6,
+        "problem_id": "HUNGER",
+        "required_recipe_refs": [],
+        "required_source_tags": [
+          "FISH"
+        ]
+      },
+      "review": {
+        "reviewed_by": "synthetic-fixture-tests",
+        "status": "APPROVED"
+      },
+      "source_path": "cognition_fixture.txt",
+      "source_sha256": "1375f4dd0ce58082e3c0e44a9bfc290241216876c3786e010552c062abeecdd2"
+    }
+  ],
+  "pack_id": "cognitive-cases-54a32582271a2ec8",
+  "runtime_policy": "ADVISORY_ONLY",
+  "schema_version": 1
+}

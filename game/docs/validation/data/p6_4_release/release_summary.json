@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "runtime_source_sha256": "fbf2eb317d8ee4b4060c16e8e0f969cc171817e4d96419aff7f8ebe12bfa7ca8",
+  "architecture_manifest_sha256": "15ee2b33364439b0b622a8559c5215200e8609aad9a7504fae3ad32217316d6c",
+  "original_baseline": {
+    "suites": 32,
+    "assertions": 825,
+    "ok": true
+  },
+  "post_validation_formatting": {
+    "path": "tests/cognition/test_compile_cases.py",
+    "change": "Remove one trailing blank line at EOF; AST unchanged.",
+    "before_sha256": "313afe02a76e3912927049e9a4b25e500d6028935322de03039ce0000c35d1ae",
+    "after_sha256": "430b6fc49968d8c02d262765c7fa195efb78dd5603969469f990f4a686b2ca7c",
+    "ast_equal": true,
+    "python_tests_rerun": 18,
+    "python_exit": 0
+  },
+  "validated_source_sha256": "d52eef98d6d0e0e34ab53370d4cc9b4c5eed649dbb32791cf717038300bde8fb",
+  "release_regression": {
+    "suites": 35,
+    "assertions": 899,
+    "python_tests": 18,
+    "ok": true
+  },
+  "causal_pilot": {
+    "baseline": {
+      "started": 278,
+      "completed": 43,
+      "cancelled": 223,
+      "blocked": 0,
+      "active_or_suspended_at_end": 12,
+      "multi_stage_completed": 0
+    },
+    "treatment": {
+      "started": 278,
+      "completed": 43,
+      "cancelled": 223,
+      "blocked": 0,
+      "active_or_suspended_at_end": 12,
+      "multi_stage_completed": 0
+    },
+    "positive_uplifts": 0
+  },
+  "adoption_pilot": {
+    "baseline": {
+      "started": 278,
+      "completed": 43,
+      "cancelled": 223,
+      "blocked": 0,
+      "active_or_suspended_at_end": 12,
+      "multi_stage_completed": 0
+    },
+    "treatment": {
+      "started": 282,
+      "completed": 41,
+      "cancelled": 230,
+      "blocked": 0,
+      "active_or_suspended_at_end": 11,
+      "multi_stage_completed": 0
+    },
+    "behavior_difference_seeds": 0,
+    "first_seed_full_replay": true
+  },
+  "funnel": {
+    "actor_decision_opportunities": 13610,
+    "complete_chain_ready_opportunities": 4,
+    "complete_chain_adopted_opportunities": 0,
+    "unknown_shell_source_opportunities": 1413,
+    "commitment_reconsiderations": 62,
+    "probe_passivity_all_seeds": true
+  },
+  "headless": {
+    "ticks": 1000,
+    "actors": 3,
+    "events": 1396,
+    "adoption_records": 1418,
+    "execution_records": 387,
+    "replay_verified": true
+  },
+  "clean_install": {
+    "ticks": 200,
+    "replay_verified": true,
+    "excluded": [
+      ".godot",
+      "node_modules",
+      "tools",
+      "game/config/ai.local.json",
+      "story-engine/config.json"
+    ]
+  },
+  "limits": [
+    "Natural proof-complete ACQUIRE/CRAFT/MAIN chains remain zero.",
+    "Novel extraction/model training not performed; only an engineering fixture is supplied.",
+    "CognitiveCaseLibrary is callable read-only infrastructure, not automatically injected into agents.",
+    "Replay recomputes from initial inputs; complete mid-run checkpoint restore is not implemented.",
+    "Windows command path supplied but not executed in this Linux validation."
+  ]
+}

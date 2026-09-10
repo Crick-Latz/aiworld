@@ -1,3 +1,5 @@
+> 2026-09-10 状态说明：本文件保留为 P6.0 历史设计与人工模式摘要。所列文学案例尚未附逐条原文与审核证据，不能计作已完成的模型训练。当前证据导入与只读检索接口见 [小说认知接口](../../../../docs/NOVEL_COGNITION.md)。
+
 # P6.0 — 叙事行为挖掘（Narrative Behavior Mining）
 
 20 部荒岛/孤立求生/群体生存作品的行为模式抽取。**不是文学评论**——只抽 13 元组：Problem / Perceived Situation / Knowledge Used / Available Resources / Candidate Strategies / Chosen / Prerequisites / Tool-Capability / Social Dependency / Risk / Failure / Adaptation / Long-term Consequence。禁止照抄剧情/长篇引用/把文学夸张写进物理规则。

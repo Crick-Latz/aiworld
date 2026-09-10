@@ -1,0 +1,46 @@
+{
+  "comparison": "P6.4 fixed pilot treatment vs read-only funnel probe",
+  "rows": [
+    {
+      "seed": 61000,
+      "equal": true
+    },
+    {
+      "seed": 61001,
+      "equal": true
+    },
+    {
+      "seed": 61002,
+      "equal": true
+    },
+    {
+      "seed": 61003,
+      "equal": true
+    },
+    {
+      "seed": 61004,
+      "equal": true
+    },
+    {
+      "seed": 61005,
+      "equal": true
+    },
+    {
+      "seed": 61006,
+      "equal": true
+    },
+    {
+      "seed": 61007,
+      "equal": true
+    },
+    {
+      "seed": 61008,
+      "equal": true
+    },
+    {
+      "seed": 61009,
+      "equal": true
+    }
+  ],
+  "ok": true
+}

@@ -30,12 +30,18 @@ var _cooldown := {}     # actor_id -> {plan_id: 可重选 tick}（§七 避免�
 
 ## 决策前调用：有效 run 延续 / 终态重选 → 自动推进已满足步骤。
 ## SUSPENDED 与 ACTIVE 同样提供当前步骤（暂停≠退出考虑集——真实恢复入口）。
-## 返回 {run_id, plan_id, root_goal, step}（无可执行步骤时为空）。
-func prepare_decision(actor_id: String, proposals: Array, ctx: Dictionary, tick: int) -> Dictionary:
+## 返回 {run_id, plan_id, root_goal, step, valuation_context}（无可执行步骤时为空）。
+func prepare_decision(actor_id: String, proposals: Array, ctx: Dictionary, tick: int, adoption: Dictionary = {}) -> Dictionary:
 	var run: Dictionary = runs.get(actor_id, {})
 	var prefer_goal := ""
 	# 有效 run = ACTIVE/SUSPENDED；终态（CANCELLED/BLOCKED/COMPLETED）每次决策都尝试重选
 	var valid := not run.is_empty() and str(run.get("state", "")) in ["ACTIVE", "SUSPENDED"]
+	var subjective := str(adoption.get("mode", "")) == "SUBJECTIVE"
+	var selected_id := str(adoption.get("selected_plan_id", ""))
+	if subjective and valid and selected_id != str(run.get("plan_id", "")):
+		_transition(run, tick, "CANCELLED", "COMMITMENT_RECONSIDERED", run.get("current_step_id", ""), "")
+		_set_cooldown(actor_id, str(run.get("plan_id", "")), tick)
+		valid = false
 	if valid and not _plan_still_proposed(run, proposals):
 		prefer_goal = str(run.get("root_goal", ""))
 		_transition(run, tick, "CANCELLED", "PLAN_DISAPPEARED", run.get("current_step_id", ""), "")
@@ -43,9 +49,13 @@ func prepare_decision(actor_id: String, proposals: Array, ctx: Dictionary, tick:
 	if not valid:
 		if not run.is_empty():
 			prefer_goal = str(run.get("root_goal", ""))
-		run = _select_new_run(actor_id, proposals, ctx, tick, prefer_goal)
+		if subjective and selected_id == "":
+			return {}
+		run = _select_new_run(actor_id, proposals, ctx, tick, prefer_goal, selected_id if subjective else "")
 		if run.is_empty():
 			return {}
+	if subjective:
+		run["commitment"] = adoption.duplicate(true)
 	# §六 决策前重查前提 + 自动推进（USE 能力在场跳过；ACQUIRE 库存达标跳过）
 	var step: Dictionary = _advance_satisfied(run, ctx, tick)
 	if str(run.get("state", "")) not in ["ACTIVE", "SUSPENDED"]:
@@ -55,6 +65,7 @@ func prepare_decision(actor_id: String, proposals: Array, ctx: Dictionary, tick:
 	return {
 		"run_id": str(run["run_id"]), "plan_id": str(run["plan_id"]),
 		"root_goal": str(run["root_goal"]), "step": step,
+		"valuation_context": _valuation_context(run),
 	}
 
 ## 决策后调用：记录选中（或未选中）的步骤候选——"被选中"不算完成，只挂 pending。
@@ -223,13 +234,28 @@ func _complete_main(run: Dictionary, step: Dictionary, event_segment: Array,
 
 # ── 内部 ──
 
+func _valuation_context(run: Dictionary) -> Dictionary:
+	var plan: Dictionary = run.get("plan_snapshot", {})
+	var steps: Array = run.get("steps", [])
+	var idx := _step_index_of(run, str(run.get("current_step_id", "")))
+	return {
+		"expected_benefit": float(plan.get("expected_benefit", 0.0)),
+		"estimated_cost": float(plan.get("estimated_cost", 0.0)),
+		"estimated_risk": float(plan.get("estimated_risk", 0.0)),
+		"confidence": float(plan.get("confidence", 0.0)),
+		"step_index": maxi(idx, 0),
+		"step_count": steps.size(),
+	}
+
 func _select_new_run(actor_id: String, proposals: Array, ctx: Dictionary, tick: int,
-		prefer_goal: String = "") -> Dictionary:
+		prefer_goal: String = "", adopted_plan_id: String = "") -> Dictionary:
 	# §四 固定公开排序：先延续上一 root_goal（目标连续性），再 root_goal 升序 → plan_id 升序；
 	# 只选 READY（可执行）计划；冷却中的 plan_id（刚超时取消）跳过——避免无限忙等
 	var eligible: Array = []
 	for p in proposals:
 		if typeof(p) != TYPE_DICTIONARY:
+			continue
+		if adopted_plan_id != "" and str(p.get("plan_id", "")) != adopted_plan_id:
 			continue
 		if str(p.get("status", "")) != "READY":
 			continue
@@ -412,4 +438,12 @@ func _event_refs(segment: Array) -> Array:
 	for e in segment:
 		if typeof(e) == TYPE_DICTIONARY and (e as Dictionary).has("seq"):
 			out.append(int(e["seq"]))
+	return out
+
+## Admission policy sees the same cooldown gate as execution.
+func adoption_candidates(actor_id: String, proposals: Array, tick: int) -> Array:
+	var out: Array = []
+	for proposal in proposals:
+		if typeof(proposal) == TYPE_DICTIONARY and not _in_cooldown(actor_id, str(proposal.get("plan_id", "")), tick):
+			out.append(proposal)
 	return out

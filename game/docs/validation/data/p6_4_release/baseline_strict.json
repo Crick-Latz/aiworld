@@ -1,0 +1,331 @@
+{
+  "source_archive": "AIWorld_P6_3B_4_source.zip",
+  "source_archive_sha256": "e09477dbf2333330b151dffa161fad006fd90c047d7fa5b5bcd9d2a2c019ca17",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "suites": [
+    {
+      "name": "run_all",
+      "exit": 0,
+      "expected": 199,
+      "passed": 199,
+      "failed": 0,
+      "errors": [],
+      "seconds": 5.84,
+      "ok": true
+    },
+    {
+      "name": "player_physics",
+      "exit": 0,
+      "expected": 28,
+      "passed": 28,
+      "failed": 0,
+      "errors": [],
+      "seconds": 129.51,
+      "ok": true
+    },
+    {
+      "name": "camera_rotation",
+      "exit": 0,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": [],
+      "seconds": 0.62,
+      "ok": true
+    },
+    {
+      "name": "observer_sim",
+      "exit": 0,
+      "expected": 13,
+      "passed": 13,
+      "failed": 0,
+      "errors": [],
+      "seconds": 3.33,
+      "ok": true
+    },
+    {
+      "name": "story_causal",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.19,
+      "ok": true
+    },
+    {
+      "name": "story_dynamic",
+      "exit": 0,
+      "expected": 11,
+      "passed": 11,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.19,
+      "ok": true
+    },
+    {
+      "name": "story_save",
+      "exit": 0,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.2,
+      "ok": true
+    },
+    {
+      "name": "ai_mock",
+      "exit": 0,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": [],
+      "seconds": 0.17,
+      "ok": true
+    },
+    {
+      "name": "island_sim",
+      "exit": 0,
+      "expected": 8,
+      "passed": 8,
+      "failed": 0,
+      "errors": [],
+      "seconds": 5.1,
+      "ok": true
+    },
+    {
+      "name": "p0_cognition",
+      "exit": 0,
+      "expected": 9,
+      "passed": 9,
+      "failed": 0,
+      "errors": [],
+      "seconds": 8.72,
+      "ok": true
+    },
+    {
+      "name": "p1_social",
+      "exit": 0,
+      "expected": 33,
+      "passed": 33,
+      "failed": 0,
+      "errors": [],
+      "seconds": 43.54,
+      "ok": true
+    },
+    {
+      "name": "p1_5_cognition",
+      "exit": 0,
+      "expected": 24,
+      "passed": 24,
+      "failed": 0,
+      "errors": [],
+      "seconds": 32.63,
+      "ok": true
+    },
+    {
+      "name": "p1_6_cognition",
+      "exit": 0,
+      "expected": 27,
+      "passed": 27,
+      "failed": 0,
+      "errors": [],
+      "seconds": 7.05,
+      "ok": true
+    },
+    {
+      "name": "p1_7_ecology",
+      "exit": 0,
+      "expected": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": [],
+      "seconds": 8.83,
+      "ok": true
+    },
+    {
+      "name": "p2_institution",
+      "exit": 0,
+      "expected": 44,
+      "passed": 44,
+      "failed": 0,
+      "errors": [],
+      "seconds": 8.25,
+      "ok": true
+    },
+    {
+      "name": "narrative_ir",
+      "exit": 0,
+      "expected": 24,
+      "passed": 24,
+      "failed": 0,
+      "errors": [],
+      "seconds": 0.26,
+      "ok": true
+    },
+    {
+      "name": "p3_narrative",
+      "exit": 0,
+      "expected": 78,
+      "passed": 78,
+      "failed": 0,
+      "errors": [],
+      "seconds": 146.47,
+      "ok": true
+    },
+    {
+      "name": "p4_threads",
+      "exit": 0,
+      "expected": 17,
+      "passed": 17,
+      "failed": 0,
+      "errors": [],
+      "seconds": 16.81,
+      "ok": true
+    },
+    {
+      "name": "p5_spatial",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 5.0,
+      "ok": true
+    },
+    {
+      "name": "p4_3_thread_renderer",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 7.14,
+      "ok": true
+    },
+    {
+      "name": "p6_world_knowledge",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 2.86,
+      "ok": true
+    },
+    {
+      "name": "p6_1_runtime_agency_shadow",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 13.56,
+      "ok": true
+    },
+    {
+      "name": "p6_2_agency_action_bridge",
+      "exit": 0,
+      "expected": 33,
+      "passed": 33,
+      "failed": 0,
+      "errors": [],
+      "seconds": 32.07,
+      "ok": true
+    },
+    {
+      "name": "p6_3_items",
+      "exit": 0,
+      "expected": 45,
+      "passed": 45,
+      "failed": 0,
+      "errors": [],
+      "seconds": 8.45,
+      "ok": true
+    },
+    {
+      "name": "p6_3b_plan_steps",
+      "exit": 0,
+      "expected": 23,
+      "passed": 23,
+      "failed": 0,
+      "errors": [],
+      "seconds": 5.75,
+      "ok": true
+    },
+    {
+      "name": "p6_3b_execution",
+      "exit": 0,
+      "expected": 28,
+      "passed": 28,
+      "failed": 0,
+      "errors": [],
+      "seconds": 7.69,
+      "ok": true
+    },
+    {
+      "name": "plan_step_value",
+      "exit": 0,
+      "expected": 18,
+      "passed": 18,
+      "failed": 0,
+      "errors": [],
+      "seconds": 0.35,
+      "ok": true
+    },
+    {
+      "name": "intention_revalidation",
+      "exit": 0,
+      "expected": 14,
+      "passed": 14,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.18,
+      "ok": true
+    },
+    {
+      "name": "intention_utility",
+      "exit": 0,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0,
+      "errors": [],
+      "seconds": 0.35,
+      "ok": true
+    },
+    {
+      "name": "execution_receipt",
+      "exit": 0,
+      "expected": 6,
+      "passed": 6,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.28,
+      "ok": true
+    },
+    {
+      "name": "action_travel",
+      "exit": 0,
+      "expected": 11,
+      "passed": 11,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "name": "resource_target_revalidation",
+      "exit": 0,
+      "expected": 15,
+      "passed": 15,
+      "failed": 0,
+      "errors": [],
+      "seconds": 1.0,
+      "ok": true
+    }
+  ],
+  "passed_suites": 32,
+  "passed_assertions": 825,
+  "ok": true,
+  "note": "Verified on an immutable pre-P6.4 snapshot. An earlier concurrent-edit exploratory batch was discarded."
+}

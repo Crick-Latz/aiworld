@@ -27,6 +27,13 @@ var agency_mode := "OFF"
 # P6.3B-1 §三：计划执行开关（默认 false——不改变任何现有行为）。
 # true 时仅在 LIVE_BRIDGE 下允许计划步骤候选参与考虑集；其他模式只观察不执行。
 var agency_plan_execution_enabled := false
+# P6.3B-4：根目标因果价值向当前计划步骤传播。独立开关默认 false，便于与旧执行路径 paired 对照。
+var agency_causal_step_value_enabled := false
+# P6.4: proposal admission and commitment, independent from step execution.
+var agency_plan_adoption_enabled := false
+var _adoption_rngs := {}
+var _adoption_traces: Array = []
+var _world_seed := 0
 # P6.3B-3：无进展上限按真正错失的决策机会计数；同值继续作为取消后的冷却 tick 数。
 var agency_no_progress_timeout := 16
 var _plan_tracker: PlanExecutionTracker = null
@@ -49,6 +56,7 @@ var _rng := RandomNumberGenerator.new()
 func _init(map_query, seed: int, actor_configs: Array, economy_overrides: Dictionary = {}) -> void:
 	self.map_query = map_query
 	_rng.seed = seed
+	_world_seed = seed
 	_economy = {
 		"berry_count": 4, "berry_food": 1, "berry_regrow_days": 5,
 		"fish_prob": 0.5, "fish_amount": 1, "explore_food_prob": 0.015,
@@ -430,11 +438,29 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 		_agency_cache[id] = {"hash": h, "problems": str(problems), "proposals": proposals}
 		agency_planner_calls += 1
 	var out := {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
-		"problems": problems, "proposals": proposals}
+		"problems": problems, "proposals": proposals,
+		"causal_step_value_enabled": agency_causal_step_value_enabled}
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
-		var prep: Dictionary = tracker.prepare_decision(id, proposals, ctx, tick)
+		var adoption := {}
+		if agency_plan_adoption_enabled:
+			if not _adoption_rngs.has(id):
+				var plan_rng := RandomNumberGenerator.new()
+				plan_rng.seed = SeedDeriver.derive(_world_seed, "plan_adoption:" + id)
+				_adoption_rngs[id] = plan_rng
+			var personality: PersonalityProfile = a["personality"]
+			var dynamics := PersonalityDynamics.dynamics(personality, a.get("sensitivities", {}), a.get("norms", {}))
+			var subjective_self := {"needs": a["needs"].duplicate(true), "traits": personality.traits.duplicate(true),
+				"commitment_strength": dynamics["commitment_strength"]}
+			adoption = PlanAdoptionPolicy.deliberate(subjective_self, tracker.adoption_candidates(id, proposals, tick),
+				tracker.runs.get(id, {}), _adoption_rngs[id])
+			adoption["actor_id"] = id
+			adoption["tick"] = tick
+			adoption["context_hash"] = h
+			_adoption_traces.append(adoption.duplicate(true))
+			a["last_plan_adoption"] = adoption.duplicate(true)
+		var prep: Dictionary = tracker.prepare_decision(id, proposals, ctx, tick, adoption)
 		# R1 §五：decision_tick = sim 真实决策 tick（world["tick"] 在 step 末才更新，
 		# trace["tick"] 会滞后一位——新鲜性校验必须用显式携带的 decision_tick）
 		out["decision_tick"] = tick
@@ -1659,3 +1685,13 @@ func get_snapshot() -> Dictionary:
 		}
 	out["relationships"] = relationships.snapshot()
 	return out
+
+## Plan-choice traces are observations; they never authorize a physical action.
+func agency_adoption_trace() -> Array:
+	return _adoption_traces.duplicate(true)
+
+func agency_adoption_rng_states() -> Dictionary:
+	var states := {}
+	for id in _adoption_rngs:
+		states[id] = str((_adoption_rngs[id] as RandomNumberGenerator).state)
+	return states

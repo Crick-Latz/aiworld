@@ -1,0 +1,4 @@
+# Preserve the byte-addressed source fixture across Git checkouts.
+lore/cognition_fixture.txt text eol=lf
+lore/cognition_fixture.cases.json text eol=lf
+game/data/knowledge/cases/engineering_fixture.json text eol=lf

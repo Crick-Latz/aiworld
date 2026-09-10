@@ -173,6 +173,15 @@ func _boot_island() -> void:
 		visual.update_position(spawn, spawn, 0.0)
 		_npc_visuals[id] = visual
 	island_sim = IslandSimulation.new(map_controller, int(scenario.get("seed", 20260905)), actor_configs)
+	# Assembly only: the observer uses the same explicit profile as headless runs.
+	var profile := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--simulation-profile="): profile = arg.trim_prefix("--simulation-profile=")
+	var configured := SimulationBootstrap.configure(island_sim, profile)
+	if not configured.get("ok", false):
+		push_error("SIMULATION_PROFILE_FAILED: " + str(configured))
+		get_tree().quit(1)
+		return
 	camera_rig.center_on(Vector3(map_controller.map_size().x * 0.5, 0.0, map_controller.map_size().y * 0.5))
 	_refresh_hud()
 

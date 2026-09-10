@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "fixture_material_dependency",
+      "origin": "ENGINEERING_FIXTURE",
+      "source": {
+        "path": "cognition_fixture.txt",
+        "sha256": "1375f4dd0ce58082e3c0e44a9bfc290241216876c3786e010552c062abeecdd2",
+        "title": "原创协议测试片段",
+        "rights_basis": "ORIGINAL_ENGINEERING_FIXTURE"
+      },
+      "review": {
+        "status": "APPROVED",
+        "reviewed_by": "synthetic-fixture-tests"
+      },
+      "evidence": [
+        {
+          "id": "E1",
+          "start": 0,
+          "end": 10,
+          "quote": "岑远在浅滩看见鱼群。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        },
+        {
+          "id": "E2",
+          "start": 10,
+          "end": 33,
+          "quote": "他记得木料和贝壳能够制成鱼叉，手里有两枚贝壳。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        },
+        {
+          "id": "E3",
+          "start": 33,
+          "end": 51,
+          "quote": "傍晚，周禾当着岑远的面捆好三根木料。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        },
+        {
+          "id": "E4",
+          "start": 51,
+          "end": 73,
+          "quote": "岑远请周禾借一根木料，答应明天分给他一条鱼。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        },
+        {
+          "id": "E5",
+          "start": 73,
+          "end": 92,
+          "quote": "周禾惦记着修棚，先问岑远准备何时归还。",
+          "perspective": "NARRATOR",
+          "subject_id": "zhou_he"
+        },
+        {
+          "id": "E6",
+          "start": 92,
+          "end": 108,
+          "quote": "岑远提起夜雨，提出先帮周禾修棚。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        },
+        {
+          "id": "E7",
+          "start": 108,
+          "end": 123,
+          "quote": "周禾答应了，放下其中一根木料。",
+          "perspective": "NARRATOR",
+          "subject_id": "cen_yuan"
+        }
+      ],
+      "cognition": {
+        "problem": [
+          "获取食物"
+        ],
+        "perceived_situation": [
+          "看见浅滩的鱼群"
+        ],
+        "knowledge_used": [
+          "记得鱼叉需要木料和贝壳"
+        ],
+        "available_resources": [
+          "持有两枚贝壳"
+        ],
+        "candidate_strategies": [
+          "直接索取木料",
+          "提供劳务换取木料"
+        ],
+        "chosen_strategy": [
+          "向周禾请求木料"
+        ],
+        "prerequisites": [
+          "看见周禾持有木料"
+        ],
+        "tool_capability": [
+          "鱼叉提供捕鱼能力"
+        ],
+        "social_dependency": [
+          "取得木料需要周禾同意"
+        ],
+        "risk": [
+          "对方修棚也需要材料"
+        ],
+        "failure": [
+          "首次请求引起对方追问"
+        ],
+        "adaptation": [
+          "提出先帮助修棚"
+        ],
+        "long_term_consequence": [
+          "后续合作可能受此次交换影响"
+        ]
+      },
+      "field_evidence": {
+        "problem": [
+          "E1"
+        ],
+        "perceived_situation": [
+          "E1"
+        ],
+        "knowledge_used": [
+          "E2"
+        ],
+        "available_resources": [
+          "E2"
+        ],
+        "candidate_strategies": [
+          "E4"
+        ],
+        "chosen_strategy": [
+          "E4"
+        ],
+        "prerequisites": [
+          "E3"
+        ],
+        "tool_capability": [
+          "E2"
+        ],
+        "social_dependency": [
+          "E4"
+        ],
+        "risk": [
+          "E5"
+        ],
+        "failure": [
+          "E5"
+        ],
+        "adaptation": [
+          "E6"
+        ],
+        "long_term_consequence": [
+          "E7"
+        ]
+      },
+      "inferred_fields": [
+        "problem",
+        "candidate_strategies",
+        "tool_capability",
+        "risk",
+        "long_term_consequence"
+      ],
+      "retrieval": {
+        "problem_id": "HUNGER",
+        "required_source_tags": [
+          "FISH"
+        ],
+        "required_recipe_refs": [],
+        "candidate_rule_ids": [
+          "fish_food"
+        ],
+        "confidence": 0.6
+      }
+    }
+  ]
+}
