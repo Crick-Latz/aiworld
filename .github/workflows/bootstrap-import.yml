@@ -1,51 +1,97 @@
-name: Bootstrap AIWorld source
+name: Import AIWorld Git bundle
 
 on:
   push:
     branches:
       - bootstrap/p6-4-local-integrated
     paths:
-      - AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
-      - .bootstrap/AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
+      - AIWORLD_GITHUB_BOOTSTRAP.ready
 
 permissions:
   contents: write
 
+concurrency:
+  group: aiworld-bootstrap-import
+  cancel-in-progress: false
+
 jobs:
-  import-source:
+  import-bundle:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - name: Check out bootstrap branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Verify and extract the Codex-integrated source
+      - name: Assemble Git bundle
         shell: bash
         run: |
           set -euo pipefail
-          archive=AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
-          if [[ ! -f "${archive}" ]]; then
-            archive=.bootstrap/AIWorld_P6_4_LOCAL_INTEGRATED_SOURCE.zip
-          fi
-          echo "cc04d2c4d05808a27b85ef469b5c680d47c9e8d4a533baba59440cab39b77578  ${archive}" | sha256sum -c -
-          rm -rf /tmp/aiworld-import
-          mkdir -p /tmp/aiworld-import
-          unzip -q "${archive}" -d /tmp/aiworld-import
-          test -f /tmp/aiworld-import/source_stage/game/project.godot
-          test -f /tmp/aiworld-import/source_stage/docs/handoff/P6_4_LOCAL_INTEGRATION_REPORT.md
 
-      - name: Replace the bootstrap files with the source tree
+          bundle=/tmp/AIWORLD_GITHUB_BOOTSTRAP.bundle
+          if [[ -f AIWORLD_GITHUB_BOOTSTRAP.bundle ]]; then
+            cp AIWORLD_GITHUB_BOOTSTRAP.bundle "${bundle}"
+          else
+            shopt -s nullglob
+            parts=(AIWORLD_GITHUB_BOOTSTRAP.bundle.part-*)
+            if (( ${#parts[@]} == 0 )); then
+              echo "No Git bundle or bundle parts were uploaded." >&2
+              exit 1
+            fi
+            printf '%s\n' "${parts[@]}" | sort
+            cat $(printf '%s\n' "${parts[@]}" | sort) > "${bundle}"
+          fi
+
+          test -s "${bundle}"
+          sha256sum "${bundle}"
+          git bundle verify "${bundle}"
+
+      - name: Import and validate local checkpoint
         shell: bash
         run: |
           set -euo pipefail
-          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf -- {} +
-          cp -a /tmp/aiworld-import/source_stage/. .
-          rm -f .github/workflows/bootstrap-import.yml
-          find .github -depth -type d -empty -delete 2>/dev/null || true
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git status --short
-          git commit -m "Import AIWorld P6.4 local integrated baseline"
-          git push origin HEAD:bootstrap/p6-4-local-integrated
+
+          expected_imported_sha=dff3b5de1483f9b863dc698c7ab48d2488740923
+          bundle=/tmp/AIWORLD_GITHUB_BOOTSTRAP.bundle
+
+          git fetch "${bundle}" HEAD:refs/remotes/local-import/main
+          imported_sha=$(git rev-parse refs/remotes/local-import/main)
+          echo "Imported checkpoint: ${imported_sha}"
+          test "${imported_sha}" = "${expected_imported_sha}"
+
+          git cat-file -e "${imported_sha}:game/project.godot"
+          git cat-file -e "${imported_sha}:docs/handoff/P6_4_LOCAL_INTEGRATION_REPORT.md"
+          git cat-file -e "${imported_sha}:docs/handoff/DELIVERY_PROTOCOL.md"
+
+      - name: Preserve original GitHub main and publish imported history
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_remote_main=92471dd45f49dd1b6d059fc6ff25128b7993ad6f
+          imported_sha=dff3b5de1483f9b863dc698c7ab48d2488740923
+          backup_ref=refs/heads/archive/github-initial-main
+
+          git fetch origin main
+          remote_main=$(git rev-parse refs/remotes/origin/main)
+          echo "Current GitHub main: ${remote_main}"
+          test "${remote_main}" = "${expected_remote_main}"
+
+          existing_backup=$(git ls-remote --heads origin "${backup_ref}" | awk '{print $1}')
+          if [[ -z "${existing_backup}" ]]; then
+            git push origin "${expected_remote_main}:${backup_ref}"
+          else
+            echo "Existing backup: ${existing_backup}"
+            test "${existing_backup}" = "${expected_remote_main}"
+          fi
+
+          git push \
+            --force-with-lease=refs/heads/main:${expected_remote_main} \
+            origin \
+            "${imported_sha}:refs/heads/main"
+
+          published_sha=$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')
+          echo "Published GitHub main: ${published_sha}"
+          test "${published_sha}" = "${imported_sha}"
