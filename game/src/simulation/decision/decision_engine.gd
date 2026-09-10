@@ -12,6 +12,7 @@ extends RefCounted
 const CONSIDERATION_SIZE := 7  # 此刻心里能装下的选项数
 
 static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenerator, agency: Dictionary = {}) -> Dictionary:
+	actor.erase("_execution_receipt")
 	var intentions: IntentionManager = actor.get("intentions", null)
 	var p: PersonalityProfile = actor.get("personality", null)
 	var tick: int = world.get("tick", 0)
@@ -51,15 +52,22 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	# 但当前最优效用远超在执行意图（紧迫差距）时强制重估——
 	# 饿到极限的人不会因为"决定过要休息"就饿死在存粮上。
 	var continue_p := 0.5 + float(dyn["commitment_strength"]) * 0.45  # 0.72..0.95
+	var continuation := {}
 	if intentions != null and intentions.has_intention():
-		var cur_u := float(intentions.current_intention.get("utility", 0.0))
+		continuation = intentions.matching_candidate(all_actions)
+		if continuation.is_empty():
+			# 动作已结束后的新决策边界：旧承诺不能绕过当前合法性。
+			intentions.clear_intention()
+	if intentions != null and intentions.has_intention():
+		var cur_u := float(continuation.get("utility", 0.0))
 		var best_u := 0.0
 		for a in all_actions:
 			best_u = maxf(best_u, float(a.get("utility", 0.0)))
 		var urgency_gap := best_u - cur_u
 		if urgency_gap <= 0.35 and rng.randf() > 1.0 - continue_p:
-			intentions.reinforce()
-			return intentions.current_intention
+			var continued := intentions.continue_action(continuation)
+			_write_execution_receipt(actor, agency, exec_match, continued, "INTENTION_CONTINUE")
+			return continued
 	if all_actions.is_empty():
 		return {"action": "wait", "target": null, "utility": 0.0, "desc": "什么也不做"}
 
@@ -232,7 +240,24 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	if intentions != null:
 		intentions.set_intention(chosen, tick)
 
+	_write_execution_receipt(actor, agency, exec_match, chosen, "SOFTMAX")
 	return chosen
+
+## Physical-action receipt, not a new cognitive deliberation trace. No RNG or scoring.
+static func _write_execution_receipt(actor: Dictionary, agency: Dictionary, matched: Dictionary,
+		chosen: Dictionary, selection_mode: String) -> void:
+	var step_info: Dictionary = agency.get("execution_step", {})
+	if agency.get("mode", "OFF") != "LIVE_BRIDGE" or step_info.is_empty(): return
+	var selected := false
+	var key := AgencyActionBridge.candidate_key(chosen)
+	for candidate in matched.get("candidates", []):
+		if AgencyActionBridge.candidate_key(candidate) == key: selected = true
+	actor["_execution_receipt"] = {
+		"actor_id": str(actor.get("id", "")), "decision_tick": agency.get("decision_tick", -1),
+		"run_id": step_info.get("run_id", ""), "step_id": step_info.get("step", {}).get("step_id", ""),
+		"selected": selected, "candidate_key": key if selected else "",
+		"chosen_key": key, "selection_mode": selection_mode,
+		"blocker_reason": matched.get("blocker_reason", "")}
 
 ## 不行动是合法行为：观察、发呆、任由事情发生
 static func _do_nothing() -> Dictionary:

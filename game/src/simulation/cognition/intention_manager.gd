@@ -11,14 +11,34 @@ func has_intention() -> bool:
 	return not current_intention.is_empty()
 
 func set_intention(action: Dictionary, tick: int) -> void:
-	current_intention = {
-		"action": str(action.get("action", "wait")),
-		"desc": str(action.get("desc", "")),
-		"target": action.get("target", null),
-		"commitment": 0.8, # 初始承诺度
-		"started_tick": tick,
-		"utility": float(action.get("utility", 0.0)),
-	}
+	# 意图保留完整执行载荷；不与 Registry/调用者共享可变字典。
+	current_intention = action.duplicate(true)
+	current_intention["commitment"] = 0.8
+	current_intention["started_tick"] = tick
+
+## 仅匹配本次 actor-facing Registry 候选，不读取世界真值。
+## 展示/时长/效用不是身份；其余执行字段（配方、对象、地点、数量等）必须相同。
+func matching_candidate(candidates: Array) -> Dictionary:
+	var identity := _execution_identity(current_intention)
+	for candidate in candidates:
+		if identity == _execution_identity(candidate):
+			return candidate
+	return {}
+
+static func _execution_identity(action: Dictionary) -> Dictionary:
+	var identity := action.duplicate(true)
+	for key in ["utility", "desc", "duration", "commitment", "started_tick"]:
+		identity.erase(key)
+	return identity
+
+func continue_action(candidate: Dictionary) -> Dictionary:
+	var previous := current_intention
+	current_intention = candidate.duplicate(true)
+	# 承诺历史延续，但效用必须来自当前候选，不能冻结饥饿等旧状态。
+	for key in ["commitment", "started_tick"]:
+		current_intention[key] = previous[key]
+	reinforce()
+	return current_intention.duplicate(true)
 
 func clear_intention() -> void:
 	current_intention = {}

@@ -397,6 +397,12 @@ func _test_p3a2_1_semantic_gate() -> void:
 		str(preds.keys()) + "（CONTRIBUTED 不得再出现）")
 
 	# ── NR：解释主张（从记忆解释分布，带 confidence）──
+	# 确定性真实认知夹具：自然长跑是否恰好发生拒绝不是 NarrativeClaim 的职责。
+	# 让双方在场后经 _emit → CognitiveTransition → memory 生成解释，禁止手写 Claim。
+	var nr_weila: Dictionary = sim.actors["npc_weila"]
+	nr_weila["tile"] = oun2["tile"]
+	sim._emit("food_request_refused", "npc_oun", "欧恩拒绝了薇拉的食物请求",
+		{"proposer_id": "npc_weila", "to_id": "npc_weila", "resource": "food"})
 	var ir_r: Dictionary = NarrativeIR.build_ir(sim, "CHARACTER", "npc_weila", 30)
 	var has_interp := false
 	var interp_conf := 0.0

@@ -1,5 +1,9 @@
 class_name IslandSimulation
 extends RefCounted
+
+const FIXED_LOCATION_ACTIONS := ["forage_berries", "drink_water", "fish", "gather_shells",
+	"search_ruins", "gather_wood"]
+const TRAVEL_STALL_LIMIT := 8
 ## 荒岛世界模拟器（阶段 B）：取代 StorySimulation。
 ## 没有预设剧情。只有三个有性格的人、一座有资源的岛、和一套互动规则。
 ## 故事是模拟的输出，不是输入。
@@ -317,7 +321,6 @@ func _ordered_ids() -> Array:
 func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	# 如果正在执行行动，倒计时
 	if int(a.get("action_ticks_left", 0)) > 0:
-		a["action_ticks_left"] = int(a["action_ticks_left"]) - 1
 		# 追踪移动：指向人的行动逐 tick 走向对方（对方会走动，追不上=扑空）；
 		# 带地点目标的行动（采集/打水/伐木/探废墟）同样边走边执行——
 		# 否则 2-tick 行动总在半路完成（67 次伐木 0 成功的死因）
@@ -338,8 +341,23 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 				pursue_tile = _away_tile(a["tile"], pursue_tile, a.get("spatial", null))
 			if a["tile"] != pursue_tile:
 				_move_toward(a, pursue_tile)
+		elif _requires_fixed_location(cur_action) and cur_action["target"] != a["tile"]:
+			var before_tile: Vector2i = a["tile"]
+			_move_toward(a, cur_action["target"])
+			if a["tile"] == before_tile:
+				a["action_travel_stall_ticks"] = int(a.get("action_travel_stall_ticks", 0)) + 1
+			else:
+				a["action_travel_stall_ticks"] = 0
+			# Travel and work are separate phases: work duration starts only after arrival.
+			if a["tile"] != cur_action["target"]:
+				if int(a["action_travel_stall_ticks"]) >= TRAVEL_STALL_LIMIT:
+					_abort_unreachable_action(id, a, new_events)
+				else:
+					a["activity"] = "前往" + str(cur_action.get("desc", cur_action.get("action", "目标")))
+				return
 		elif cur_action.has("target") and typeof(cur_action["target"]) == TYPE_VECTOR2I and cur_action["target"] != a["tile"]:
 			_move_toward(a, cur_action["target"])
+		a["action_ticks_left"] = int(a["action_ticks_left"]) - 1
 		if int(a["action_ticks_left"]) <= 0:
 			_complete_action(id, a, new_events)
 		else:
@@ -358,12 +376,16 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
+	a["action_travel_stall_ticks"] = 0
 	a["activity"] = str(decision.get("desc", "？"))
 
 	# P0: 把 trace 写回真实 actor（DecisionEngine 只写了 view 副本）
 	if actor_view.has("last_decision_trace"):
 		a["last_decision_trace"] = actor_view["last_decision_trace"]
 	_enrich_trace(a, decision, gm)
+	a.erase("_execution_receipt")
+	if actor_view.has("_execution_receipt"):
+		a["_execution_receipt"] = actor_view["_execution_receipt"].duplicate(true)
 	# P6.3B-1：决策后通知执行 tracker（选中/暂停/前提失效）
 	_plan_execution_on_decision(id, a, decision)
 
@@ -433,17 +455,23 @@ func agency_plan_run(actor_id: String) -> Dictionary:
 		return {}
 	return (_plan_tracker.runs.get(actor_id, {}) as Dictionary).duplicate(true)
 
-## P6.3B-1 §六 + R1 §五：决策后通知 tracker。证据必须是【本次决策】的 trace——
-## 意图坚持早退不产生新 trace（tick 陈旧）→ 不重挂 pending、不串 run（延续已有尝试）。
+## 决策后通知 tracker：只接受当次执行凭据，不从旧认知 trace 重挂身份。
+## 继续意图也会启动新的物理行动；与仍在执行同一次行动严格区分。
 ## 选中时把行动身份存到 actor（不污染共享 Registry 候选对象），完成时原样带回。
 func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary) -> void:
 	if not agency_plan_execution_enabled or str(agency_mode) != "LIVE_BRIDGE":
 		return
-	var tr: Dictionary = a.get("last_decision_trace", {})
-	var ex: Dictionary = tr.get("agency_execution", {})
-	# R1 §五：新鲜性校验——agency_execution 必须携带本次决策的 decision_tick。
-	# 意图坚持早退不写新 trace（陈旧 tick）→ 不重挂 pending、不串 run（延续已有尝试）。
-	if int(ex.get("decision_tick", -1)) != tick:
+	# Consume once; historical cognitive traces cannot authorize a new physical attempt.
+	var ex: Dictionary = a.get("_execution_receipt", {})
+	a.erase("_execution_receipt")
+	if typeof(ex.get("decision_tick")) != TYPE_INT or ex["decision_tick"] != tick:
+		return
+	if ex.get("actor_id", "") != id or ex.get("chosen_key", "") != AgencyActionBridge.candidate_key(decision):
+		return
+	if ex.get("selection_mode", "") not in ["SOFTMAX", "INTENTION_CONTINUE"]:
+		return
+	var current_run := agency_plan_run(id)
+	if ex.get("run_id", "") != current_run.get("run_id", "") or ex.get("step_id", "") != current_run.get("current_step_id", ""):
 		return
 	var ident: Dictionary = _execution_tracker().on_decision(id, decision, ex, tick)
 	a["_plan_exec_inflight"] = ident
@@ -466,6 +494,13 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 	a["current_action"] = null
 	# P6.3B-1：本次行动产生的事件段（_emit 写 sim.events——按序号切片，供执行完成判定）
 	var _ev_idx := events.size()
+	a.erase("action_travel_stall_ticks")
+	if _requires_fixed_location(action) and a["tile"] != action["target"]:
+		_emit("action_target_missed", id, "%s 尚未抵达行动地点" % a["display_name"],
+			{"action": action_name, "target": str(action["target"]), "actual": str(a["tile"])})
+		a["activity"] = "未能抵达" + str(action.get("desc", action_name))
+		_plan_execution_on_complete(id, a, action, events.slice(_ev_idx))
+		return
 
 	match action_name:
 		"forage_berries":
@@ -522,6 +557,24 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 	a["activity"] = "刚完成" + str(action.get("desc", action_name))
 	# P6.3B-1 §六：行动完成通知（核对 run/step/candidate 标识 + 实际结果；幂等）
 	_plan_execution_on_complete(id, a, action, events.slice(_ev_idx))
+
+func _requires_fixed_location(action: Dictionary) -> bool:
+	return FIXED_LOCATION_ACTIONS.has(str(action.get("action", ""))) \
+		and typeof(action.get("target", null)) == TYPE_VECTOR2I
+
+func _abort_unreachable_action(id: String, a: Dictionary, _new_events: Array) -> void:
+	var action: Dictionary = a.get("current_action", {}).duplicate(true)
+	var event_start := events.size()
+	a["current_action"] = null
+	a["action_ticks_left"] = 0
+	a.erase("action_travel_stall_ticks")
+	var intention: IntentionManager = a.get("intentions", null)
+	if intention != null:
+		intention.force_interrupt("TARGET_UNREACHABLE")
+	_emit("action_target_unreachable", id, "%s 找不到通往行动地点的路" % a["display_name"],
+		{"action": str(action.get("action", "")), "target": str(action.get("target", "")), "actual": str(a["tile"])})
+	a["activity"] = "无法抵达" + str(action.get("desc", action.get("action", "目标")))
+	_plan_execution_on_complete(id, a, action, events.slice(event_start))
 
 # ── 行动执行 ──
 

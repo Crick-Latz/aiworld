@@ -1,0 +1,860 @@
+{
+	"purpose": "descriptive_only_not_acceptance",
+	"rows": [
+		{
+			"exceeds_threshold": false,
+			"historical_threshold": 0.15,
+			"kind": "environment_pair",
+			"seed": 777,
+			"ticks": 1200,
+			"tvd": 0.135041593920099
+		},
+		{
+			"exceeds_threshold": false,
+			"historical_threshold": 0.15,
+			"kind": "environment_pair",
+			"seed": 778,
+			"ticks": 1200,
+			"tvd": 0.140092879256966
+		},
+		{
+			"exceeds_threshold": false,
+			"historical_threshold": 0.15,
+			"kind": "environment_pair",
+			"seed": 779,
+			"ticks": 1200,
+			"tvd": 0.111750321568406
+		},
+		{
+			"event_counts": {
+				"asked_about": 1,
+				"ate_food": 30,
+				"crafted": 2,
+				"drank": 65,
+				"explored": 923,
+				"explored_found": 24,
+				"explored_hurt": 10,
+				"fire_lit": 20,
+				"fished": 1,
+				"food_request_accepted": 1,
+				"food_requested": 1,
+				"foraged": 4,
+				"foraged_empty": 29,
+				"found_person": 43,
+				"gather_wood_empty": 46,
+				"gathered_shells": 14,
+				"gathered_wood": 144,
+				"observing_person": 6,
+				"person_not_found": 40,
+				"promise_broken": 1,
+				"promise_made": 1,
+				"rested": 21,
+				"ruins_empty": 1,
+				"shared_food": 1,
+				"shelter_built": 61,
+				"socialized": 25,
+				"third_party_unknown": 1,
+				"weather_storm": 79
+			},
+			"kind": "social_episode",
+			"seed": 30014,
+			"social_events": [
+				{
+					"actor_id": "npc_oun",
+					"day": 14,
+					"object": "food",
+					"seq": 293,
+					"target_id": "npc_kadga",
+					"text": "缄默者欧恩 向 卡德加 要食物",
+					"tick": 310,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 14,
+					"object": "food",
+					"proposer_id": "npc_oun",
+					"seq": 294,
+					"text": "卡德加 把食物给了 缄默者欧恩",
+					"tick": 310,
+					"type": "food_request_accepted"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 14,
+					"object": "food",
+					"seq": 295,
+					"text": "缄默者欧恩 说：『这份情我记下，以后报答』",
+					"tick": 310,
+					"to_id": "npc_kadga",
+					"type": "promise_made"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 15,
+					"seq": 333,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 346,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				},
+				{
+					"about": "npc_kadga",
+					"actor_id": "npc_oun",
+					"day": 17,
+					"seq": 361,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 悄悄问 薇拉：最近见过 卡德加 拿到吃的吗？",
+					"tick": 378,
+					"to_id": "npc_weila",
+					"type": "asked_about"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 18,
+					"object": "food",
+					"seq": 395,
+					"source_event_ids": [
+						295
+					],
+					"text": "缄默者欧恩 没能兑现他的承诺",
+					"tick": 408,
+					"to_id": "npc_kadga",
+					"type": "promise_broken"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 18,
+					"seq": 398,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 411,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 18,
+					"seq": 403,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 416,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 18,
+					"seq": 410,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 421,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 19,
+					"seq": 415,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 426,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 19,
+					"seq": 421,
+					"source_event_ids": [
+						294
+					],
+					"text": "缄默者欧恩 开始不动声色地留意 卡德加",
+					"tick": 431,
+					"to_id": "npc_kadga",
+					"type": "observing_person"
+				}
+			],
+			"ticks": 1500
+		},
+		{
+			"event_counts": {
+				"ate_food": 15,
+				"crafted": 3,
+				"drank": 71,
+				"explored": 869,
+				"explored_found": 8,
+				"explored_hurt": 7,
+				"fire_lit": 12,
+				"fished": 3,
+				"fished_empty": 5,
+				"food_request_refused": 2,
+				"food_requested": 2,
+				"foraged_empty": 5,
+				"found_person": 37,
+				"gather_wood_empty": 50,
+				"gathered_shells": 20,
+				"gathered_wood": 91,
+				"person_not_found": 42,
+				"rested": 25,
+				"ruins_loot": 1,
+				"rule_abstained": 266,
+				"rule_proposed": 257,
+				"shelter_built": 38,
+				"socialized": 30,
+				"storage_withheld": 3,
+				"weather_storm": 75
+			},
+			"kind": "social_episode",
+			"seed": 30015,
+			"social_events": [
+				{
+					"actor_id": "npc_kadga",
+					"day": 14,
+					"object": "food",
+					"seq": 343,
+					"target_id": "npc_weila",
+					"text": "卡德加 向 薇拉 要食物",
+					"tick": 314,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 14,
+					"object": "food",
+					"proposer_id": "npc_kadga",
+					"seq": 344,
+					"text": "薇拉 摇了摇头：自己也不够吃——卡德加 的求助被拒绝了",
+					"tick": 314,
+					"type": "food_request_refused"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 21,
+					"object": "food",
+					"seq": 528,
+					"target_id": "npc_weila",
+					"text": "缄默者欧恩 向 薇拉 要食物",
+					"tick": 488,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 21,
+					"object": "food",
+					"proposer_id": "npc_oun",
+					"seq": 529,
+					"text": "薇拉 摇了摇头：自己也不够吃——缄默者欧恩 的求助被拒绝了",
+					"tick": 488,
+					"type": "food_request_refused"
+				}
+			],
+			"ticks": 1500
+		},
+		{
+			"event_counts": {
+				"asked_about": 20,
+				"ate_food": 35,
+				"confronted_violation": 13,
+				"crafted": 3,
+				"explored": 680,
+				"explored_found": 5,
+				"explored_hurt": 7,
+				"fire_lit": 18,
+				"fished": 29,
+				"fished_empty": 36,
+				"food_request_refused": 5,
+				"food_requested": 5,
+				"found_person": 83,
+				"gather_wood_empty": 43,
+				"gathered_shells": 17,
+				"gathered_wood": 92,
+				"institution_established": 2,
+				"person_not_found": 3,
+				"reason_asked": 6,
+				"reason_claimed": 3,
+				"reason_deflected": 3,
+				"reflected": 36,
+				"rested": 18,
+				"rule_abstained": 486,
+				"rule_proposed": 337,
+				"rule_revised": 26,
+				"rule_supported": 150,
+				"shared_food": 17,
+				"shelter_built": 36,
+				"socialized": 35,
+				"storage_withheld": 20,
+				"third_party_claimed": 2,
+				"third_party_unknown": 18,
+				"water_request_refused": 2,
+				"water_requested": 2,
+				"weather_storm": 73
+			},
+			"kind": "social_episode",
+			"seed": 30016,
+			"social_events": [
+				{
+					"actor_id": "npc_weila",
+					"day": 16,
+					"object": "food",
+					"seq": 368,
+					"target_id": "npc_kadga",
+					"text": "薇拉 向 卡德加 要食物",
+					"tick": 370,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 16,
+					"object": "food",
+					"proposer_id": "npc_weila",
+					"seq": 369,
+					"text": "卡德加 摇了摇头：自己也不够吃——薇拉 的求助被拒绝了",
+					"tick": 370,
+					"type": "food_request_refused"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 16,
+					"seq": 373,
+					"source_event_ids": [
+						369
+					],
+					"text": "薇拉 问 卡德加：那天为什么不帮我？",
+					"tick": 374,
+					"to_id": "npc_kadga",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"claim": "我自己也没粮了",
+					"day": 16,
+					"seq": 374,
+					"source_event_ids": [
+						373
+					],
+					"text": "卡德加 说：『我自己也没粮了』",
+					"tick": 374,
+					"to_id": "npc_weila",
+					"type": "reason_claimed"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 18,
+					"object": "food",
+					"seq": 419,
+					"target_id": "npc_oun",
+					"text": "薇拉 向 缄默者欧恩 要食物",
+					"tick": 413,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 18,
+					"object": "food",
+					"proposer_id": "npc_weila",
+					"seq": 420,
+					"text": "缄默者欧恩 摇了摇头：自己也不够吃——薇拉 的求助被拒绝了",
+					"tick": 413,
+					"type": "food_request_refused"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 22,
+					"seq": 533,
+					"source_event_ids": [
+						420
+					],
+					"text": "薇拉 问 缄默者欧恩：那天为什么不帮我？",
+					"tick": 511,
+					"to_id": "npc_oun",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 22,
+					"seq": 534,
+					"source_event_ids": [
+						533
+					],
+					"text": "缄默者欧恩 沉默了一会儿，什么也没说",
+					"tick": 511,
+					"to_id": "npc_weila",
+					"type": "reason_deflected"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 23,
+					"object": "food",
+					"seq": 566,
+					"target_id": "npc_oun",
+					"text": "卡德加 向 缄默者欧恩 要食物",
+					"tick": 541,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 23,
+					"object": "food",
+					"proposer_id": "npc_kadga",
+					"seq": 567,
+					"text": "缄默者欧恩 摇了摇头：自己也不够吃——卡德加 的求助被拒绝了",
+					"tick": 541,
+					"type": "food_request_refused"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 23,
+					"seq": 569,
+					"source_event_ids": [
+						567
+					],
+					"text": "卡德加 问 缄默者欧恩：那天为什么不帮我？",
+					"tick": 543,
+					"to_id": "npc_oun",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 23,
+					"seq": 570,
+					"source_event_ids": [
+						569
+					],
+					"text": "缄默者欧恩 沉默了一会儿，什么也没说",
+					"tick": 543,
+					"to_id": "npc_kadga",
+					"type": "reason_deflected"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 851,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 721,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 857,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 723,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 860,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 725,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 863,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 727,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 869,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 729,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 875,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 731,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 879,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 733,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 31,
+					"seq": 882,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 735,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 888,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 737,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 894,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 739,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 897,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 741,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 903,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 743,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 909,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 745,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 912,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 747,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 918,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 749,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 32,
+					"seq": 924,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 751,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 34,
+					"seq": 1004,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 792,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 34,
+					"seq": 1009,
+					"source_event_ids": [
+						777
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 794,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 35,
+					"object": "food",
+					"seq": 1072,
+					"target_id": "npc_weila",
+					"text": "缄默者欧恩 向 薇拉 要食物",
+					"tick": 825,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 35,
+					"object": "food",
+					"proposer_id": "npc_oun",
+					"seq": 1073,
+					"text": "薇拉 摇了摇头：自己也不够吃——缄默者欧恩 的求助被拒绝了",
+					"tick": 825,
+					"type": "food_request_refused"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 36,
+					"object": "food",
+					"seq": 1114,
+					"target_id": "npc_weila",
+					"text": "卡德加 向 薇拉 要食物",
+					"tick": 849,
+					"type": "food_requested"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 36,
+					"object": "food",
+					"proposer_id": "npc_kadga",
+					"seq": 1115,
+					"text": "薇拉 摇了摇头：自己也不够吃——卡德加 的求助被拒绝了",
+					"tick": 849,
+					"type": "food_request_refused"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_kadga",
+					"day": 36,
+					"seq": 1120,
+					"source_event_ids": [
+						1115
+					],
+					"text": "卡德加 悄悄问 缄默者欧恩：最近见过 薇拉 拿到吃的吗？",
+					"tick": 851,
+					"to_id": "npc_oun",
+					"type": "asked_about"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 52,
+					"seq": 1843,
+					"source_event_ids": [
+						1837
+					],
+					"text": "薇拉 问 卡德加：那天为什么不帮我？",
+					"tick": 1227,
+					"to_id": "npc_kadga",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"claim": "我自己也没粮了",
+					"day": 52,
+					"seq": 1844,
+					"source_event_ids": [
+						1843
+					],
+					"text": "卡德加 说：『我自己也没粮了』",
+					"tick": 1227,
+					"to_id": "npc_weila",
+					"type": "reason_claimed"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 52,
+					"object": "water",
+					"seq": 1867,
+					"target_id": "npc_weila",
+					"text": "缄默者欧恩 向 薇拉 要水",
+					"tick": 1239,
+					"type": "water_requested"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 52,
+					"object": "water",
+					"proposer_id": "npc_oun",
+					"seq": 1868,
+					"text": "薇拉 摇了摇头：自己也不够吃——缄默者欧恩 的求助被拒绝了",
+					"tick": 1239,
+					"type": "water_request_refused"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 53,
+					"seq": 1869,
+					"source_event_ids": [
+						1857
+					],
+					"text": "薇拉 问 缄默者欧恩：那天为什么不帮我？",
+					"tick": 1240,
+					"to_id": "npc_oun",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_oun",
+					"day": 53,
+					"seq": 1870,
+					"source_event_ids": [
+						1869
+					],
+					"text": "缄默者欧恩 沉默了一会儿，什么也没说",
+					"tick": 1240,
+					"to_id": "npc_weila",
+					"type": "reason_deflected"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 54,
+					"object": "water",
+					"seq": 1919,
+					"target_id": "npc_kadga",
+					"text": "薇拉 向 卡德加 要水",
+					"tick": 1276,
+					"type": "water_requested"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"day": 54,
+					"object": "water",
+					"proposer_id": "npc_weila",
+					"seq": 1920,
+					"text": "卡德加 摇了摇头：自己也不够吃——薇拉 的求助被拒绝了",
+					"tick": 1276,
+					"type": "water_request_refused"
+				},
+				{
+					"about": "npc_weila",
+					"actor_id": "npc_oun",
+					"day": 54,
+					"seq": 1924,
+					"source_event_ids": [
+						1868
+					],
+					"text": "缄默者欧恩 悄悄问 卡德加：最近见过 薇拉 拿到吃的吗？",
+					"tick": 1280,
+					"to_id": "npc_kadga",
+					"type": "asked_about"
+				},
+				{
+					"actor_id": "npc_weila",
+					"day": 54,
+					"seq": 1927,
+					"source_event_ids": [
+						1920
+					],
+					"text": "薇拉 问 卡德加：那天为什么不帮我？",
+					"tick": 1282,
+					"to_id": "npc_kadga",
+					"type": "reason_asked"
+				},
+				{
+					"actor_id": "npc_kadga",
+					"claim": "我自己也没粮了",
+					"day": 54,
+					"seq": 1928,
+					"source_event_ids": [
+						1927
+					],
+					"text": "卡德加 说：『我自己也没粮了』",
+					"tick": 1282,
+					"to_id": "npc_weila",
+					"type": "reason_claimed"
+				}
+			],
+			"ticks": 1500
+		}
+	]
+}

@@ -39,7 +39,7 @@ $suites = @(
     @{ Name = "p2_institution"; Script = "res://test/p2_institution.gd"; Expected = 44 },
     @{ Name = "narrative_ir"; Script = "res://test/narrative_ir.gd"; Expected = 24 },
     @{ Name = "p3_narrative"; Script = "res://test/p3_narrative.gd"; Expected = 78 },
-    @{ Name = "p4_threads"; Script = "res://test/p4_threads.gd"; Expected = 16 },
+    @{ Name = "p4_threads"; Script = "res://test/p4_threads.gd"; Expected = 17 },
     @{ Name = "p5_spatial"; Script = "res://test/p5_spatial.gd"; Expected = 15 },
     @{ Name = "p4_3_thread_renderer"; Script = "res://test/p4_3_thread_renderer.gd"; Expected = 15 },
     @{ Name = "p6_world_knowledge"; Script = "res://test/p6_world_knowledge.gd"; Expected = 15 },
@@ -47,7 +47,11 @@ $suites = @(
     @{ Name = "p6_2_agency_action_bridge"; Script = "res://test/p6_2_agency_action_bridge.gd"; Expected = 33 },
     @{ Name = "p6_3_items"; Script = "res://test/p6_3_items.gd"; Expected = 45 },
     @{ Name = "p6_3b_plan_steps"; Script = "res://test/p6_3b_plan_steps.gd"; Expected = 23 },
-    @{ Name = "p6_3b_execution"; Script = "res://test/p6_3b_execution.gd"; Expected = 27 }
+    @{ Name = "p6_3b_execution"; Script = "res://test/p6_3b_execution.gd"; Expected = 27 },
+    @{ Name = "intention_revalidation"; Script = "res://test/intention_revalidation.gd"; Expected = 14 }
+    @{ Name = "intention_utility"; Script = "res://test/intention_utility.gd"; Expected = 6 }
+    @{ Name = "execution_receipt"; Script = "res://test/execution_receipt.gd"; Expected = 6 }
+    @{ Name = "action_travel"; Script = "res://test/action_travel_lifecycle.gd"; Expected = 11 }
 )
 
 $failures = [Collections.Generic.List[string]]::new()

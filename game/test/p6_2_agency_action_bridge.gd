@@ -149,16 +149,23 @@ func _run() -> void:
 		and pf_off_rng.state == pf_live_rng.state,
 		"off=%s live=%s rng_eq=%s" % [str(pf_off.get("action", "")), str(pf_live.get("action", "")), str(pf_off_rng.state == pf_live_rng.state)])
 
-	# PG：salient 进入 considered 但不保证选中（LIVE 长 sim 取证）
+	# PG：salient 进入 considered 但不保证选中。用独立决策夹具跨固定 RNG 集合验证，
+	# 不依赖 600 tick 自然运行最后一条 trace 恰好处于哪种状态。
 	var pg_in_considered := false
 	var pg_not_selected := false
-	for id in live.actors:
-		var tr: Dictionary = live.actors[id].get("last_decision_trace", {})
+	for pg_seed in range(64):
+		var pg_view := pd_view.duplicate(true)
+		pg_view["intentions"] = IntentionManager.new()
+		var pg_rng := RandomNumberGenerator.new(); pg_rng.seed = 7100 + pg_seed
+		DecisionEngine.decide(pg_view, live.world, pg_rng,
+			{"mode": "LIVE_BRIDGE", "context_hash": "pg", "problems": ["HUNGER"], "proposals": pd_plans})
+		var tr: Dictionary = pg_view.get("last_decision_trace", {})
 		for gc in tr.get("agency_grounded_candidates", []):
 			if (tr.get("considered_actions", []) as Array).has(str(gc.get("action", ""))):
 				pg_in_considered = true
 				if str(tr.get("selected", "")) != str(gc.get("action", "")):
 					pg_not_selected = true
+		if pg_in_considered and pg_not_selected: break
 	_check("pg_salient_considered_not_guaranteed", pg_in_considered, "in=%s" % str(pg_in_considered))
 
 	# PH：Registry 无合法候选 → 拒绝（fish 无鱼叉）
@@ -310,21 +317,38 @@ func _run() -> void:
 		_check("ru2_inert_no_double", true, "同上")
 
 	# ru5：强制构造 SWAPPED_IN——低效用 grounded（饥饿刚过阈值）挤入满考虑集
-	var ru5_actor: Dictionary = live.actors["npc_weila"]
-	ru5_actor["needs"]["hunger"] = 420
-	var ru5_berry: Vector2i = (live.world.get("berry_bushes", []) as Array)[0].get("pos")
-	(ru5_actor["spatial"] as SpatialBeliefMap).observe_resource("berry", ru5_berry, true, false, 1)
-	var ru5_ctx := AgencyContextBuilder.build(live, ru5_actor)
+	# 独立决策夹具，不依赖 600 tick 自然演化恰好剩下哪些候选。
+	var ru5_sim := IslandSimulation.new(mq, 30014, configs.duplicate(true))
+	var ru5_actor: Dictionary = ru5_sim.actors["npc_weila"]
+	ru5_actor["personality"] = PersonalityProfile.new({}, {})
+	ru5_actor["needs"] = {"hunger": 420, "thirst": 950, "energy": 100, "social": 950}
+	ru5_actor["inventory"] = {"wood": 2, "shells": 1, "food": 0}
+	ru5_actor["physical"] = {"wet": false, "sick": false, "injured": false}
+	ru5_actor["spatial"] = SpatialBeliefMap.new()
+	var ru5_near: Vector2i = ru5_actor["tile"]
+	var ru5_berry := Vector2i(40, 40)
+	for kind in ["water", "shell", "ruin"]:
+		ru5_actor["spatial"].observe_resource(kind, ru5_near, true, false, 1)
+	ru5_actor["spatial"].observe_resource("berry", ru5_berry, true, false, 1)
+	var ru5_ctx := AgencyContextBuilder.build(ru5_sim, ru5_actor)
 	var ru5_plans: Array = MeansEndsPlanner.propose_plans("HUNGER", store, ru5_ctx)
+	var ru5_world := {"tick": 1, "fires": {}, "shelters": {}}
+	var ru5_fixture_view := ru5_sim._build_actor_view("npc_weila", ru5_actor)
+	ru5_fixture_view["intentions"] = IntentionManager.new()
+	var ru5_off_rng := RandomNumberGenerator.new(); ru5_off_rng.seed = 500
+	DecisionEngine.decide(ru5_fixture_view, ru5_world, ru5_off_rng)
+	var ru5_before: Dictionary = ru5_fixture_view["last_decision_trace"].duplicate(true)
+	var ru5_precondition: bool = (ru5_before.get("ignored_actions", []) as Array).has("forage_berries") \
+		and (ru5_before.get("considered_keys", []) as Array).size() >= DecisionEngine.CONSIDERATION_SIZE
 	var ru5_swapped := false
 	var ru5_util_ok := true
 	var ru5_util_val := -1.0
-	for ru5_seed in range(80):
-		var ru5_view := live._build_actor_view("npc_weila", ru5_actor)
+	for ru5_seed in range(1): # 挤位发生在 RNG 之前；不靠重抽 softmax 寻找夹具。
+		var ru5_view := ru5_sim._build_actor_view("npc_weila", ru5_actor)
 		ru5_view["intentions"] = IntentionManager.new()
 		var ru5_rng := RandomNumberGenerator.new()
 		ru5_rng.seed = 500 + ru5_seed
-		DecisionEngine.decide(ru5_view, live.world, ru5_rng, {"mode": "LIVE_BRIDGE", "context_hash": "h", "problems": ["HUNGER"], "proposals": ru5_plans})
+		DecisionEngine.decide(ru5_view, ru5_world, ru5_rng, {"mode": "LIVE_BRIDGE", "context_hash": "h", "problems": ["HUNGER"], "proposals": ru5_plans})
 		var ru5_tr: Dictionary = ru5_view.get("last_decision_trace", {})
 		if (ru5_tr.get("agency_swapped_in_keys", []) as Array).size() > 0:
 			ru5_swapped = true
@@ -337,8 +361,8 @@ func _run() -> void:
 								ru5_util_ok = false
 					break
 			break
-	_check("ru5_forced_swapped_in", ru5_swapped and ru5_util_ok and ru5_util_val >= 0.0 and ru5_util_val < 0.3,
-		"swapped=%s util=%f（需 <0.3 证明被换入者本是弱候选）" % [str(ru5_swapped), ru5_util_val])
+	_check("ru5_forced_swapped_in", ru5_precondition and ru5_swapped and ru5_util_ok and ru5_util_val >= 0.0 and ru5_util_val < 0.3,
+		"precondition=%s swapped=%s util=%f" % [str(ru5_precondition), str(ru5_swapped), ru5_util_val])
 
 	# ru6：多 grounded 同行动不同目标 → key 一致去重（registry 最优同名候选）
 	var ru6_plans: Array = ru5_plans.duplicate()
@@ -347,7 +371,7 @@ func _run() -> void:
 		ru6_second["plan_id"] = "PLAN_DUP"
 		ru6_second["belief_refs"] = ["known_source:berry|9,9"]
 		ru6_plans.append(ru6_second)
-	var ru6_all: Array = ActionRegistry.get_available_actions(live._build_actor_view("npc_weila", ru5_actor), live.world)
+	var ru6_all: Array = ActionRegistry.get_available_actions(ru5_sim._build_actor_view("npc_weila", ru5_actor), ru5_world)
 	var ru6_ground := AgencyActionBridge.ground(ru6_plans, ru6_all, 1, "x")
 	var ru6_keys: Array = []
 	for gc3 in ru6_ground.get("grounded_candidates", []):
@@ -358,14 +382,9 @@ func _run() -> void:
 			ru6_dup = true
 	_check("ru6_same_action_target_consistency", ru6_keys.size() <= 1 or ru6_dup, str(ru6_keys))
 
-	# ru7：pg_not_selected 真断言（considered 但未选中的 grounded 存在）
-	var ru7_not_selected := false
-	for id2 in live.actors:
-		var tr7: Dictionary = live.actors[id2].get("last_decision_trace", {})
-		for gc4 in tr7.get("agency_grounded_candidates", []):
-			if (tr7.get("considered_actions", []) as Array).has(str(gc4.get("action", ""))) and str(tr7.get("selected", "")) != str(gc4.get("action", "")):
-				ru7_not_selected = true
-	_check("ru7_pg_not_selected_asserted", ru7_not_selected, "LIVE 600t 内需存在 considered-but-not-selected 实例")
+	# ru7：同一独立夹具确实观察到 considered-but-not-selected，防止实现强制选中。
+	_check("ru7_pg_not_selected_asserted", pg_not_selected,
+		"64 个固定决策种子内需存在 considered-but-not-selected 实例")
 
 	# ru8：TARGET_MISMATCH 已从实现类别诚实移除（源码无"预留"字样即通过）
 	var ru8_src := FileAccess.get_file_as_string("res://src/simulation/knowledge/agency_action_bridge.gd")
@@ -489,7 +508,7 @@ func _run() -> void:
 
 	print("SUMMARY pass=%d fail=%d" % [_pass, _fail])
 	_f = true
-	quit(0)
+	quit(0 if _fail == 0 else 1)
 
 func _far_tile(sim, mq) -> Vector2i:
 	var rect: Rect2i = mq.get_map_rect()

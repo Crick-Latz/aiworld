@@ -143,11 +143,21 @@ func _ti_determinism() -> void:
 	te2.process(sim)
 	_check("ti_deterministic", str(te1.engine.threads) == str(te2.engine.threads),
 		"threads match=%s" % str(te1.engine.threads.size() == te2.engine.threads.size()))
-	# ThreadIR 也确定性
-	if te1.engine.threads.size() > 0:
-		var ir1 := te1.build_thread_ir(sim, te1.engine.threads[0])
-		var ir2 := te2.build_thread_ir(sim, te2.engine.threads[0])
-		_check("ti_thread_ir_deterministic", str(ir1) == str(ir2))
+	# ThreadIR 固定夹具：不因自然样本没长出线程就少跑一个门。
+	sim._emit("promise_made", "npc_oun", "fixture promise", {"to_id": "npc_kadga"})
+	var fixture_seq := int(sim.events.back()["seq"])
+	te1.process(sim)
+	te2.process(sim)
+	var thread1 := {}
+	var thread2 := {}
+	for th in te1.engine.threads:
+		if (th.get("source_event_ids", []) as Array).has(fixture_seq): thread1 = th
+	for th in te2.engine.threads:
+		if (th.get("source_event_ids", []) as Array).has(fixture_seq): thread2 = th
+	var ir1 := te1.build_thread_ir(sim, thread1) if not thread1.is_empty() else {}
+	var ir2 := te2.build_thread_ir(sim, thread2) if not thread2.is_empty() else {}
+	_check("ti_thread_ir_deterministic", not thread1.is_empty() and not thread2.is_empty()
+		and not ir1.is_empty() and str(ir1) == str(ir2))
 
 func _sim_hash(sim) -> Dictionary:
 	var out := {}

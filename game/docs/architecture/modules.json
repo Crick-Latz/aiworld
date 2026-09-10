@@ -83,7 +83,8 @@
         "m11_knowledge_agency"
       ],
       "test_entrypoints": [
-        "game/test/observer_sim.gd"
+        "game/test/observer_sim.gd",
+        "game/test/action_travel_lifecycle.gd"
       ],
       "legacy_exceptions": []
     },
@@ -92,6 +93,7 @@
       "owner_role": "sim",
       "owned_paths": [
         "game/src/simulation/behavior/agent_brain.gd",
+        "game/src/simulation/cognition/intention_manager.gd",
         "game/src/simulation/decision/action_registry.gd",
         "game/src/simulation/decision/decision_engine.gd"
       ],
@@ -104,7 +106,15 @@
         "m10_items_crafting"
       ],
       "test_entrypoints": [
-        "game/test/observer_sim.gd"
+        "game/test/observer_sim.gd",
+        "game/test/intention_revalidation.gd",
+        "game/test/intention_revalidation_probe.gd (fixed-seed before/after capture)",
+        "game/test/intention_regression_probe.gd (test-local legacy/payload/fixed comparison)",
+        "game/test/intention_story_samples.gd (descriptive product samples; not acceptance)",
+        "game/test/intention_utility.gd",
+        "game/test/intention_utility_probe.gd (read-only utility audit)",
+        "game/test/plan_completion_audit.gd (read-only completion identity audit)",
+        "game/test/execution_receipt.gd"
       ],
       "legacy_exceptions": []
     },

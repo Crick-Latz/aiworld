@@ -55,20 +55,31 @@ func _run() -> void:
 		# RA/RD：ctx 只含自己见过的来源，且少于世界总量（主观派生，非真值）
 		_check("ra_subjective_sources_only", n_berry >= 1 and n_berry <= world_berries,
 			"actor=%s known=%d world=%d" % [berry_owner, n_berry, world_berries])
-		# RD：另一人的浆果来源集不同（同世界不同脑子）
+		# RD：显式不同的主观观察，不假设同点出生的人必然见到不同浆果。
 		var other := ""
 		for id in sim.actors:
 			if str(id) != berry_owner:
 				other = str(id)
 				break
-		var other_berry: Array = []
-		for s in (ctx_store[other] as Dictionary).get("known_sources", []):
-			if str(s.get("tag", "")) == "BERRY":
-				other_berry.append(s)
-		var owner_ids := _source_ids(owner_ctx, "BERRY")
-		var other_ids := _source_ids(ctx_store[other] as Dictionary, "BERRY")
-		_check("rd_same_world_different_knowledge", owner_ids != other_ids or other_berry.is_empty(),
-			"owner=%s other=%s" % [str(owner_ids), str(other_ids)])
+		var rd_a: Dictionary = sim.actors[berry_owner].duplicate(true)
+		var rd_b: Dictionary = sim.actors[other].duplicate(true)
+		rd_a["spatial"] = SpatialBeliefMap.new()
+		rd_b["spatial"] = SpatialBeliefMap.new()
+		rd_a["spatial"].observe_resource("berry", Vector2i(10, 11), true, false, 1)
+		rd_b["spatial"].observe_resource("berry", Vector2i(20, 21), true, false, 1)
+		var rd_world := AgencyMeasure.canon(sim.world)
+		var rd_a_before := AgencyContextBuilder.build(sim, rd_a)
+		var rd_b_before := AgencyContextBuilder.build(sim, rd_b)
+		rd_b["spatial"].observe_resource("berry", Vector2i(22, 23), true, false, 2)
+		var rd_a_after := AgencyContextBuilder.build(sim, rd_a)
+		var rd_b_after := AgencyContextBuilder.build(sim, rd_b)
+		_check("rd_same_world_different_knowledge",
+			_source_ids(rd_a_before, "BERRY") == ["berry|10,11"]
+			and _source_ids(rd_b_before, "BERRY") == ["berry|20,21"]
+			and _source_ids(rd_b_after, "BERRY") == ["berry|20,21", "berry|22,23"]
+			and AgencyMeasure.canon(rd_a_before) == AgencyMeasure.canon(rd_a_after)
+			and AgencyMeasure.canon(sim.world) == rd_world,
+			"explicit observations; changing B must not change A or world")
 	else:
 		_check("ra_subjective_sources_only", false, "400 ticks 无人见浆果——延长跑")
 		_check("rd_same_world_different_knowledge", false, "同上")
@@ -214,7 +225,7 @@ func _run() -> void:
 
 	print("SUMMARY pass=%d fail=%d" % [_pass, _fail])
 	_f = true
-	quit(0)
+	quit(0 if _fail == 0 else 1)
 
 func _source_ids(ctx: Dictionary, tag: String) -> Array:
 	var out: Array = []
