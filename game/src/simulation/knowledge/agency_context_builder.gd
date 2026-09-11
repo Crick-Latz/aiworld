@@ -59,7 +59,7 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 	else:
 		for k in belief.known_resources:
 			var r: Dictionary = belief.known_resources[k]
-			var tag := str(SOURCE_KIND_TAGS.get(str(r["kind"]), ""))
+			var tag := str(SOURCE_KIND_TAGS.get(str(r.get("kind", "")), ""))
 			if tag == "" or not bool(r.get("believed_present", false)):
 				continue
 			var source_id := str(k)
@@ -67,7 +67,11 @@ static func build(sim, actor: Dictionary) -> Dictionary:
 				"tag": tag, "source_id": source_id,
 				"belief_ref": "known_source:" + source_id,
 				"last_seen_tick": int(r.get("last_seen_tick", 0)),
-				"confidence": 1.0,
+				"received_tick": int(r.get("received_tick", r.get("last_seen_tick", 0))),
+				"confidence": clampf(float(r.get("confidence", 1.0)), 0.0, 1.0),
+				"evidence_kind": str(r.get("evidence_kind", SpatialBeliefMap.EVIDENCE_PERCEPT)),
+				"source_actor_id": str(r.get("source_actor_id", "")),
+				"source_event_id": int(r.get("source_event_id", -1)),
 			})
 			_add_unique(ctx["known_source_tags"], tag)
 			_add_unique(ctx["context_refs"], "known_source:" + source_id)
@@ -112,7 +116,18 @@ static func context_hash(ctx: Dictionary) -> String:
 	for p in ctx.get("known_peers", []):
 		parts.append(str(p.get("id", "")) + ":" + _join_sorted(p.get("expertise_tags", [])))
 	for s in ctx.get("known_sources", []):
-		parts.append(str(s.get("source_id", "")))
+		var source_id := str(s.get("source_id", ""))
+		var evidence_kind := str(s.get("evidence_kind", SpatialBeliefMap.EVIDENCE_PERCEPT))
+		var source_actor_id := str(s.get("source_actor_id", ""))
+		var confidence := float(s.get("confidence", 1.0))
+		# 亲眼观察沿用 P6.4 的 hash 语义，信息层关闭时不改变既有采纳轨迹。
+		# 报告证据追加来源与置信度，确保信息到达会触发父计划重验。
+		if evidence_kind == SpatialBeliefMap.EVIDENCE_PERCEPT and source_actor_id == "" \
+				and is_equal_approx(confidence, 1.0):
+			parts.append(source_id)
+		else:
+			parts.append("REPORT:%s:%s:%.4f:%s:%s" % [source_id, str(s.get("tag", "")),
+				confidence, evidence_kind, source_actor_id])
 	return str(hash("|".join(parts)))
 
 static func _add_unique(arr: Array, value: String) -> void:

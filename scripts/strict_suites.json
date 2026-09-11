@@ -190,6 +190,11 @@
       "name": "cognitive_cases",
       "script": "res://test/cognitive_cases.gd",
       "expected": 21
+    },
+    {
+      "name": "p7_information_subgoal",
+      "script": "res://test/p7_information_subgoal.gd",
+      "expected": 70
     }
   ]
 }

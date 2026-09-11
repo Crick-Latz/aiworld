@@ -126,6 +126,44 @@ static func _perceive_resources(sim, belief: SpatialBeliefMap, pos: Vector2i, ho
 		var ft := _pos_from_key(str(pk))
 		if ft.x >= 0 and bool(fires[pk]) and _in_sight(sim, pos, ft, hour, weather):
 			belief.observe_resource("fire", ft, true, false, t)
+	# P7.0：对报告过或旧记忆中的来源做可见范围复核。角色亲自到达后，
+	# 传感器可以确认或推翻报告；决策层仍然看不到世界真值。
+	var known_keys: Array = belief.known_resources.keys()
+	known_keys.sort()
+	for resource_key in known_keys:
+		var remembered: Dictionary = belief.known_resources.get(resource_key, {})
+		var tile: Vector2i = remembered.get("tile", Vector2i(-1, -1))
+		if tile.x < 0 or not _in_sight(sim, pos, tile, hour, weather):
+			continue
+		var truth := _resource_truth_state(sim, str(remembered.get("kind", "")), tile)
+		belief.observe_resource(str(remembered.get("kind", "")), tile,
+			bool(truth.get("present", false)), bool(truth.get("searched", false)), t)
+
+static func _resource_truth_state(sim, kind: String, tile: Vector2i) -> Dictionary:
+	var w: Dictionary = sim.world
+	match kind:
+		"berry":
+			for bush in w.get("berry_bushes", []):
+				if bush.get("pos", Vector2i(-1, -1)) == tile:
+					return {"present": int(bush.get("food", 0)) > 0, "searched": false}
+		"water":
+			return {"present": (w.get("water_springs", []) as Array).has(tile), "searched": false}
+		"fish":
+			return {"present": (w.get("fish_spots", []) as Array).has(tile), "searched": false}
+		"shell":
+			return {"present": (w.get("shell_beaches", []) as Array).has(tile), "searched": false}
+		"tree":
+			return {"present": (w.get("trees", []) as Array).has(tile), "searched": false}
+		"ruin":
+			for ruin in w.get("ruins", []):
+				if ruin.get("pos", Vector2i(-1, -1)) == tile:
+					return {"present": true, "searched": bool(ruin.get("searched", false))}
+		"fire":
+			var fires: Dictionary = w.get("fires", {})
+			for pk in fires:
+				if bool(fires[pk]) and _pos_from_key(str(pk)) == tile:
+					return {"present": true, "searched": false}
+	return {"present": false, "searched": false}
 
 static func _in_sight(sim, pos: Vector2i, target: Vector2i, hour: int, weather: String) -> bool:
 	var d := absi(target.x - pos.x) + absi(target.y - pos.y)

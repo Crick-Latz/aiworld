@@ -299,8 +299,22 @@ func _test_p3a3_llm_offline() -> void:
 	var out_nc: Dictionary = await NarrativeRenderer.render(no_cfg_provider, ir_o)
 	_check("p3a3_no_config_falls_back", bool(out_nc.get("ok", false)) and str(out_nc.get("renderer", "")) == "template",
 		"renderer=%s" % str(out_nc.get("renderer", "")))
-	# 2. load_config 无文件无环境变量 → 空 dict
+	# 2. 在测试作用域内注入占位环境配置；清洁源码无需本地密钥文件。
+	var env_names := ["AIWORD_LLM_BASE_URL", "AIWORD_LLM_API_KEY", "AIWORD_LLM_MODEL"]
+	var env_values := {}
+	var env_present := {}
+	for name in env_names:
+		env_values[name] = OS.get_environment(name)
+		env_present[name] = OS.has_environment(name)
+	OS.set_environment("AIWORD_LLM_BASE_URL", "https://example.invalid/v1")
+	OS.set_environment("AIWORD_LLM_API_KEY", "test-placeholder-key")
+	OS.set_environment("AIWORD_LLM_MODEL", "test-model")
 	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
+	for name in env_names:
+		if bool(env_present[name]):
+			OS.set_environment(name, str(env_values[name]))
+		else:
+			OS.unset_environment(name)
 	_check("p3a3_load_config_valid_when_set", not cfg.is_empty() and cfg.has("api_key"), str(cfg.keys()))
 	# 3. 响应解析：合成 LLM JSON（合法 claims）→ 标准 sentence 输出 + ids 系统派生
 	var claims: Array = ir_o.get("claims", [])

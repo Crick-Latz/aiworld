@@ -14,6 +14,11 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	var inv: Dictionary = actor.get("inventory", {})
 	var pos: Vector2i = actor.get("tile", Vector2i.ZERO)
 
+	# P7.0：信息子目标生成的搜索/询问候选。策略只读取 actor 主观视图。
+	for information_action in InformationActionPolicy.build(actor, actor.get("information_subgoal", {}),
+			int(world.get("tick", 0))):
+		actions.append(information_action)
+
 	var a1 = _forage(p, needs, inv, pos, world, actor)
 	if a1 != null: actions.append(a1)
 	var a2 = _drink(p, needs, pos, world, actor)
