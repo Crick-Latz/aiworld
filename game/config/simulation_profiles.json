@@ -2,9 +2,40 @@
   "schema_version": 1,
   "default_profile": "framework",
   "profiles": {
-    "legacy": {"agency_mode": "OFF", "plan_execution": false, "causal_step_value": false, "plan_adoption": false},
-    "execution": {"agency_mode": "LIVE_BRIDGE", "plan_execution": true, "causal_step_value": false, "plan_adoption": false},
-    "causal": {"agency_mode": "LIVE_BRIDGE", "plan_execution": true, "causal_step_value": true, "plan_adoption": false},
-    "framework": {"agency_mode": "LIVE_BRIDGE", "plan_execution": true, "causal_step_value": true, "plan_adoption": true}
+    "legacy": {
+      "agency_mode": "OFF",
+      "plan_execution": false,
+      "causal_step_value": false,
+      "plan_adoption": false,
+      "information_subgoals": false
+    },
+    "execution": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": false,
+      "plan_adoption": false,
+      "information_subgoals": false
+    },
+    "causal": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": false,
+      "information_subgoals": false
+    },
+    "framework": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": false
+    },
+    "information": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true
+    }
   }
 }
