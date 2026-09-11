@@ -195,6 +195,16 @@
       "name": "p7_information_subgoal",
       "script": "res://test/p7_information_subgoal.gd",
       "expected": 70
+    },
+    {
+      "name": "p7_1_material_request",
+      "script": "res://test/p7_1_material_request.gd",
+      "expected": 90
+    },
+    {
+      "name": "p7_1_material_request_hardening",
+      "script": "res://test/p7_1_material_request_hardening.gd",
+      "expected": 14
     }
   ]
 }
