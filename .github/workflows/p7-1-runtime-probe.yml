@@ -12,6 +12,7 @@ on:
       - game/src/runtime/simulation_audit.gd
       - game/config/simulation_profiles.json
       - game/test/p7_1_runtime.gd
+      - scripts/run-simulation.py
 permissions:
   contents: read
 jobs:
@@ -49,6 +50,13 @@ jobs:
           "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request_hardening.gd 2>&1 | tee "$RUNNER_TEMP/hardening.log"
           grep -Eq '^SUMMARY: passed=14 failed=0$' "$RUNNER_TEMP/hardening.log"
           if grep -Eq 'SCRIPT ERROR:|^ERROR:' "$RUNNER_TEMP/hardening.log"; then exit 1; fi
+      - name: Runtime regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_runtime.gd 2>&1 | tee "$RUNNER_TEMP/runtime.log"
+          grep -Eq '^SUMMARY: passed=30 failed=0$' "$RUNNER_TEMP/runtime.log"
+          if grep -Eq 'SCRIPT ERROR:|^ERROR:' "$RUNNER_TEMP/runtime.log"; then exit 1; fi
       - name: Module boundaries
         run: node scripts/check-module-boundaries.mjs
       - name: Material deterministic replay smoke
