@@ -1,0 +1,322 @@
+name: Recover P7.0 and finalize P7.1A
+
+on:
+  push:
+    branches:
+      - work/p7-1-material-request
+    paths:
+      - .github/workflows/p7-recover-and-finalize.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: p7-recover-and-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.event.head_commit.message == 'chore(ci): recover P7.0 and finalize P7.1A'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      P7_TREE: 7f1d57b6bf92f7e794b3480ef6ec24b1631a101f
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Prepare evidence directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ci/p7-recovery .tmp/ci/p7-1-final
+          git rev-parse HEAD | tee .tmp/ci/p7-1-final/staging-sha.txt
+          git status --short
+
+      - name: Install checksum-pinned Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aiworld-godot"
+          archive="$RUNNER_TEMP/aiworld-godot/engine.zip"
+          curl --fail --location --retry 3 --max-time 180 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            --output "$archive"
+          echo 'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  '"$archive" | sha256sum -c -
+          unzip -q "$archive" 'Godot_v4.7.2-stable_linux.x86_64' -d "$RUNNER_TEMP/aiworld-godot"
+          engine="$RUNNER_TEMP/aiworld-godot/Godot_v4.7.2-stable_linux.x86_64"
+          chmod +x "$engine"
+          test "$("$engine" --version)" = '4.7.2.stable.official.ed1daf0bf'
+          echo "GODOT_BIN=$engine" >> "$GITHUB_ENV"
+          "$engine" --version | tee .tmp/ci/p7-1-final/godot-version.txt
+
+      - name: Prepare P7.0 recovery candidate when main is incomplete
+        id: p7
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+          git fetch origin main
+          current_main=$(git rev-parse origin/main)
+          echo "${current_main}" | tee .tmp/ci/p7-recovery/original-main-sha.txt
+
+          if git cat-file -e 'origin/main:game/test/p7_information_subgoal.gd' 2>/dev/null \
+             && git cat-file -e 'origin/main:game/src/simulation/information/information_subgoal_tracker.gd' 2>/dev/null; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+            echo "candidate_sha=${current_main}" >> "$GITHUB_OUTPUT"
+            echo 'P7.0 source already present on main.' | tee .tmp/ci/p7-recovery/status.txt
+            exit 0
+          fi
+
+          tree_meta=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/trees/${P7_TREE}?recursive=1")
+          for required in \
+            game/test/p7_information_subgoal.gd \
+            game/src/simulation/information/information_subgoal_tracker.gd \
+            game/docs/validation/p7_0_information_subgoal_for_gpt.md \
+            docs/handoff/P7_0_GITHUB_DELIVERY.md; do
+            jq -e --arg path "${required}" '.tree[] | select(.path == $path and .type == "blob")' <<<"${tree_meta}" >/dev/null
+          done
+
+          payload=$(jq -n \
+            --arg message 'feat(sim): make unknown resource sources actionable' \
+            --arg tree "${P7_TREE}" \
+            --arg parent "${current_main}" \
+            '{message:$message, tree:$tree, parents:[$parent]}')
+          candidate=$(curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/git/commits" -d "${payload}" | jq -r '.sha')
+          test -n "${candidate}"
+
+          ref_path="${api}/git/refs/heads/work/p7-0-recovery"
+          status=$(curl --silent --show-error -o /tmp/p7-ref.json -w '%{http_code}' "${auth[@]}" "${ref_path}")
+          if [[ "${status}" = '200' ]]; then
+            curl --fail --silent --show-error -X PATCH "${auth[@]}" "${api}/git/refs/heads/work/p7-0-recovery" \
+              -d "$(jq -n --arg sha "${candidate}" '{sha:$sha,force:true}')" >/dev/null
+          elif [[ "${status}" = '404' ]]; then
+            curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/git/refs" \
+              -d "$(jq -n --arg ref 'refs/heads/work/p7-0-recovery' --arg sha "${candidate}" '{ref:$ref,sha:$sha}')" >/dev/null
+          else
+            cat /tmp/p7-ref.json >&2
+            exit 1
+          fi
+
+          echo 'needed=true' >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=${candidate}" >> "$GITHUB_OUTPUT"
+          echo "Prepared P7.0 recovery candidate ${candidate}" | tee .tmp/ci/p7-recovery/status.txt
+
+      - name: Check out P7.0 recovery candidate
+        if: steps.p7.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/p7-0-recovery
+          git checkout --detach '${{ steps.p7.outputs.candidate_sha }}'
+          test "$(git rev-parse HEAD)" = '${{ steps.p7.outputs.candidate_sha }}'
+          test -f game/test/p7_information_subgoal.gd
+          test -f game/src/simulation/information/information_subgoal_tracker.gd
+
+      - name: Validate recovered P7.0 strict regression
+        if: steps.p7.outputs.needed == 'true'
+        run: python3 scripts/run-strict-regression.py --evidence .tmp/ci/p7-recovery/strict
+
+      - name: Validate recovered P7.0 framework replay
+        if: steps.p7.outputs.needed == 'true'
+        run: python3 scripts/run-simulation.py --profile framework --seed 61000 --ticks 1000 --verify-replay --out .tmp/ci/p7-recovery/framework-61000.json
+
+      - name: Validate recovered P7.0 information replay
+        if: steps.p7.outputs.needed == 'true'
+        run: python3 scripts/run-simulation.py --profile information --seed 61003 --ticks 1000 --verify-replay --out .tmp/ci/p7-recovery/information-61003.json
+
+      - name: Publish recovered P7.0 to main
+        if: steps.p7.outputs.needed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+          expected=$(cat .tmp/ci/p7-recovery/original-main-sha.txt)
+          current=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${current}" = "${expected}"
+          candidate='${{ steps.p7.outputs.candidate_sha }}'
+          curl --fail --silent --show-error -X PATCH "${auth[@]}" "${api}/git/refs/heads/main" \
+            -d "$(jq -n --arg sha "${candidate}" '{sha:$sha,force:false}')" >/dev/null
+          published=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${published}" = "${candidate}"
+          echo "${published}" | tee .tmp/ci/p7-recovery/published-main-sha.txt
+
+      - name: Prepare P7.1A candidate on current mainline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B work/p7-1-material-request "$GITHUB_SHA"
+          git fetch origin main
+          git merge --no-edit origin/main
+          test -f game/test/p7_information_subgoal.gd
+          test -f game/src/simulation/information/information_subgoal_tracker.gd
+          python3 scripts/prepare_p7_1_candidate_v2.py
+
+          rm -f scripts/prepare_p7_1_candidate.py \
+                scripts/prepare_p7_1_candidate_v2.py \
+                .github/workflows/p7-1-validate.yml \
+                .github/workflows/p7-1-review-gate.yml \
+                .github/workflows/p7-1-auto-merge.yml \
+                .github/workflows/p7-1-auto-merge-v2.yml \
+                .github/workflows/p7-1-auto-merge-v3.yml \
+                .github/workflows/p7-1-material-request-ci.yml \
+                .github/workflows/p7-recover-and-finalize.yml
+
+          test -f .github/workflows/material-request-ci.yml
+          git diff --check
+          git status --short | tee .tmp/ci/p7-1-final/candidate-status.txt
+          git rev-parse origin/main | tee .tmp/ci/p7-1-final/base-main-sha.txt
+
+      - name: Validate P7.1A lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request.gd 2>&1 | tee .tmp/ci/p7-1-final/lifecycle.log
+          grep -Eq 'SUMMARY: passed=[1-9][0-9]* failed=0' .tmp/ci/p7-1-final/lifecycle.log
+
+      - name: Validate P7.1A hardening regression
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request_hardening.gd 2>&1 | tee .tmp/ci/p7-1-final/hardening.log
+          grep -Eq 'SUMMARY: passed=[1-9][0-9]* failed=0' .tmp/ci/p7-1-final/hardening.log
+
+      - name: Validate P7.1A full strict regression
+        run: python3 scripts/run-strict-regression.py --evidence .tmp/ci/p7-1-final/strict
+
+      - name: Validate P7.1A stable framework replay
+        run: python3 scripts/run-simulation.py --profile framework --seed 61000 --ticks 1000 --verify-replay --out .tmp/ci/p7-1-final/framework-61000.json
+
+      - name: Validate P7.1A information replay
+        run: python3 scripts/run-simulation.py --profile information --seed 61003 --ticks 1000 --verify-replay --out .tmp/ci/p7-1-final/information-61003.json
+
+      - name: Publish validated P7.1A branch
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git commit -m 'feat(sim): establish causal material request foundation'
+          git push origin HEAD:work/p7-1-material-request
+          candidate=$(git rev-parse HEAD)
+          echo "${candidate}" | tee .tmp/ci/p7-1-final/candidate-sha.txt
+          echo "candidate_sha=${candidate}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or locate P7.1A pull request
+        id: pr
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+          query="${api}/pulls?state=open&base=main&head=Crick-Latz:work/p7-1-material-request"
+          number=$(curl --fail --silent --show-error "${auth[@]}" "${query}" | jq -r '.[0].number // empty')
+          if [[ -z "${number}" ]]; then
+            body='Adds the validated P7.1A material-request foundation: subjective holder selection, autonomous recipient responses, verified inventory transfer evidence, request lifecycle tracking and one-shot parent-plan revalidation. Runtime wiring remains P7.1B.'
+            created=$(curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/pulls" \
+              -d "$(jq -n --arg title 'P7.1A: establish causal material request foundation' --arg head 'work/p7-1-material-request' --arg base 'main' --arg body "${body}" '{title:$title,head:$head,base:$base,body:$body,draft:true}')")
+            number=$(jq -r '.number' <<<"${created}")
+          fi
+          test -n "${number}"
+          echo "pr_number=${number}" >> "$GITHUB_OUTPUT"
+          echo "${number}" | tee .tmp/ci/p7-1-final/pr-number.txt
+
+      - name: Mark ready, document evidence and merge P7.1A
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+          candidate='${{ steps.publish.outputs.candidate_sha }}'
+          expected_main=$(cat .tmp/ci/p7-1-final/base-main-sha.txt)
+          current_main=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${current_main}" = "${expected_main}"
+          current_branch=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/work/p7-1-material-request" | jq -r '.object.sha')
+          test "${current_branch}" = "${candidate}"
+
+          number='${{ steps.pr.outputs.pr_number }}'
+          pr=$(curl --fail --silent --show-error "${auth[@]}" "${api}/pulls/${number}")
+          node_id=$(jq -r '.node_id' <<<"${pr}")
+          draft=$(jq -r '.draft' <<<"${pr}")
+          if [[ "${draft}" = 'true' ]]; then
+            graphql=$(jq -n --arg id "${node_id}" '{query:"mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}",variables:{id:$id}}')
+            curl --fail --silent --show-error -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H 'Content-Type: application/json' https://api.github.com/graphql -d "${graphql}" | jq -e '.data.markPullRequestReadyForReview.pullRequest.isDraft == false' >/dev/null
+          fi
+
+          comment=$(cat <<EOF
+          P7.1A passed its merge gate at commit ${candidate}.
+
+          Verified with checksum-pinned Godot 4.7.2:
+          - material-request lifecycle regression
+          - request atomicity and subjective-filter hardening regression
+          - full strict regression
+          - stable framework replay, seed 61000, 1000 ticks
+          - P7.0 information replay, seed 61003, 1000 ticks
+
+          Runtime wiring remains P7.1B.
+          EOF
+          )
+          curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/issues/${number}/comments" \
+            -d "$(jq -n --arg body "${comment}" '{body:$body}')" >/dev/null
+
+          merge_payload=$(jq -n \
+            --arg title "feat(sim): establish causal material request foundation (#${number})" \
+            --arg body 'Adds subjective holder selection, autonomous recipient responses, verified inventory transfer evidence, request lifecycle tracking, one-shot parent-plan revalidation and regression coverage.' \
+            --arg sha "${candidate}" \
+            '{commit_title:$title,commit_message:$body,sha:$sha,merge_method:"squash"}')
+          result=$(curl --fail --silent --show-error -X PUT "${auth[@]}" "${api}/pulls/${number}/merge" -d "${merge_payload}")
+          jq -e '.merged == true' <<<"${result}" >/dev/null
+          merged=$(jq -r '.sha' <<<"${result}")
+          echo "${merged}" | tee .tmp/ci/p7-1-final/merged-main-sha.txt
+          echo "merged_sha=${merged}" >> "$GITHUB_OUTPUT"
+
+      - name: Create P7.1B runtime integration branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+          merged='${{ steps.merge.outputs.merged_sha }}'
+          endpoint="${api}/git/ref/heads/work/p7-1b-runtime-integration"
+          status=$(curl --silent --show-error -o /tmp/p7-1b-ref.json -w '%{http_code}' "${auth[@]}" "${endpoint}")
+          if [[ "${status}" = '404' ]]; then
+            curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/git/refs" \
+              -d "$(jq -n --arg ref 'refs/heads/work/p7-1b-runtime-integration' --arg sha "${merged}" '{ref:$ref,sha:$sha}')" >/dev/null
+          elif [[ "${status}" = '200' ]]; then
+            existing=$(jq -r '.object.sha' /tmp/p7-1b-ref.json)
+            test "${existing}" = "${merged}"
+          else
+            cat /tmp/p7-1b-ref.json >&2
+            exit 1
+          fi
+          echo "${merged}" | tee .tmp/ci/p7-1-final/p7-1b-base-sha.txt
+
+      - name: Retain all verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p7-recover-finalize-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tmp/ci/p7-recovery/
+            .tmp/ci/p7-1-final/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
