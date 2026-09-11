@@ -82,6 +82,19 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 				"information": true,
 			})
 
+	# P7.1B：材料请求候选沿用同一个考虑集和 softmax，只获得显著性，不获得强制效用。
+	var material_state: Dictionary = agency.get("material_request", {})
+	var material_salient: Array = []
+	if agency_mode == "LIVE_BRIDGE" and not material_state.is_empty():
+		var material_candidate: Dictionary = material_state.get("candidate", {})
+		if not material_candidate.is_empty():
+			material_salient.append({"candidate_key": AgencyActionBridge.candidate_key(material_candidate),
+				"original_utility": float(material_candidate.get("utility", 0.0)),
+				"effective_utility": float(material_candidate.get("utility", 0.0)),
+				"plan_id": str((material_state.get("request", {}) as Dictionary).get("parent_plan_id", "")),
+				"problem_id": str((material_state.get("request", {}) as Dictionary).get("root_goal", "")),
+				"material_request": true})
+
 	# 意图坚持 vs 机会成本：承诺强度决定"懒得重想"的概率，
 	# 但当前最优效用远超在执行意图（紧迫差距）时强制重估——
 	# 饿到极限的人不会因为"决定过要休息"就饿死在存粮上。
@@ -130,6 +143,7 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	var salient_pool: Array = (agency_ground["grounded_candidates"] as Array).duplicate()
 	salient_pool.append_array(exec_salient)
 	salient_pool.append_array(information_salient)
+	salient_pool.append_array(material_salient)
 	if agency_mode == "LIVE_BRIDGE" and not salient_pool.is_empty():
 		var salient := {}
 		for gc in salient_pool:

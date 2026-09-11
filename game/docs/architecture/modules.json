@@ -1,7 +1,7 @@
 {
   "format_version": "1",
   "updated": "2026-09-11",
-  "note": "实际存在文件的归属登记。P7.0 新增主观信息子目标、信息交换与来源报告链；UI/美术仍不在本阶段。",
+  "note": "P7.1B 材料请求运行链已登记；请求者只读主观持有人证据，实际转交由世界变更事件确认。",
   "modules": [
     {
       "module_id": "m01_entry_assembly",
@@ -287,7 +287,15 @@
         "game/data/knowledge/cases/engineering_fixture.json",
         "game/src/simulation/knowledge/information_subgoal_tracker.gd",
         "game/src/simulation/knowledge/information_action_policy.gd",
-        "game/src/simulation/knowledge/information_exchange_policy.gd"
+        "game/src/simulation/knowledge/information_exchange_policy.gd",
+        "game/src/simulation/material_request/material_request_contract.gd",
+        "game/src/simulation/material_request/material_request_coordinator.gd",
+        "game/src/simulation/material_request/material_request_policy.gd",
+        "game/src/simulation/material_request/material_request_response_policy.gd",
+        "game/src/simulation/material_request/material_request_tracker.gd",
+        "game/src/simulation/material_request/material_transfer_service.gd",
+        "game/src/simulation/material_request/material_holder_belief_adapter.gd",
+        "game/src/simulation/material_request/material_request_runtime_adapter.gd"
       ],
       "public_entrypoints": [
         "WorldKnowledgeStore.available_for",
@@ -299,7 +307,10 @@
         "CognitiveCaseLibrary.load_pack/retrieve (ADVISORY_ONLY)",
         "InformationSubgoalTracker.prepare/on_action_complete",
         "InformationActionPolicy.build",
-        "InformationExchangePolicy.evaluate"
+        "InformationExchangePolicy.evaluate",
+        "MaterialRequestCoordinator",
+        "MaterialRequestRuntimeAdapter.prepare",
+        "MaterialHolderBeliefAdapter.observe_event"
       ],
       "allowed_dependencies": [
         "m09_shared_capability",

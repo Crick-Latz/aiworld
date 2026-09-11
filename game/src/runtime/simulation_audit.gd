@@ -11,6 +11,8 @@ static func fingerprint(sim: IslandSimulation) -> Dictionary:
 		"adoption_sha256": AgencyMeasure.canon(sim.agency_adoption_trace()).sha256_text(),
 		"information_sha256": AgencyMeasure.canon(sim.agency_information_trace()).sha256_text(),
 		"information_rng_states": sim.agency_information_rng_states(),
+		"material_request_sha256": AgencyMeasure.canon(sim.agency_material_request_snapshot()).sha256_text(),
+		"material_request_rng_states": sim.agency_material_request_rng_states(),
 		"state_sha256": AgencyMeasure.canon(_encode(sim, {})).sha256_text(),
 		"adoption_rng_states": sim.agency_adoption_rng_states(),
 	}
@@ -35,9 +37,14 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 	for row in sim.agency_information_trace():
 		var info_event := str(row.get("event", ""))
 		information[info_event] = int(information.get(info_event, 0)) + 1
+	var material := {}
+	for request_id in sim.agency_material_request_snapshot():
+		var request: Dictionary = sim.agency_material_request_snapshot()[request_id]
+		var status := str(request.get("status", ""))
+		material[status] = int(material.get(status, 0)) + 1
 	return {"tick": sim.tick, "actors": sim.actors.size(), "event_counts": events,
 		"execution_counts": executions, "execution_reasons": reasons, "adoption_counts": adoption,
-		"information_counts": information,
+		"information_counts": information, "material_request_counts": material,
 		"planner_calls": sim.agency_planner_calls, "planner_cache_hits": sim.agency_cache_hits}
 
 static func _encode(value: Variant, active: Dictionary) -> Variant:

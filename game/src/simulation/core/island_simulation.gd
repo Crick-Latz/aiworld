@@ -33,6 +33,9 @@ var agency_causal_step_value_enabled := false
 var agency_plan_adoption_enabled := false
 # P7.0：UNKNOWN_SOURCE → 搜索/询问信息子目标。默认 false，framework 基线不变。
 var agency_information_subgoals_enabled := false
+var agency_material_requests_enabled := false
+var _material_request_coordinator_state: MaterialRequestCoordinator = null
+var _material_request_rngs := {}
 var _information_tracker_state: InformationSubgoalTracker = null
 # 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
 var _information_rngs := {}
@@ -394,6 +397,8 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	var agency_extra := _agency_prepare(id, a) if str(agency_mode) != "OFF" else {}
 	if agency_extra.has("information_goal"):
 		actor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)
+	if agency_extra.has("material_request"):
+		actor_view["material_request_runtime"] = (agency_extra["material_request"] as Dictionary).duplicate(true)
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
@@ -454,6 +459,12 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			{"needs": a["needs"].duplicate(true)}, tick, _item_catalog_if_any())
 		if not information_goal.is_empty():
 			out["information_goal"] = information_goal
+	# P7.1B：材料请求只从角色自己的持有人信念和当前可见人生成。
+	if agency_material_requests_enabled and str(agency_mode) == "LIVE_BRIDGE":
+		var material_state := MaterialRequestRuntimeAdapter.prepare(id, proposals, a, relationships,
+			_material_request_coordinator(), tick, SeedDeriver.derive(_world_seed, "material_target:" + id))
+		if not material_state.is_empty():
+			out["material_request"] = material_state
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -513,6 +524,38 @@ func agency_information_rng_states() -> Dictionary:
 	ids.sort()
 	for id in ids:
 		states[id] = str((_information_rngs[id] as RandomNumberGenerator).state)
+	return states
+
+## P7.1B：材料请求 coordinator、只读状态与独立响应随机流。
+func _material_request_coordinator() -> MaterialRequestCoordinator:
+	if _material_request_coordinator_state == null:
+		_material_request_coordinator_state = MaterialRequestCoordinator.new()
+	return _material_request_coordinator_state
+
+func agency_material_request_snapshot() -> Dictionary:
+	if _material_request_coordinator_state == null:
+		return {}
+	return _material_request_coordinator_state.tracker.snapshot()
+
+func agency_material_request_state(actor_id: String) -> Dictionary:
+	if _material_request_coordinator_state == null:
+		return {}
+	var active := _material_request_coordinator_state.tracker.active_requests_for(actor_id)
+	return {} if active.is_empty() else (active[0] as Dictionary).duplicate(true)
+
+func _material_request_rng(actor_id: String) -> RandomNumberGenerator:
+	if not _material_request_rngs.has(actor_id):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SeedDeriver.derive(_world_seed, "material_response:" + actor_id)
+		_material_request_rngs[actor_id] = rng
+	return _material_request_rngs[actor_id]
+
+func agency_material_request_rng_states() -> Dictionary:
+	var states := {}
+	var ids: Array = _material_request_rngs.keys()
+	ids.sort()
+	for id in ids:
+		states[id] = str((_material_request_rngs[id] as RandomNumberGenerator).state)
 	return states
 
 ## P6.3B-1：tracker 访问器（超时配置同步）+ 只读 trace/run 暴露
@@ -628,6 +671,12 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_search_resource_source(id, a, action, new_events)
 		"ask_resource_source":
 			_do_ask_resource_source(id, a, action, new_events)
+		"request_material":
+			_do_request_material(id, a, action, new_events)
+		"accept_material_counter":
+			_do_accept_material_counter(id, a, action, new_events)
+		"receive_material":
+			_do_receive_material(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
 		"observe_person":
@@ -1297,6 +1346,92 @@ func _do_ask_resource_source(id: String, a: Dictionary, action: Dictionary, ev: 
 		_:
 			_emit("source_information_unknown", target_id, "%s 也不知道来源" % target["display_name"], common)
 
+## P7.1B 材料请求执行：对话只记录响应；物品只在独立 transfer 行动里改变。
+func _do_request_material(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+		return
+	var request_id := str(action.get("request_id", ""))
+	var target_id := str(action.get("target_actor", ""))
+	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+	if request.is_empty() or str(request.get("status", "")) != MaterialRequestContract.STATUS_ACTIVE:
+		return
+	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		_emit("material_request_missed", id, "%s 没能当面提出材料请求" % a["display_name"], {
+			"request_id": request_id, "target_id": target_id, "item_id": str(request.get("item_id", ""))})
+		return
+	var decision := {"ok": true, "target_id": target_id, "score": float(action.get("utility", 0.0)), "subjective_only": true}
+	var offer: Dictionary = _material_request_coordinator_state.request_policy.build_offer(request, decision, {})
+	if not _material_request_coordinator_state.tracker.record_offer(request_id, target_id, tick, offer):
+		return
+	_emit("material_requested", id, "%s 向 %s 请求材料" % [a["display_name"], actors[target_id]["display_name"]], {
+		"request_id": request_id, "target_id": target_id, "item_id": str(request.get("item_id", "")),
+		"quantity": int(request.get("requested_quantity", 0)), "parent_plan_id": str(request.get("parent_plan_id", ""))})
+	var context := MaterialRequestRuntimeAdapter.recipient_context(self, target_id, id, str(request.get("item_id", "")))
+	var answered := _material_request_coordinator_state.answer_request(request_id, target_id, context,
+		_material_request_rng(target_id).randf(), tick)
+	if not bool(answered.get("ok", false)):
+		return
+	var response: Dictionary = answered.get("response", {})
+	var outcome := str(response.get("outcome", ""))
+	var response_type := "material_request_unknown"
+	match outcome:
+		MaterialRequestContract.OUTCOME_ACCEPT: response_type = "material_request_accepted"
+		MaterialRequestContract.OUTCOME_REFUSE: response_type = "material_request_refused"
+		MaterialRequestContract.OUTCOME_COUNTER: response_type = "material_request_countered"
+	_emit(response_type, target_id, "%s 回应了材料请求" % actors[target_id]["display_name"], {
+		"request_id": request_id, "to_id": id, "target_id": id,
+		"item_id": str(request.get("item_id", "")), "outcome": outcome,
+		"accepted_quantity": int(response.get("accepted_quantity", 0)),
+		"reason_code": str(response.get("reason", "")), "parent_plan_id": str(request.get("parent_plan_id", ""))})
+	if str(response.get("reason", "")) == "NO_TRANSFERABLE_SURPLUS":
+		MaterialHolderBeliefAdapter.mark_refuted(a, target_id, str(request.get("item_id", "")), tick)
+
+func _do_accept_material_counter(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+		return
+	var request_id := str(action.get("request_id", ""))
+	var target_id := str(action.get("target_actor", ""))
+	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		return
+	var accepted := _material_request_coordinator_state.accept_counter(request_id, tick)
+	if bool(accepted.get("ok", false)):
+		_emit("material_counter_accepted", id, "%s 接受了材料还价" % a["display_name"], {
+			"request_id": request_id, "target_id": target_id, "item_id": str(action.get("item_id", "")),
+			"quantity": int(action.get("quantity", 0))})
+
+func _do_receive_material(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+		return
+	var request_id := str(action.get("request_id", ""))
+	var target_id := str(action.get("target_actor", ""))
+	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		return
+	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+	if request.is_empty():
+		return
+	var result := _material_request_coordinator_state.transfer_and_resolve(request_id,
+		actors[target_id]["inventory"], a["inventory"], tick)
+	if not bool(result.get("ok", false)):
+		var reason := str(result.get("reason", "TRANSFER_FAILED"))
+		_emit("material_transfer_failed", target_id, "材料转交没有完成", {
+			"request_id": request_id, "to_id": id, "target_id": id,
+			"item_id": str(request.get("item_id", "")), "reason_code": reason})
+		if reason == "GIVER_INVENTORY_CHANGED":
+			MaterialHolderBeliefAdapter.mark_refuted(a, target_id, str(request.get("item_id", "")), tick)
+			_material_request_coordinator_state.tracker.fail(request_id, tick, reason)
+			a["material_request_cooldown_until"] = tick + 6
+		return
+	var transfer_event: Dictionary = result.get("event", {})
+	var extra := transfer_event.duplicate(true)
+	extra.erase("type")
+	extra.erase("tick")
+	_emit(MaterialRequestContract.EVENT_ITEM_TRANSFER_COMPLETED, target_id, "%s 把约定材料交给了 %s" % [actors[target_id]["display_name"], a["display_name"]], extra)
+	var revalidation: Dictionary = result.get("revalidation", {})
+	_emit("material_request_resolved", id, "%s 收到了计划所需材料" % a["display_name"], {
+		"request_id": request_id, "item_id": str(request.get("item_id", "")),
+		"quantity": int(transfer_event.get("quantity", 0)), "parent_plan_id": str(revalidation.get("parent_plan_id", "")),
+		"transfer_event_id": str(transfer_event.get("event_id", "")), "evidence_kind": "WORLD_MUTATION"})
+
 ## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）
 func _do_sit_by_fire(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 200, 0, 1000)
@@ -1731,6 +1866,8 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		if id != actor_id and actors.has(actor_id):
 			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
+		if agency_material_requests_enabled and id != actor_id:
+			MaterialHolderBeliefAdapter.observe_event(a, e, tick)
 		# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。
 		# 证据只写目击者 ToM；看不见的人不会凭空知道。
 		if id != actor_id:

@@ -18,6 +18,10 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	for information_action in InformationActionPolicy.build(actor, actor.get("information_subgoal", {}),
 			int(world.get("tick", 0))):
 		actions.append(information_action)
+	var material_runtime: Dictionary = actor.get("material_request_runtime", {})
+	var material_candidate: Dictionary = material_runtime.get("candidate", {})
+	if not material_candidate.is_empty():
+		actions.append(material_candidate.duplicate(true))
 
 	var a1 = _forage(p, needs, inv, pos, world, actor)
 	if a1 != null: actions.append(a1)
