@@ -17,7 +17,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -49,3 +49,7 @@ jobs:
           "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request_hardening.gd 2>&1 | tee "$RUNNER_TEMP/hardening.log"
           grep -Eq '^SUMMARY: passed=14 failed=0$' "$RUNNER_TEMP/hardening.log"
           if grep -Eq 'SCRIPT ERROR:|^ERROR:' "$RUNNER_TEMP/hardening.log"; then exit 1; fi
+      - name: Module boundaries
+        run: node scripts/check-module-boundaries.mjs
+      - name: Material deterministic replay smoke
+        run: python3 scripts/run-simulation.py --profile material --seed 61007 --ticks 300 --verify-replay --out "$RUNNER_TEMP/material-61007.json"
