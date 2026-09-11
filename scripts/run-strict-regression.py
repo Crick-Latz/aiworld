@@ -47,7 +47,7 @@ def main() -> int:
         row = dict(name=name, **result, errors=errors)
         row["ok"] = row["exit"] == 0 and not errors
         if expected is not None:
-            summaries = re.findall(r"^SUMMARY pass=(\d+) fail=(\d+)$", text, re.MULTILINE)
+            summaries = re.findall(r"^SUMMARY(?::)? (?:pass|passed)=(\d+) (?:fail|failed)=(\d+)$", text, re.MULTILINE)
             passed, failed = map(int, summaries[0]) if len(summaries) == 1 else (-1, -1)
             row.update(expected=expected, passed=passed, failed=failed)
             row["ok"] = row["ok"] and passed == expected and failed == 0
