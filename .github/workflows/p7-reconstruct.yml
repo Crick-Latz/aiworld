@@ -1,4 +1,4 @@
-name: Reconstruct validated P7.0 source tree
+name: Diagnose P7.0 payload stream
 
 on:
   push:
@@ -8,85 +8,61 @@ on:
       - .github/workflows/p7-reconstruct.yml
 
 permissions:
-  contents: write
-
-concurrency:
-  group: p7-0-reconstruct-once
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  reconstruct:
+  diagnose:
     runs-on: ubuntu-22.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Check out reconstruction branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
-      - name: Decode, validate and restore P7.0 payload
+      - name: Compare staged payload streams
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/p7-0/part-*.b64 > "$RUNNER_TEMP/p7-0.b64"
-          base64 --decode "$RUNNER_TEMP/p7-0.b64" > "$RUNNER_TEMP/p7-0.tar.xz"
-          xz --test "$RUNNER_TEMP/p7-0.tar.xz"
-          mkdir -p "$RUNNER_TEMP/p7-0-extracted"
-          PAYLOAD="$RUNNER_TEMP/p7-0.tar.xz" DEST="$RUNNER_TEMP/p7-0-extracted" python3 - <<'PY'
+          cat .bootstrap/p7-0/part-*.b64 | tr -d '\r\n\t ' > "$RUNNER_TEMP/parts.b64"
+          cat .bootstrap/probe-0{0,1,2,3,4}.b64 | tr -d '\r\n\t ' > "$RUNNER_TEMP/probe.b64"
+          PARTS="$RUNNER_TEMP/parts.b64" PROBE="$RUNNER_TEMP/probe.b64" python3 - <<'PY'
           import os
-          import pathlib
-          import tarfile
+          from pathlib import Path
 
-          payload = os.environ['PAYLOAD']
-          dest = pathlib.Path(os.environ['DEST'])
-          with tarfile.open(payload, 'r:xz') as tf:
-              members = tf.getmembers()
-              if not members:
-                  raise SystemExit('empty P7.0 payload')
-              for member in members:
-                  path = pathlib.PurePosixPath(member.name)
-                  if path.is_absolute() or '..' in path.parts:
-                      raise SystemExit(f'unsafe archive path: {member.name}')
-                  if member.issym() or member.islnk():
-                      raise SystemExit(f'links are forbidden in payload: {member.name}')
-                  if not (member.isfile() or member.isdir()):
-                      raise SystemExit(f'unsupported archive entry: {member.name}')
-              print('payload entries:', len(members))
-              for member in members:
-                  tf.extract(member, dest)
+          p = Path(os.environ['PARTS']).read_text()
+          q = Path(os.environ['PROBE']).read_text()
+          n = min(len(p), len(q))
+          lcp = 0
+          while lcp < n and p[lcp] == q[lcp]:
+              lcp += 1
+          print('parts_chars=', len(p))
+          print('probe_chars=', len(q))
+          print('longest_common_prefix=', lcp)
+          print('parts_near_lcp=', p[max(0,lcp-24):lcp+48])
+          print('probe_near_lcp=', q[max(0,lcp-24):lcp+48])
+          for i in range(5):
+              chunk = Path(f'.bootstrap/probe-{i:02d}.b64').read_text().replace('\n','').replace('\r','').replace('\t','').replace(' ','')
+              print(f'probe_{i:02d}_chars=', len(chunk), 'position_in_parts=', p.find(chunk))
           PY
 
-          required=$(find "$RUNNER_TEMP/p7-0-extracted" -type f -path '*/game/test/p7_information_subgoal.gd' -print -quit)
-          test -n "$required"
-          source_root="${required%/game/test/p7_information_subgoal.gd}"
-          test -d "$source_root/game"
-          rsync -a "$source_root/" ./
+          base64 --decode "$RUNNER_TEMP/parts.b64" > "$RUNNER_TEMP/parts.xz"
+          echo "parts_decoded_bytes=$(wc -c < "$RUNNER_TEMP/parts.xz")"
+          sha256sum "$RUNNER_TEMP/parts.xz"
+          if xz --test "$RUNNER_TEMP/parts.xz"; then
+            echo 'PARTS_XZ_OK=1'
+          else
+            echo 'PARTS_XZ_OK=0'
+          fi
 
-          test -f game/test/p7_information_subgoal.gd
-          test -f game/config/simulation_profiles.json
-          test -f game/docs/validation/p7_0_information_subgoal_for_gpt.md
-          test -f game/docs/validation/data/p7_0_information_pilot.json
-          test -f docs/handoff/P7_0_GITHUB_DELIVERY.md
-          find game/src -type f -name information_subgoal_tracker.gd -print -quit | grep -q .
-          find game/src -type f -name information_action_policy.gd -print -quit | grep -q .
-          find game/src -type f -name information_exchange_policy.gd -print -quit | grep -q .
-
-          rm -rf .bootstrap/p7-0
-          rmdir .bootstrap 2>/dev/null || true
-          rm -f .github/workflows/p7-finalize.yml
-          rm -f .github/workflows/p7-reconstruct.yml
-
-          git status --short
-          git diff --check
-
-      - name: Commit reconstructed source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'aiworld-ci'
-          git config user.email 'aiworld-ci@users.noreply.github.com'
-          git add -A
-          git diff --cached --quiet && { echo 'reconstruction produced no changes'; exit 1; }
-          git commit -m 'fix(p7.0): restore complete information-subgoal source'
-          git push origin HEAD:repair/p7-0-source-tree
+          if base64 --decode "$RUNNER_TEMP/probe.b64" > "$RUNNER_TEMP/probe.xz"; then
+            echo "probe_decoded_bytes=$(wc -c < "$RUNNER_TEMP/probe.xz")"
+            sha256sum "$RUNNER_TEMP/probe.xz"
+            if xz --test "$RUNNER_TEMP/probe.xz"; then
+              echo 'PROBE_XZ_OK=1'
+            else
+              echo 'PROBE_XZ_OK=0'
+            fi
+          else
+            echo 'PROBE_BASE64_OK=0'
+          fi
