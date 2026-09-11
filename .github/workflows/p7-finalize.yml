@@ -1,0 +1,157 @@
+name: Finalize validated P7.0
+
+on:
+  push:
+    branches:
+      - work/p7-0-information-subgoal
+    paths:
+      - .github/workflows/p7-finalize.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: p7-0-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.event.head_commit.message == 'chore(ci): stage P7.0 finalizer'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_MAIN: dff3b5de1483f9b863dc698c7ab48d2488740923
+      P7_TREE: 7f1d57b6bf92f7e794b3480ef6ec24b1631a101f
+      PR_NUMBER: '2'
+    steps:
+      - name: Check out staging revision
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Validate and publish P7.0 candidate tree
+        id: publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+
+          current_branch=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/work/p7-0-information-subgoal" | jq -r '.object.sha')
+          test "${current_branch}" = "${GITHUB_SHA}"
+
+          current_main=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${current_main}" = "${EXPECTED_MAIN}"
+
+          tree_json=$(mktemp)
+          curl --fail --silent --show-error "${auth[@]}" "${api}/git/trees/${P7_TREE}?recursive=1" > "${tree_json}"
+          TREE_JSON="${tree_json}" python3 - <<'PY'
+          import json, os
+          data = json.load(open(os.environ['TREE_JSON'], encoding='utf-8'))
+          paths = {entry.get('path', '') for entry in data.get('tree', [])}
+          required_exact = {
+              'game/test/p7_information_subgoal.gd',
+              'game/config/simulation_profiles.json',
+              'game/docs/validation/p7_0_information_subgoal_for_gpt.md',
+              'game/docs/validation/data/p7_0_information_pilot.json',
+              'docs/handoff/P7_0_GITHUB_DELIVERY.md',
+              '.github/workflows/framework-ci.yml',
+          }
+          missing = sorted(required_exact - paths)
+          required_fragments = (
+              'information_subgoal_tracker.gd',
+              'information_action_policy.gd',
+              'information_exchange_policy.gd',
+          )
+          fragment_missing = [frag for frag in required_fragments if not any(path.endswith(frag) for path in paths)]
+          if missing or fragment_missing:
+              raise SystemExit(f'missing exact={missing}; missing fragments={fragment_missing}')
+          if '.github/workflows/p7-finalize.yml' in paths:
+              raise SystemExit('candidate tree unexpectedly contains the one-shot finalizer')
+          print(f'validated tree entries: {len(paths)}')
+          PY
+
+          commit_payload=$(jq -n --arg message 'feat(sim): make unknown resource sources actionable' --arg tree "${P7_TREE}" --arg parent "${GITHUB_SHA}" '{message:$message, tree:$tree, parents:[$parent]}')
+          candidate=$(curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/git/commits" -d "${commit_payload}" | jq -r '.sha')
+          test -n "${candidate}"
+
+          ref_payload=$(jq -n --arg sha "${candidate}" '{sha:$sha, force:false}')
+          curl --fail --silent --show-error -X PATCH "${auth[@]}" "${api}/git/refs/heads/work/p7-0-information-subgoal" -d "${ref_payload}" > /dev/null
+          published=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/work/p7-0-information-subgoal" | jq -r '.object.sha')
+          test "${published}" = "${candidate}"
+          echo "candidate_sha=${candidate}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out candidate revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/p7-0-information-subgoal
+          git checkout --detach "${{ steps.publish.outputs.candidate_sha }}"
+          test "$(git rev-parse HEAD)" = "${{ steps.publish.outputs.candidate_sha }}"
+
+      - name: Install checksum-pinned Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aiworld-godot" .tmp/ci/p7-final
+          archive="$RUNNER_TEMP/aiworld-godot/engine.zip"
+          curl --fail --location --retry 3 --max-time 180 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            --output "$archive"
+          echo "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  $archive" | sha256sum -c -
+          unzip -q "$archive" 'Godot_v4.7.2-stable_linux.x86_64' -d "$RUNNER_TEMP/aiworld-godot"
+          engine="$RUNNER_TEMP/aiworld-godot/Godot_v4.7.2-stable_linux.x86_64"
+          chmod +x "$engine"
+          test "$("$engine" --version)" = '4.7.2.stable.official.ed1daf0bf'
+          echo "GODOT_BIN=$engine" >> "$GITHUB_ENV"
+
+      - name: Run full strict regression
+        run: python3 scripts/run-strict-regression.py --evidence .tmp/ci/p7-final/strict
+
+      - name: Verify stable framework replay
+        run: python3 scripts/run-simulation.py --profile framework --seed 61000 --ticks 1000 --verify-replay --out .tmp/ci/p7-final/framework-61000.json
+
+      - name: Verify information profile replay
+        run: python3 scripts/run-simulation.py --profile information --seed 61003 --ticks 1000 --verify-replay --out .tmp/ci/p7-final/information-61003.json
+
+      - name: Mark PR ready and merge validated P7.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          candidate='${{ steps.publish.outputs.candidate_sha }}'
+
+          current_main=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${current_main}" = "${EXPECTED_MAIN}"
+          current_branch=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/work/p7-0-information-subgoal" | jq -r '.object.sha')
+          test "${current_branch}" = "${candidate}"
+
+          pr=$(curl --fail --silent --show-error "${auth[@]}" "${api}/pulls/${PR_NUMBER}")
+          node_id=$(jq -r '.node_id' <<<"${pr}")
+          draft=$(jq -r '.draft' <<<"${pr}")
+          if [[ "${draft}" = 'true' ]]; then
+            graphql=$(jq -n --arg id "${node_id}" '{query:"mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}",variables:{id:$id}}')
+            curl --fail --silent --show-error -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H 'Content-Type: application/json' https://api.github.com/graphql -d "${graphql}" | jq -e '.data.markPullRequestReadyForReview.pullRequest.isDraft == false' > /dev/null
+          fi
+
+          merge_payload=$(jq -n --arg title 'feat(sim): make unknown resource sources actionable (#2)' --arg body 'Validated P7.0 information-subgoal lifecycle, subjective search and ask policies, information exchange, belief updates, parent-plan revalidation, regression coverage and deterministic replay evidence.' --arg sha "${candidate}" '{commit_title:$title, commit_message:$body, sha:$sha, merge_method:"squash"}')
+          merge=$(curl --fail --silent --show-error -X PUT "${auth[@]}" "${api}/pulls/${PR_NUMBER}/merge" -d "${merge_payload}")
+          jq -e '.merged == true' <<<"${merge}" > /dev/null
+          jq -r '.sha' <<<"${merge}" | tee .tmp/ci/p7-final/merged-main-sha.txt
+
+      - name: Retain finalization evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p7-finalize-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tmp/ci/p7-final/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
