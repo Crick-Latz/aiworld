@@ -1,0 +1,85 @@
+name: Material request regression
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'game/src/simulation/material_request/**'
+      - 'game/test/p7_1_material_request*.gd'
+      - '.github/workflows/material-request-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'game/src/simulation/material_request/**'
+      - 'game/test/p7_1_material_request*.gd'
+      - '.github/workflows/material-request-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: material-request-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out tested revision
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install checksum-pinned Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aiworld-godot" .tmp/ci/material-request
+          archive="$RUNNER_TEMP/aiworld-godot/engine.zip"
+          curl --fail --location --retry 3 --max-time 180 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            --output "$archive"
+          echo 'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  '"$archive" | sha256sum -c -
+          unzip -q "$archive" 'Godot_v4.7.2-stable_linux.x86_64' -d "$RUNNER_TEMP/aiworld-godot"
+          engine="$RUNNER_TEMP/aiworld-godot/Godot_v4.7.2-stable_linux.x86_64"
+          chmod +x "$engine"
+          test "$("$engine" --version)" = '4.7.2.stable.official.ed1daf0bf'
+          echo "GODOT_BIN=$engine" >> "$GITHUB_ENV"
+          git rev-parse HEAD | tee .tmp/ci/material-request/tested-commit.txt
+
+      - name: Material request lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request.gd 2>&1 | tee .tmp/ci/material-request/lifecycle.log
+          grep -Eq 'SUMMARY: passed=[1-9][0-9]* failed=0' .tmp/ci/material-request/lifecycle.log
+
+      - name: Material request hardening regression
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request_hardening.gd 2>&1 | tee .tmp/ci/material-request/hardening.log
+          grep -Eq 'SUMMARY: passed=[1-9][0-9]* failed=0' .tmp/ci/material-request/hardening.log
+
+      - name: Full strict regression
+        run: python3 scripts/run-strict-regression.py --evidence .tmp/ci/material-request/strict
+
+      - name: Stable framework deterministic replay
+        run: python3 scripts/run-simulation.py --profile framework --seed 61000 --ticks 1000 --verify-replay --out .tmp/ci/material-request/framework-61000.json
+
+      - name: P7.0 information deterministic replay
+        run: python3 scripts/run-simulation.py --profile information --seed 61003 --ticks 1000 --verify-replay --out .tmp/ci/material-request/information-61003.json
+
+      - name: Retain verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: material-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tmp/ci/material-request/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
