@@ -1,0 +1,300 @@
+name: Wire P7.1 material requests into runtime
+
+on:
+  push:
+    branches:
+      - work/p7-1-runtime-v2
+    paths:
+      - .github/workflows/p7-1-runtime-wire.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply guarded runtime patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              with p.open('r', encoding='utf-8', newline='') as f:
+                  text = f.read()
+              nl = '\r\n' if '\r\n' in text else '\n'
+              old_n = old.replace('\n', nl)
+              new_n = new.replace('\n', nl)
+              count = text.count(old_n)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one anchor, found {count}: {old[:80]!r}')
+              text = text.replace(old_n, new_n, 1)
+              with p.open('w', encoding='utf-8', newline='') as f:
+                  f.write(text)
+
+          island = 'game/src/simulation/core/island_simulation.gd'
+          replace_once(island,
+              'var agency_information_subgoals_enabled := false\n',
+              'var agency_information_subgoals_enabled := false\n'
+              'var agency_material_requests_enabled := false\n'
+              'var _material_request_coordinator_state: MaterialRequestCoordinator = null\n'
+              'var _material_request_rngs := {}\n')
+
+          replace_once(island,
+              'if agency_extra.has("information_goal"):\n\t\tactor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)\n\tvar decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)\n',
+              'if agency_extra.has("information_goal"):\n\t\tactor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)\n'
+              '\tif agency_extra.has("material_request"):\n\t\tactor_view["material_request_runtime"] = (agency_extra["material_request"] as Dictionary).duplicate(true)\n'
+              '\tvar decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)\n')
+
+          replace_once(island,
+              '\t\tif not information_goal.is_empty():\n\t\t\tout["information_goal"] = information_goal\n\t# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）\n',
+              '\t\tif not information_goal.is_empty():\n\t\t\tout["information_goal"] = information_goal\n'
+              '\t# P7.1B：材料请求只从角色自己的持有人信念和当前可见人生成。\n'
+              '\tif agency_material_requests_enabled and str(agency_mode) == "LIVE_BRIDGE":\n'
+              '\t\tvar material_state := MaterialRequestRuntimeAdapter.prepare(id, proposals, a, relationships,\n'
+              '\t\t\t_material_request_coordinator(), tick, SeedDeriver.derive(_world_seed, "material_target:" + id))\n'
+              '\t\tif not material_state.is_empty():\n\t\t\tout["material_request"] = material_state\n'
+              '\t# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）\n')
+
+          replace_once(island,
+              '## P6.3B-1：tracker 访问器（超时配置同步）+ 只读 trace/run 暴露\n',
+              '## P7.1B：材料请求 coordinator、只读状态与独立响应随机流。\n'
+              'func _material_request_coordinator() -> MaterialRequestCoordinator:\n'
+              '\tif _material_request_coordinator_state == null:\n'
+              '\t\t_material_request_coordinator_state = MaterialRequestCoordinator.new()\n'
+              '\treturn _material_request_coordinator_state\n\n'
+              'func agency_material_request_snapshot() -> Dictionary:\n'
+              '\tif _material_request_coordinator_state == null:\n\t\treturn {}\n'
+              '\treturn _material_request_coordinator_state.tracker.snapshot()\n\n'
+              'func agency_material_request_state(actor_id: String) -> Dictionary:\n'
+              '\tif _material_request_coordinator_state == null:\n\t\treturn {}\n'
+              '\tvar active := _material_request_coordinator_state.tracker.active_requests_for(actor_id)\n'
+              '\treturn {} if active.is_empty() else (active[0] as Dictionary).duplicate(true)\n\n'
+              'func _material_request_rng(actor_id: String) -> RandomNumberGenerator:\n'
+              '\tif not _material_request_rngs.has(actor_id):\n'
+              '\t\tvar rng := RandomNumberGenerator.new()\n'
+              '\t\trng.seed = SeedDeriver.derive(_world_seed, "material_response:" + actor_id)\n'
+              '\t\t_material_request_rngs[actor_id] = rng\n'
+              '\treturn _material_request_rngs[actor_id]\n\n'
+              'func agency_material_request_rng_states() -> Dictionary:\n'
+              '\tvar states := {}\n\tvar ids: Array = _material_request_rngs.keys()\n\tids.sort()\n'
+              '\tfor id in ids:\n\t\tstates[id] = str((_material_request_rngs[id] as RandomNumberGenerator).state)\n'
+              '\treturn states\n\n'
+              '## P6.3B-1：tracker 访问器（超时配置同步）+ 只读 trace/run 暴露\n')
+
+          replace_once(island,
+              '\t\t"ask_resource_source":\n\t\t\t_do_ask_resource_source(id, a, action, new_events)\n\t\t"ask_reason":\n',
+              '\t\t"ask_resource_source":\n\t\t\t_do_ask_resource_source(id, a, action, new_events)\n'
+              '\t\t"request_material":\n\t\t\t_do_request_material(id, a, action, new_events)\n'
+              '\t\t"accept_material_counter":\n\t\t\t_do_accept_material_counter(id, a, action, new_events)\n'
+              '\t\t"receive_material":\n\t\t\t_do_receive_material(id, a, action, new_events)\n'
+              '\t\t"ask_reason":\n')
+
+          handlers = r'''## P7.1B 材料请求执行：对话只记录响应；物品只在独立 transfer 行动里改变。
+          func _do_request_material(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+          	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+          		return
+          	var request_id := str(action.get("request_id", ""))
+          	var target_id := str(action.get("target_actor", ""))
+          	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+          	if request.is_empty() or str(request.get("status", "")) != MaterialRequestContract.STATUS_ACTIVE:
+          		return
+          	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+          		_emit("material_request_missed", id, "%s 没能当面提出材料请求" % a["display_name"], {
+          			"request_id": request_id, "target_id": target_id, "item_id": str(request.get("item_id", ""))})
+          		return
+          	var decision := {"ok": true, "target_id": target_id, "score": float(action.get("utility", 0.0)), "subjective_only": true}
+          	var offer: Dictionary = _material_request_coordinator_state.request_policy.build_offer(request, decision, {})
+          	if not _material_request_coordinator_state.tracker.record_offer(request_id, target_id, tick, offer):
+          		return
+          	_emit("material_requested", id, "%s 向 %s 请求材料" % [a["display_name"], actors[target_id]["display_name"]], {
+          		"request_id": request_id, "target_id": target_id, "item_id": str(request.get("item_id", "")),
+          		"quantity": int(request.get("requested_quantity", 0)), "parent_plan_id": str(request.get("parent_plan_id", ""))})
+          	var context := MaterialRequestRuntimeAdapter.recipient_context(self, target_id, id, str(request.get("item_id", "")))
+          	var answered := _material_request_coordinator_state.answer_request(request_id, target_id, context,
+          		_material_request_rng(target_id).randf(), tick)
+          	if not bool(answered.get("ok", false)):
+          		return
+          	var response: Dictionary = answered.get("response", {})
+          	var outcome := str(response.get("outcome", ""))
+          	var response_type := "material_request_unknown"
+          	match outcome:
+          		MaterialRequestContract.OUTCOME_ACCEPT: response_type = "material_request_accepted"
+          		MaterialRequestContract.OUTCOME_REFUSE: response_type = "material_request_refused"
+          		MaterialRequestContract.OUTCOME_COUNTER: response_type = "material_request_countered"
+          	_emit(response_type, target_id, "%s 回应了材料请求" % actors[target_id]["display_name"], {
+          		"request_id": request_id, "to_id": id, "target_id": id,
+          		"item_id": str(request.get("item_id", "")), "outcome": outcome,
+          		"accepted_quantity": int(response.get("accepted_quantity", 0)),
+          		"reason_code": str(response.get("reason", "")), "parent_plan_id": str(request.get("parent_plan_id", ""))})
+          	if str(response.get("reason", "")) == "NO_TRANSFERABLE_SURPLUS":
+          		MaterialHolderBeliefAdapter.mark_refuted(a, target_id, str(request.get("item_id", "")), tick)
+
+          func _do_accept_material_counter(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+          	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+          		return
+          	var request_id := str(action.get("request_id", ""))
+          	var target_id := str(action.get("target_actor", ""))
+          	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+          		return
+          	var accepted := _material_request_coordinator_state.accept_counter(request_id, tick)
+          	if bool(accepted.get("ok", false)):
+          		_emit("material_counter_accepted", id, "%s 接受了材料还价" % a["display_name"], {
+          			"request_id": request_id, "target_id": target_id, "item_id": str(action.get("item_id", "")),
+          			"quantity": int(action.get("quantity", 0))})
+
+          func _do_receive_material(id: String, a: Dictionary, action: Dictionary, _ev: Array) -> void:
+          	if not agency_material_requests_enabled or _material_request_coordinator_state == null:
+          		return
+          	var request_id := str(action.get("request_id", ""))
+          	var target_id := str(action.get("target_actor", ""))
+          	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+          		return
+          	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+          	if request.is_empty():
+          		return
+          	var result := _material_request_coordinator_state.transfer_and_resolve(request_id,
+          		actors[target_id]["inventory"], a["inventory"], tick)
+          	if not bool(result.get("ok", false)):
+          		var reason := str(result.get("reason", "TRANSFER_FAILED"))
+          		_emit("material_transfer_failed", target_id, "材料转交没有完成", {
+          			"request_id": request_id, "to_id": id, "target_id": id,
+          			"item_id": str(request.get("item_id", "")), "reason_code": reason})
+          		if reason == "GIVER_INVENTORY_CHANGED":
+          			MaterialHolderBeliefAdapter.mark_refuted(a, target_id, str(request.get("item_id", "")), tick)
+          			_material_request_coordinator_state.tracker.fail(request_id, tick, reason)
+          			a["material_request_cooldown_until"] = tick + 6
+          		return
+          	var transfer_event: Dictionary = result.get("event", {})
+          	var extra := transfer_event.duplicate(true)
+          	extra.erase("type")
+          	extra.erase("tick")
+          	_emit(MaterialRequestContract.EVENT_ITEM_TRANSFER_COMPLETED, target_id, "%s 把约定材料交给了 %s" % [actors[target_id]["display_name"], a["display_name"]], extra)
+          	var revalidation: Dictionary = result.get("revalidation", {})
+          	_emit("material_request_resolved", id, "%s 收到了计划所需材料" % a["display_name"], {
+          		"request_id": request_id, "item_id": str(request.get("item_id", "")),
+          		"quantity": int(transfer_event.get("quantity", 0)), "parent_plan_id": str(revalidation.get("parent_plan_id", "")),
+          		"transfer_event_id": str(transfer_event.get("event_id", "")), "evidence_kind": "WORLD_MUTATION"})
+
+          '''
+          handlers = handlers.replace('          ', '')
+          replace_once(island, '## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）\n', handlers + '## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）\n')
+
+          replace_once(island,
+              '\t\tCognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})\n\t\t# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。\n',
+              '\t\tCognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})\n'
+              '\t\tif agency_material_requests_enabled and id != actor_id:\n'
+              '\t\t\tMaterialHolderBeliefAdapter.observe_event(a, e, tick)\n'
+              '\t\t# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。\n')
+
+          registry = 'game/src/simulation/decision/action_registry.gd'
+          replace_once(registry,
+              '\tfor information_action in InformationActionPolicy.build(actor, actor.get("information_subgoal", {}),\n\t\t\tint(world.get("tick", 0))):\n\t\tactions.append(information_action)\n\n\tvar a1 = _forage',
+              '\tfor information_action in InformationActionPolicy.build(actor, actor.get("information_subgoal", {}),\n\t\t\tint(world.get("tick", 0))):\n\t\tactions.append(information_action)\n'
+              '\tvar material_runtime: Dictionary = actor.get("material_request_runtime", {})\n'
+              '\tvar material_candidate: Dictionary = material_runtime.get("candidate", {})\n'
+              '\tif not material_candidate.is_empty():\n\t\tactions.append(material_candidate.duplicate(true))\n\n\tvar a1 = _forage')
+
+          engine = 'game/src/simulation/decision/decision_engine.gd'
+          replace_once(engine,
+              '\t# 意图坚持 vs 机会成本：承诺强度决定"懒得重想"的概率，\n',
+              '\t# P7.1B：材料请求候选沿用同一个考虑集和 softmax，只获得显著性，不获得强制效用。\n'
+              '\tvar material_state: Dictionary = agency.get("material_request", {})\n'
+              '\tvar material_salient: Array = []\n'
+              '\tif agency_mode == "LIVE_BRIDGE" and not material_state.is_empty():\n'
+              '\t\tvar material_candidate: Dictionary = material_state.get("candidate", {})\n'
+              '\t\tif not material_candidate.is_empty():\n'
+              '\t\t\tmaterial_salient.append({"candidate_key": AgencyActionBridge.candidate_key(material_candidate),\n'
+              '\t\t\t\t"original_utility": float(material_candidate.get("utility", 0.0)),\n'
+              '\t\t\t\t"effective_utility": float(material_candidate.get("utility", 0.0)),\n'
+              '\t\t\t\t"plan_id": str((material_state.get("request", {}) as Dictionary).get("parent_plan_id", "")),\n'
+              '\t\t\t\t"problem_id": str((material_state.get("request", {}) as Dictionary).get("root_goal", "")),\n'
+              '\t\t\t\t"material_request": true})\n\n'
+              '\t# 意图坚持 vs 机会成本：承诺强度决定"懒得重想"的概率，\n')
+          replace_once(engine,
+              '\tsalient_pool.append_array(information_salient)\n',
+              '\tsalient_pool.append_array(information_salient)\n\tsalient_pool.append_array(material_salient)\n')
+
+          bootstrap = 'game/src/runtime/simulation_bootstrap.gd'
+          replace_once(bootstrap,
+              '\tif bool(config.get("information_subgoals", false)) and not bool(config.get("plan_execution", false)):\n\t\treturn {"ok": false, "error": "INFORMATION_REQUIRES_EXECUTION"}\n',
+              '\tif bool(config.get("information_subgoals", false)) and not bool(config.get("plan_execution", false)):\n\t\treturn {"ok": false, "error": "INFORMATION_REQUIRES_EXECUTION"}\n'
+              '\tif bool(config.get("material_requests", false)) and not bool(config.get("plan_execution", false)):\n\t\treturn {"ok": false, "error": "MATERIAL_REQUEST_REQUIRES_EXECUTION"}\n')
+          replace_once(bootstrap,
+              '\t\t\tor bool(config.get("information_subgoals", false))) and str(config["agency_mode"]) != "LIVE_BRIDGE":\n',
+              '\t\t\tor bool(config.get("information_subgoals", false)) or bool(config.get("material_requests", false))) and str(config["agency_mode"]) != "LIVE_BRIDGE":\n')
+          replace_once(bootstrap,
+              '\tsim.agency_information_subgoals_enabled = bool(config.get("information_subgoals", false))\n',
+              '\tsim.agency_information_subgoals_enabled = bool(config.get("information_subgoals", false))\n'
+              '\tsim.agency_material_requests_enabled = bool(config.get("material_requests", false))\n')
+
+          profiles_path = Path('game/config/simulation_profiles.json')
+          profiles = json.loads(profiles_path.read_text(encoding='utf-8'))
+          profiles['profiles']['material'] = {
+              'agency_mode': 'LIVE_BRIDGE', 'plan_execution': True, 'causal_step_value': True,
+              'plan_adoption': True, 'information_subgoals': True, 'material_requests': True,
+          }
+          profiles_path.write_text(json.dumps(profiles, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          audit = 'game/src/runtime/simulation_audit.gd'
+          replace_once(audit,
+              '\t\t"information_rng_states": sim.agency_information_rng_states(),\n',
+              '\t\t"information_rng_states": sim.agency_information_rng_states(),\n'
+              '\t\t"material_request_sha256": AgencyMeasure.canon(sim.agency_material_request_snapshot()).sha256_text(),\n'
+              '\t\t"material_request_rng_states": sim.agency_material_request_rng_states(),\n')
+          replace_once(audit,
+              '\treturn {"tick": sim.tick, "actors": sim.actors.size(), "event_counts": events,\n',
+              '\tvar material := {}\n'
+              '\tfor request_id in sim.agency_material_request_snapshot():\n'
+              '\t\tvar request: Dictionary = sim.agency_material_request_snapshot()[request_id]\n'
+              '\t\tvar status := str(request.get("status", ""))\n'
+              '\t\tmaterial[status] = int(material.get(status, 0)) + 1\n'
+              '\treturn {"tick": sim.tick, "actors": sim.actors.size(), "event_counts": events,\n')
+          replace_once(audit,
+              '\t\t"information_counts": information,\n',
+              '\t\t"information_counts": information, "material_request_counts": material,\n')
+
+          modules_path = Path('game/docs/architecture/modules.json')
+          modules = json.loads(modules_path.read_text(encoding='utf-8'))
+          m11 = next(m for m in modules['modules'] if m['module_id'] == 'm11_knowledge_agency')
+          for p in [
+              'game/src/simulation/material_request/material_request_contract.gd',
+              'game/src/simulation/material_request/material_request_coordinator.gd',
+              'game/src/simulation/material_request/material_request_policy.gd',
+              'game/src/simulation/material_request/material_request_response_policy.gd',
+              'game/src/simulation/material_request/material_request_tracker.gd',
+              'game/src/simulation/material_request/material_transfer_service.gd',
+              'game/src/simulation/material_request/material_holder_belief_adapter.gd',
+              'game/src/simulation/material_request/material_request_runtime_adapter.gd',
+          ]:
+              if p not in m11['owned_paths']:
+                  m11['owned_paths'].append(p)
+          for ep in ['MaterialRequestCoordinator', 'MaterialRequestRuntimeAdapter.prepare', 'MaterialHolderBeliefAdapter.observe_event']:
+              if ep not in m11['public_entrypoints']:
+                  m11['public_entrypoints'].append(ep)
+          modules['note'] = 'P7.1B 材料请求运行链已登记；请求者只读主观持有人证据，实际转交由世界变更事件确认。'
+          modules_path.write_text(json.dumps(modules, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          Path('.github/workflows/p7-1-runtime-wire.yml').unlink()
+          PY
+          git diff --check
+          git status --short
+      - name: Commit runtime wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'aiworld-ci'
+          git config user.email 'aiworld-ci@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && { echo 'no runtime wiring changes'; exit 1; }
+          git commit -m 'feat(p7.1b): wire material requests into live simulation'
+          git push origin HEAD:work/p7-1-runtime-v2
