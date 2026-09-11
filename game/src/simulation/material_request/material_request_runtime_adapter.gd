@@ -4,33 +4,39 @@ class_name MaterialRequestRuntimeAdapter
 const Contract = preload("res://src/simulation/material_request/material_request_contract.gd")
 const HolderBeliefs = preload("res://src/simulation/material_request/material_holder_belief_adapter.gd")
 const REQUEST_TTL_TICKS := 24
+const RETRY_COOLDOWN_TICKS := 6
 
 static func prepare(actor_id: String, proposals: Array, actor: Dictionary,
 		relationships: RelationshipStore, coordinator: MaterialRequestCoordinator,
 		now_tick: int, seed: int) -> Dictionary:
-	coordinator.tracker.expire_due(now_tick)
+	var expired: Array = coordinator.tracker.expire_due(now_tick)
+	for raw_expired in expired:
+		if raw_expired is Dictionary and String(raw_expired.get("requester_id", "")) == actor_id:
+			actor["material_request_cooldown_until"] = maxi(int(actor.get("material_request_cooldown_until", 0)), now_tick + RETRY_COOLDOWN_TICKS)
+	if now_tick < int(actor.get("material_request_cooldown_until", 0)):
+		return {}
 	var active: Array = coordinator.tracker.active_requests_for(actor_id)
 	if not active.is_empty():
 		return _runtime_state(active[0], actor, relationships, coordinator, now_tick, seed)
 
-	var blocker := _select_material_blocker(proposals)
+	var blocker: Dictionary = _select_material_blocker(proposals)
 	if blocker.is_empty():
 		return {}
 	var item_id := String(blocker.get("item_id", ""))
 	var quantity := maxi(1, int(blocker.get("quantity", 1)))
 	var plan_id := String(blocker.get("plan_id", ""))
 	var root_goal := String(blocker.get("root_goal", ""))
-	var request_id := "MR:%s:%s:%s" % [actor_id, plan_id, item_id]
+	var request_id := "MR:%s:%s:%s:%d" % [actor_id, plan_id, item_id, now_tick]
 	if coordinator.tracker.has_request(request_id):
-		var existing := coordinator.tracker.get_request(request_id)
+		var existing: Dictionary = coordinator.tracker.get_request(request_id)
 		if not Contract.is_terminal(String(existing.get("status", ""))):
 			return _runtime_state(existing, actor, relationships, coordinator, now_tick, seed)
 		return {}
 
-	var request := Contract.make_request(request_id, actor_id, item_id, quantity, root_goal,
+	var request: Dictionary = Contract.make_request(request_id, actor_id, item_id, quantity, root_goal,
 		plan_id, now_tick, now_tick + REQUEST_TTL_TICKS, _urgency(actor, root_goal))
 	request["knowledge_context"] = {"max_holder_belief_age_ticks": HolderBeliefs.DEFAULT_MAX_AGE_TICKS}
-	var preview_state := _runtime_state(request, actor, relationships, coordinator, now_tick, seed)
+	var preview_state: Dictionary = _runtime_state(request, actor, relationships, coordinator, now_tick, seed)
 	if (preview_state.get("candidate", {}) as Dictionary).is_empty():
 		return {}
 	var opened: Dictionary = coordinator.open_request(request)
@@ -74,9 +80,9 @@ static func _runtime_state(request: Dictionary, actor: Dictionary,
 	var visible: Array = actor.get("others_visible", [])
 	match status:
 		Contract.STATUS_ACTIVE:
-			var excluded := _answered_targets(request)
+			var excluded: Array = _answered_targets(request)
 			var knowledge: Dictionary = request.get("knowledge_context", {})
-			var beliefs := HolderBeliefs.candidates(actor, String(request.get("item_id", "")), visible,
+			var beliefs: Array = HolderBeliefs.candidates(actor, String(request.get("item_id", "")), visible,
 				relationships, now_tick, excluded, int(knowledge.get("max_holder_belief_age_ticks", HolderBeliefs.DEFAULT_MAX_AGE_TICKS)))
 			var decision: Dictionary = coordinator.request_policy.choose_target(request, beliefs, now_tick, seed)
 			if bool(decision.get("ok", false)):
@@ -104,7 +110,7 @@ static func _select_material_blocker(proposals: Array) -> Dictionary:
 				continue
 			if String(blocker.get("item_id", "")).is_empty() or int(blocker.get("quantity", 0)) <= 0:
 				continue
-			var row := blocker.duplicate(true)
+			var row: Dictionary = blocker.duplicate(true)
 			row["plan_id"] = String(plan.get("plan_id", ""))
 			row["root_goal"] = String(plan.get("root_goal", ""))
 			rows.append(row)
