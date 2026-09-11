@@ -540,7 +540,7 @@ func agency_material_request_snapshot() -> Dictionary:
 func agency_material_request_state(actor_id: String) -> Dictionary:
 	if _material_request_coordinator_state == null:
 		return {}
-	var active := _material_request_coordinator_state.tracker.active_requests_for(actor_id)
+	var active: Array = _material_request_coordinator_state.tracker.active_requests_for(actor_id)
 	return {} if active.is_empty() else (active[0] as Dictionary).duplicate(true)
 
 func _material_request_rng(actor_id: String) -> RandomNumberGenerator:
@@ -1352,7 +1352,7 @@ func _do_request_material(id: String, a: Dictionary, action: Dictionary, _ev: Ar
 		return
 	var request_id := str(action.get("request_id", ""))
 	var target_id := str(action.get("target_actor", ""))
-	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+	var request: Dictionary = _material_request_coordinator_state.tracker.get_request(request_id)
 	if request.is_empty() or str(request.get("status", "")) != MaterialRequestContract.STATUS_ACTIVE:
 		return
 	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
@@ -1406,7 +1406,7 @@ func _do_receive_material(id: String, a: Dictionary, action: Dictionary, _ev: Ar
 	var target_id := str(action.get("target_actor", ""))
 	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
 		return
-	var request := _material_request_coordinator_state.tracker.get_request(request_id)
+	var request: Dictionary = _material_request_coordinator_state.tracker.get_request(request_id)
 	if request.is_empty():
 		return
 	var result := _material_request_coordinator_state.transfer_and_resolve(request_id,
