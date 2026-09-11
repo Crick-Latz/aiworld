@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   reconstruct:
-    if: github.event.head_commit.message == 'chore(p7.0): add one-shot reconstruction workflow'
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
