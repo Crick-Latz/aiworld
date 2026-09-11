@@ -64,6 +64,24 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 				"execution": true,
 			})
 
+	# P7.0：当前信息子目标的合法搜索/询问候选属于 agency-salient。
+	# 它们仍沿用 ActionRegistry 的效用并经过同一 softmax，不获得强制执行权。
+	var information_goal: Dictionary = agency.get("information_goal", {})
+	var information_salient: Array = []
+	if agency_mode == "LIVE_BRIDGE" and not information_goal.is_empty():
+		var goal_id := str(information_goal.get("goal_id", ""))
+		for candidate in all_actions:
+			if str(candidate.get("information_goal_id", "")) != goal_id:
+				continue
+			information_salient.append({
+				"candidate_key": AgencyActionBridge.candidate_key(candidate),
+				"original_utility": float(candidate.get("utility", 0.0)),
+				"effective_utility": float(candidate.get("utility", 0.0)),
+				"plan_id": str(information_goal.get("parent_plan_id", "")),
+				"problem_id": str(information_goal.get("root_goal", "")),
+				"information": true,
+			})
+
 	# 意图坚持 vs 机会成本：承诺强度决定"懒得重想"的概率，
 	# 但当前最优效用远超在执行意图（紧迫差距）时强制重估——
 	# 饿到极限的人不会因为"决定过要休息"就饿死在存粮上。
@@ -111,6 +129,7 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 	# P6.3B-1：salient 池 = grounded 候选 + 当前执行步骤候选（同一挤位/驱逐规则）
 	var salient_pool: Array = (agency_ground["grounded_candidates"] as Array).duplicate()
 	salient_pool.append_array(exec_salient)
+	salient_pool.append_array(information_salient)
 	if agency_mode == "LIVE_BRIDGE" and not salient_pool.is_empty():
 		var salient := {}
 		for gc in salient_pool:
@@ -228,6 +247,14 @@ static func decide(actor: Dictionary, world: Dictionary, rng: RandomNumberGenera
 		trace["agency_swapped_in_keys"] = agency_swapped_keys
 		trace["agency_evicted_keys"] = agency_evicted_keys
 		trace["agency_candidate_status"] = agency_candidate_status
+		if not information_goal.is_empty():
+			var info_keys: Array = information_salient.map(func(row): return str(row.get("candidate_key", "")))
+			trace["agency_information"] = {
+				"goal": information_goal.duplicate(true),
+				"candidate_keys": info_keys,
+				"selected": info_keys.has(chosen_key),
+				"selected_candidate_key": chosen_key if info_keys.has(chosen_key) else "",
+			}
 		# P6.3B-1 §八：执行步骤匹配留痕（selected=false 时带 blocker_reason）。
 		# decision_tick 显式携带本次决策的 sim tick——新鲜性校验用（trace["tick"] 来自
 		# world["tick"]，在 step 末更新，决策时会滞后一位）

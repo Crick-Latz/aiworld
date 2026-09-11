@@ -2,3 +2,7 @@
 lore/cognition_fixture.txt text eol=lf
 lore/cognition_fixture.cases.json text eol=lf
 game/data/knowledge/cases/engineering_fixture.json text eol=lf
+# Legacy GDScript paths keep CRLF; CR before LF is not trailing whitespace.
+game/src/simulation/decision/action_registry.gd whitespace=cr-at-eol
+game/src/simulation/knowledge/agency_context_builder.gd whitespace=cr-at-eol
+game/test/p3_narrative.gd whitespace=cr-at-eol

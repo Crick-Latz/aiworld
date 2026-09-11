@@ -2,7 +2,7 @@ class_name IslandSimulation
 extends RefCounted
 
 const FIXED_LOCATION_ACTIONS := ["forage_berries", "drink_water", "fish", "gather_shells",
-	"search_ruins", "gather_wood"]
+	"search_ruins", "gather_wood", "search_resource_source"]
 const TRAVEL_STALL_LIMIT := 8
 ## 荒岛世界模拟器（阶段 B）：取代 StorySimulation。
 ## 没有预设剧情。只有三个有性格的人、一座有资源的岛、和一套互动规则。
@@ -31,6 +31,11 @@ var agency_plan_execution_enabled := false
 var agency_causal_step_value_enabled := false
 # P6.4: proposal admission and commitment, independent from step execution.
 var agency_plan_adoption_enabled := false
+# P7.0：UNKNOWN_SOURCE → 搜索/询问信息子目标。默认 false，framework 基线不变。
+var agency_information_subgoals_enabled := false
+var _information_tracker_state: InformationSubgoalTracker = null
+# 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
+var _information_rngs := {}
 var _adoption_rngs := {}
 var _adoption_traces: Array = []
 var _world_seed := 0
@@ -387,6 +392,8 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	var actor_view := _build_actor_view(id, a)
 	# P6.2：决策边界提供主观 proposals/bridge mode（OFF 时不做任何事——旧行为逐位不变）
 	var agency_extra := _agency_prepare(id, a) if str(agency_mode) != "OFF" else {}
+	if agency_extra.has("information_goal"):
+		actor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
@@ -440,6 +447,13 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 	var out := {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
 		"problems": problems, "proposals": proposals,
 		"causal_step_value_enabled": agency_causal_step_value_enabled}
+	# P7.0：从结构化 UNKNOWN_SOURCE blocker 形成一个当前信息子目标。
+	# tracker 只拿主观 ctx、proposals 和自身 needs，不接触地图真值。
+	if agency_information_subgoals_enabled and str(agency_mode) == "LIVE_BRIDGE":
+		var information_goal := _information_tracker().prepare(id, proposals, ctx,
+			{"needs": a["needs"].duplicate(true)}, tick, _item_catalog_if_any())
+		if not information_goal.is_empty():
+			out["information_goal"] = information_goal
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -469,6 +483,37 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			out["catalog"] = _recipe_catalog_if_any()
 			out["items"] = _item_catalog_if_any()
 	return out
+
+## P7.0：信息子目标 tracker 与只读诊断接口。
+func _information_tracker() -> InformationSubgoalTracker:
+	if _information_tracker_state == null:
+		_information_tracker_state = InformationSubgoalTracker.new()
+	return _information_tracker_state
+
+func agency_information_trace() -> Array:
+	if _information_tracker_state == null:
+		return []
+	return _information_tracker_state.trace_snapshot()
+
+func agency_information_goal(actor_id: String) -> Dictionary:
+	if _information_tracker_state == null:
+		return {}
+	return _information_tracker_state.current_goal(actor_id)
+
+func _information_rng(actor_id: String) -> RandomNumberGenerator:
+	if not _information_rngs.has(actor_id):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SeedDeriver.derive(_world_seed, "information_exchange:" + actor_id)
+		_information_rngs[actor_id] = rng
+	return _information_rngs[actor_id]
+
+func agency_information_rng_states() -> Dictionary:
+	var states := {}
+	var ids: Array = _information_rngs.keys()
+	ids.sort()
+	for id in ids:
+		states[id] = str((_information_rngs[id] as RandomNumberGenerator).state)
+	return states
 
 ## P6.3B-1：tracker 访问器（超时配置同步）+ 只读 trace/run 暴露
 func _execution_tracker() -> PlanExecutionTracker:
@@ -517,6 +562,13 @@ func _plan_execution_on_complete(id: String, a: Dictionary, action: Dictionary, 
 	a.erase("_plan_exec_inflight")
 	_execution_tracker().on_action_complete(id, action, event_segment, a["inventory"], tick, identity)
 
+func _information_subgoal_on_complete(id: String, a: Dictionary, action: Dictionary, event_segment: Array) -> void:
+	if not agency_information_subgoals_enabled or str(agency_mode) != "LIVE_BRIDGE" \
+			or _information_tracker_state == null:
+		return
+	var ctx_after := AgencyContextBuilder.build(self, a)
+	_information_tracker_state.on_action_complete(id, action, event_segment, ctx_after, tick)
+
 func _agency_planner_slim(proposals: Array) -> void:
 	AgencyActionBridge.annotate_steps(proposals)
 
@@ -531,6 +583,7 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 		_emit("action_target_missed", id, "%s 尚未抵达行动地点" % a["display_name"],
 			{"action": action_name, "target": str(action["target"]), "actual": str(a["tile"])})
 		a["activity"] = "未能抵达" + str(action.get("desc", action_name))
+		_information_subgoal_on_complete(id, a, action, events.slice(_ev_idx))
 		_plan_execution_on_complete(id, a, action, events.slice(_ev_idx))
 		return
 
@@ -571,6 +624,10 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_keep_distance(id, a, action, new_events)
 		"gather_wood":
 			_do_gather_wood(id, a, new_events)
+		"search_resource_source":
+			_do_search_resource_source(id, a, action, new_events)
+		"ask_resource_source":
+			_do_ask_resource_source(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
 		"observe_person":
@@ -587,7 +644,8 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			pass  # wait / ask_for_help / offer_help 暂为占位
 
 	a["activity"] = "刚完成" + str(action.get("desc", action_name))
-	# P6.3B-1 §六：行动完成通知（核对 run/step/candidate 标识 + 实际结果；幂等）
+	# P7.0 / P6.3B-1：各 tracker 都只消费本次行动的事件段。
+	_information_subgoal_on_complete(id, a, action, events.slice(_ev_idx))
 	_plan_execution_on_complete(id, a, action, events.slice(_ev_idx))
 
 func _requires_fixed_location(action: Dictionary) -> bool:
@@ -606,6 +664,7 @@ func _abort_unreachable_action(id: String, a: Dictionary, _new_events: Array) ->
 	_emit("action_target_unreachable", id, "%s 找不到通往行动地点的路" % a["display_name"],
 		{"action": str(action.get("action", "")), "target": str(action.get("target", "")), "actual": str(a["tile"])})
 	a["activity"] = "无法抵达" + str(action.get("desc", action.get("action", "目标")))
+	_information_subgoal_on_complete(id, a, action, events.slice(event_start))
 	_plan_execution_on_complete(id, a, action, events.slice(event_start))
 
 func _abort_invalidated_action(id: String, a: Dictionary, _new_events: Array) -> void:
@@ -624,6 +683,7 @@ func _abort_invalidated_action(id: String, a: Dictionary, _new_events: Array) ->
 			"target_source_key": str(action.get(ActionTargetContract.SOURCE_KEY_FIELD, "")),
 		})
 	a["activity"] = "重新考虑" + str(action.get("desc", action.get("action", "目标")))
+	_information_subgoal_on_complete(id, a, action, events.slice(event_start))
 	_plan_execution_on_complete(id, a, action, events.slice(event_start))
 
 # ── 行动执行 ──
@@ -1163,6 +1223,80 @@ func _do_gather_wood(id: String, a: Dictionary, ev: Array) -> void:
 			return
 	_emit("gather_wood_empty", id, "%s 找了一圈，附近没有合适的柴" % a["display_name"], {})
 
+## P7.0 有目的搜索：目的地来自 actor 的主观地图；到达后的资源结论只能经 SpatialPerception。
+func _do_search_resource_source(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var goal_id := str(action.get("information_goal_id", ""))
+	var source_kind := str(action.get("source_kind", ""))
+	var item_id := str(action.get("item_id", ""))
+	SpatialPerception.perceive(self, a)
+	var belief: SpatialBeliefMap = a.get("spatial", null)
+	var found := {}
+	if belief != null:
+		var rows := belief.resource_beliefs(source_kind)
+		if not rows.is_empty():
+			found = rows[0]
+	if found.is_empty():
+		_emit("source_search_failed", id, "%s 搜索后仍不知道%s在哪里" % [a["display_name"], item_id], {
+			"information_goal_id": goal_id, "parent_plan_id": str(action.get("parent_plan_id", "")),
+			"item_id": item_id, "source_kind": source_kind, "searched_tile": str(a["tile"]),
+		})
+		return
+	var source_tile: Vector2i = found.get("tile", Vector2i.ZERO)
+	_emit("source_search_found", id, "%s 发现了%s的来源" % [a["display_name"], item_id], {
+		"information_goal_id": goal_id, "parent_plan_id": str(action.get("parent_plan_id", "")),
+		"item_id": item_id, "source_kind": source_kind, "source_tile": str(source_tile),
+		"source_x": source_tile.x, "source_y": source_tile.y,
+		"observed_tick": int(found.get("last_seen_tick", tick)),
+		"confidence": float(found.get("confidence", 1.0)), "evidence_kind": SpatialBeliefMap.EVIDENCE_PERCEPT,
+	})
+
+## P7.0 询问来源：目标由提问者的 ToM 证据选择；回答内容只来自回答者自己的空间信念。
+func _do_ask_resource_source(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var target_id := str(action.get("target_actor", ""))
+	var goal_id := str(action.get("information_goal_id", ""))
+	var source_kind := str(action.get("source_kind", ""))
+	var item_id := str(action.get("item_id", ""))
+	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		_emit("source_information_missed", id, "%s 没能向目标问到消息" % a["display_name"], {
+			"information_goal_id": goal_id, "parent_plan_id": str(action.get("parent_plan_id", "")),
+			"item_id": item_id, "source_kind": source_kind, "target_id": target_id,
+		})
+		return
+	var target: Dictionary = actors[target_id]
+	_emit("source_information_requested", id, "%s 向 %s 打听%s的来源" % [a["display_name"], target["display_name"], item_id], {
+		"information_goal_id": goal_id, "parent_plan_id": str(action.get("parent_plan_id", "")),
+		"item_id": item_id, "source_kind": source_kind, "target_id": target_id,
+	})
+	var response := InformationExchangePolicy.evaluate(target, id, source_kind,
+		relationships.composite_trust(target_id, id), tick, _information_rng(target_id))
+	var response_kind := str(response.get("response", InformationExchangePolicy.RESPONSE_UNKNOWN))
+	var common := {
+		"information_goal_id": goal_id, "parent_plan_id": str(action.get("parent_plan_id", "")),
+		"item_id": item_id, "source_kind": source_kind, "to_id": id, "target_id": id,
+		"reason_code": str(response.get("reason_code", "")),
+		"observed_tick": int(response.get("observed_tick", -1)),
+		"age_ticks": int(response.get("age_ticks", -1)),
+		"confidence": float(response.get("confidence", 0.0)),
+	}
+	match response_kind:
+		InformationExchangePolicy.RESPONSE_SHARE:
+			var tile: Vector2i = response.get("tile", Vector2i.ZERO)
+			common["source_tile"] = str(tile)
+			common["source_x"] = tile.x
+			common["source_y"] = tile.y
+			var seq := _emit("source_information_shared", target_id,
+				"%s 告诉 %s：我见过%s来源" % [target["display_name"], a["display_name"], item_id], common)
+			var asker_belief: SpatialBeliefMap = a.get("spatial", null)
+			if asker_belief != null:
+				asker_belief.learn_reported_resource(source_kind, tile, int(response.get("observed_tick", tick)),
+					tick, target_id, float(response.get("confidence", 0.0)), seq)
+		InformationExchangePolicy.RESPONSE_REFUSE:
+			_emit("source_information_refused", target_id, "%s 不愿透露来源" % target["display_name"], common)
+		InformationExchangePolicy.RESPONSE_STALE:
+			_emit("source_information_stale", target_id, "%s 只记得一条过时线索" % target["display_name"], common)
+		_:
+			_emit("source_information_unknown", target_id, "%s 也不知道来源" % target["display_name"], common)
+
 ## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）
 func _do_sit_by_fire(id: String, a: Dictionary, ev: Array) -> void:
 	a["needs"]["energy"] = clampi(int(a["needs"]["energy"]) + 200, 0, 1000)
@@ -1380,6 +1514,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"physical": a["physical"],
 		"inventory": a["inventory"],
 		"visited_tiles": a["visited_tiles"],
+		"spatial": a.get("spatial", null),
 		"beliefs": a.get("beliefs", BeliefStore.new()),
 		"intentions": a.get("intentions", IntentionManager.new()),
 		"goal_manager": a.get("goal_manager", GoalManager.new()),
@@ -1596,6 +1731,15 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		if id != actor_id and actors.has(actor_id):
 			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
+		# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。
+		# 证据只写目击者 ToM；看不见的人不会凭空知道。
+		if id != actor_id:
+			var demonstrated_source := InformationExchangePolicy.source_kind_for_event(str(e.get("type", "")))
+			if demonstrated_source == "__EVENT_FIELD__":
+				demonstrated_source = str(e.get("source_kind", ""))
+			if demonstrated_source != "":
+				a["tom"].add_evidence(actor_id, InformationExchangePolicy.knowledge_predicate(demonstrated_source),
+					1.0, 0.65, int(e.get("seq", -1)), tick)
 		# P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → descriptive_compliance
 		var evt_rule := str(e.get("rule_id", ""))
 		if evt_rule != "" and id != actor_id:

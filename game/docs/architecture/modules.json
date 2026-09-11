@@ -1,7 +1,7 @@
 {
   "format_version": "1",
-  "updated": "2026-09-10",
-  "note": "实际存在文件的归属登记（OBS-01/23-A 基线）。新目录 src/simulation 等随 OBS 包长出，不把未来目录当已实现模块。",
+  "updated": "2026-09-11",
+  "note": "实际存在文件的归属登记。P7.0 新增主观信息子目标、信息交换与来源报告链；UI/美术仍不在本阶段。",
   "modules": [
     {
       "module_id": "m01_entry_assembly",
@@ -91,7 +91,8 @@
       ],
       "test_entrypoints": [
         "game/test/observer_sim.gd",
-        "game/test/action_travel_lifecycle.gd"
+        "game/test/action_travel_lifecycle.gd",
+        "game/test/p7_information_subgoal.gd"
       ],
       "legacy_exceptions": []
     },
@@ -112,7 +113,8 @@
       "allowed_dependencies": [
         "m04_map_navigation",
         "m09_shared_capability",
-        "m10_items_crafting"
+        "m10_items_crafting",
+        "m11_knowledge_agency"
       ],
       "test_entrypoints": [
         "game/test/observer_sim.gd",
@@ -126,7 +128,8 @@
         "game/test/execution_receipt.gd",
         "game/test/resource_target_revalidation.gd",
         "game/test/plan_step_value.gd",
-        "game/test/p6_3b_causal_value_pilot.gd (paired natural experiment; non-acceptance)"
+        "game/test/p6_3b_causal_value_pilot.gd (paired natural experiment; non-acceptance)",
+        "game/test/p7_information_subgoal.gd"
       ],
       "legacy_exceptions": []
     },
@@ -281,7 +284,10 @@
         "game/src/simulation/knowledge/world_knowledge_store.gd",
         "game/src/simulation/knowledge/plan_adoption_policy.gd",
         "game/src/simulation/knowledge/cognitive_case_library.gd",
-        "game/data/knowledge/cases/engineering_fixture.json"
+        "game/data/knowledge/cases/engineering_fixture.json",
+        "game/src/simulation/knowledge/information_subgoal_tracker.gd",
+        "game/src/simulation/knowledge/information_action_policy.gd",
+        "game/src/simulation/knowledge/information_exchange_policy.gd"
       ],
       "public_entrypoints": [
         "WorldKnowledgeStore.available_for",
@@ -290,7 +296,10 @@
         "AgencyActionBridge.ground",
         "RecipeKnowledgeAdapter.known_recipe_refs",
         "PlanAdoptionPolicy.deliberate",
-        "CognitiveCaseLibrary.load_pack/retrieve (ADVISORY_ONLY)"
+        "CognitiveCaseLibrary.load_pack/retrieve (ADVISORY_ONLY)",
+        "InformationSubgoalTracker.prepare/on_action_complete",
+        "InformationActionPolicy.build",
+        "InformationExchangePolicy.evaluate"
       ],
       "allowed_dependencies": [
         "m09_shared_capability",
@@ -304,7 +313,8 @@
         "game/test/plan_adoption.gd",
         "game/test/cognitive_cases.gd",
         "game/test/p6_4_adoption_pilot.gd",
-        "game/test/agency_funnel_probe.gd"
+        "game/test/agency_funnel_probe.gd",
+        "game/test/p7_information_subgoal.gd"
       ],
       "legacy_exceptions": []
     }
