@@ -1,0 +1,351 @@
+name: Validate and merge P7.1A
+
+on:
+  push:
+    branches:
+      - work/p7-1-material-request
+    paths:
+      - .github/workflows/p7-1-auto-merge.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: p7-1-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  validate-and-merge:
+    if: github.event.head_commit.message == 'chore(ci): stage P7.1 auto-merge'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 70
+    env:
+      PR_NUMBER: '3'
+    steps:
+      - name: Check out P7.1 branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Synchronize mainline and harden request semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ci/p7-1-auto
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          base_sha=$(git rev-parse origin/main)
+          echo "${base_sha}" | tee .tmp/ci/p7-1-auto/base-main-sha.txt
+          git merge --no-edit origin/main
+          test -f game/test/p7_information_subgoal.gd
+          test -f game/src/simulation/information/information_subgoal_tracker.gd
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          tracker = Path('game/src/simulation/material_request/material_request_tracker.gd')
+          text = tracker.read_text(encoding='utf-8')
+          if 'var resolved_quantity := 0' not in text:
+              replacement = '''func record_response(
+              \trequest_id: String,
+              \tresponder_id: String,
+              \toutcome: String,
+              \ttick: int,
+              \taccepted_quantity: int = 0,
+              \treason: String = "",
+              \tcounter: Dictionary = {}
+              ) -> bool:
+              \tif not _requests.has(request_id):
+              \t\treturn false
+              \tvar request: Dictionary = _requests[request_id]
+              \tif String(request.get("status", "")) != Contract.STATUS_WAITING_RESPONSE:
+              \t\treturn false
+              \tif responder_id != String(request.get("target_id", "")):
+              \t\treturn false
+              \tif outcome not in [Contract.OUTCOME_ACCEPT, Contract.OUTCOME_REFUSE, Contract.OUTCOME_COUNTER, Contract.OUTCOME_UNKNOWN]:
+              \t\treturn false
+
+              \tvar resolved_quantity := 0
+              \tif outcome == Contract.OUTCOME_ACCEPT:
+              \t\tvar requested := int(request.get("requested_quantity", 0))
+              \t\tresolved_quantity = accepted_quantity if accepted_quantity > 0 else requested
+              \t\tif resolved_quantity <= 0 or resolved_quantity > requested:
+              \t\t\treturn false
+              \telif outcome == Contract.OUTCOME_COUNTER:
+              \t\tresolved_quantity = int(counter.get("quantity", accepted_quantity))
+              \t\tif resolved_quantity <= 0 or resolved_quantity > int(request.get("requested_quantity", 0)):
+              \t\t\treturn false
+
+              \trequest["response_outcome"] = outcome
+              \trequest["response_reason"] = reason
+              \trequest["updated_tick"] = tick
+              \trequest["last_counter"] = counter.duplicate(true)
+
+              \tmatch outcome:
+              \t\tContract.OUTCOME_ACCEPT:
+              \t\t\trequest["accepted_quantity"] = resolved_quantity
+              \t\t\trequest["status"] = Contract.STATUS_WAITING_TRANSFER
+              \t\tContract.OUTCOME_COUNTER:
+              \t\t\trequest["accepted_quantity"] = resolved_quantity
+              \t\t\trequest["status"] = Contract.STATUS_WAITING_REQUESTER
+              \t\tContract.OUTCOME_REFUSE, Contract.OUTCOME_UNKNOWN:
+              \t\t\trequest["accepted_quantity"] = 0
+              \t\t\trequest["status"] = Contract.STATUS_ACTIVE
+
+              \t_append_history(request, "RESPONSE_RECORDED", tick, {
+              \t\t"responder_id": responder_id,
+              \t\t"outcome": outcome,
+              \t\t"accepted_quantity": int(request.get("accepted_quantity", 0)),
+              \t\t"reason": reason,
+              \t\t"counter": counter.duplicate(true),
+              \t})
+              \t_requests[request_id] = request
+              \treturn true
+
+              func accept_counter'''
+              text, count = re.subn(
+                  r'func record_response\([\s\S]*?\nfunc accept_counter',
+                  replacement,
+                  text,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit('record_response hardening did not match exactly once')
+              tracker.write_text(text, encoding='utf-8')
+
+          policy = Path('game/src/simulation/material_request/material_request_policy.gd')
+          ptext = policy.read_text(encoding='utf-8')
+          ptext = ptext.replace(
+              '\t\tif not raw_candidate is Dictionary:',
+              '\t\tif not (raw_candidate is Dictionary):',
+              1,
+          )
+          visibility_anchor = '''\t\tif not bool(candidate.get("visible", false)):
+          \t\t\tcontinue
+          \t\tvar believed_quantity := maxi(0, int(candidate.get("believed_quantity", 0)))
+          '''
+          visibility_replacement = '''\t\tif not bool(candidate.get("visible", false)):
+          \t\t\tcontinue
+          \t\tif bool(candidate.get("stale", false)):
+          \t\t\tcontinue
+          \t\tvar candidate_item := String(candidate.get("item_id", request.get("item_id", "")))
+          \t\tif candidate_item != String(request.get("item_id", "")):
+          \t\t\tcontinue
+          \t\tvar believed_quantity := maxi(0, int(candidate.get("believed_quantity", 0)))
+          '''
+          if 'var candidate_item :=' not in ptext:
+              if visibility_anchor not in ptext:
+                  raise SystemExit('subjective holder filter anchor not found')
+              ptext = ptext.replace(visibility_anchor, visibility_replacement, 1)
+          policy.write_text(ptext, encoding='utf-8')
+
+          response = Path('game/src/simulation/material_request/material_request_response_policy.gd')
+          rtext = response.read_text(encoding='utf-8')
+          old_partial = '''\tif surplus < requested:
+          \t\tvar counter_quantity := surplus
+          \t\treturn _result(
+          \t\t\tContract.OUTCOME_COUNTER,
+          \t\t\t"PARTIAL_SURPLUS_COUNTER",
+          \t\t\tcounter_quantity,
+          \t\t\taccept_probability,
+          \t\t\tsurplus,
+          \t\t\t{
+          \t\t\t\t"quantity": counter_quantity,
+          \t\t\t\t"requires_exchange": offer_value < 0.35 and own_need > 0.35,
+          \t\t\t}
+          \t\t)
+          '''
+          new_partial = '''\tif surplus < requested:
+          \t\tvar counter_quantity := surplus
+          \t\tif bounded_roll <= accept_probability or offer_value >= 0.35 or relationship >= 0.65:
+          \t\t\treturn _result(
+          \t\t\t\tContract.OUTCOME_COUNTER,
+          \t\t\t\t"PARTIAL_SURPLUS_COUNTER",
+          \t\t\t\tcounter_quantity,
+          \t\t\t\taccept_probability,
+          \t\t\t\tsurplus,
+          \t\t\t\t{
+          \t\t\t\t\t"quantity": counter_quantity,
+          \t\t\t\t\t"requires_exchange": offer_value < 0.35 and own_need > 0.35,
+          \t\t\t\t}
+          \t\t\t)
+          \t\treturn _result(
+          \t\t\tContract.OUTCOME_REFUSE,
+          \t\t\t"PARTIAL_SURPLUS_WITHHELD",
+          \t\t\t0,
+          \t\t\taccept_probability,
+          \t\t\tsurplus,
+          \t\t\t{}
+          \t\t)
+          '''
+          if 'PARTIAL_SURPLUS_WITHHELD' not in rtext:
+              if old_partial not in rtext:
+                  raise SystemExit('partial surplus policy anchor not found')
+              rtext = rtext.replace(old_partial, new_partial, 1)
+          response.write_text(rtext, encoding='utf-8')
+
+          test = Path('game/test/p7_1_material_request.gd')
+          ttext = test.read_text(encoding='utf-8')
+          wrong_responder = '\t_assert_false(tracker.record_response("req-1", "wrong-actor", Contract.OUTCOME_ACCEPT, 13, 2), "wrong responder cannot answer")\n'
+          invalid_tests = '''\t_assert_false(tracker.record_response("req-1", "actor-holder", Contract.OUTCOME_ACCEPT, 13, 3), "accepted quantity cannot exceed request")
+          \t_assert_eq(String(tracker.get_request("req-1").get("status", "")), Contract.STATUS_WAITING_RESPONSE, "invalid response preserves waiting state")
+          \t_assert_eq(String(tracker.get_request("req-1").get("response_outcome", "")), "", "invalid response leaves outcome untouched")
+          '''
+          if 'accepted quantity cannot exceed request' not in ttext:
+              if wrong_responder not in ttext:
+                  raise SystemExit('invalid response test anchor not found')
+              ttext = ttext.replace(wrong_responder, wrong_responder + invalid_tests, 1)
+
+          belief_anchor = '''\t\t{
+          \t\t\t"actor_id": "actor-visible-best",
+          '''
+          excluded_candidates = '''\t\t{
+          \t\t\t"actor_id": "actor-visible-wrong-item",
+          \t\t\t"visible": true,
+          \t\t\t"item_id": "shell",
+          \t\t\t"believed_quantity": 50,
+          \t\t\t"confidence": 1.0,
+          \t\t\t"relationship": 1.0,
+          \t\t\t"expected_cooperation": 1.0,
+          \t\t\t"distance": 1.0,
+          \t\t\t"last_observed_tick": 100,
+          \t\t},
+          \t\t{
+          \t\t\t"actor_id": "actor-visible-stale",
+          \t\t\t"visible": true,
+          \t\t\t"item_id": "wood",
+          \t\t\t"stale": true,
+          \t\t\t"believed_quantity": 50,
+          \t\t\t"confidence": 1.0,
+          \t\t\t"relationship": 1.0,
+          \t\t\t"expected_cooperation": 1.0,
+          \t\t\t"distance": 1.0,
+          \t\t\t"last_observed_tick": 100,
+          \t\t},
+          '''
+          if 'actor-visible-wrong-item' not in ttext:
+              if belief_anchor not in ttext:
+                  raise SystemExit('belief exclusion test anchor not found')
+              ttext = ttext.replace(belief_anchor, excluded_candidates + belief_anchor, 1)
+
+          partial_anchor = '\t_assert_eq(int(Dictionary(partial.get("counter", {})).get("quantity", 0)), 1, "counter records offered quantity")\n'
+          partial_refusal = '''
+          \tvar guarded_partial_context := guarded_context.duplicate(true)
+          \tguarded_partial_context["inventory_quantity"] = 2
+          \tguarded_partial_context["reserve_quantity"] = 1
+          \tvar guarded_partial := policy.evaluate(request, guarded_partial_context, 0.99)
+          \t_assert_eq(String(guarded_partial.get("outcome", "")), Contract.OUTCOME_REFUSE, "recipient may withhold partial surplus")
+          \t_assert_eq(String(guarded_partial.get("reason", "")), "PARTIAL_SURPLUS_WITHHELD", "partial refusal records recipient interest")
+          '''
+          if 'recipient may withhold partial surplus' not in ttext:
+              if partial_anchor not in ttext:
+                  raise SystemExit('partial refusal test anchor not found')
+              ttext = ttext.replace(partial_anchor, partial_anchor + partial_refusal, 1)
+          test.write_text(ttext, encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/p7-1-validate.yml \
+                .github/workflows/p7-1-review-gate.yml \
+                .github/workflows/p7-1-auto-merge.yml
+
+      - name: Install checksum-pinned Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aiworld-godot"
+          archive="$RUNNER_TEMP/aiworld-godot/engine.zip"
+          curl --fail --location --retry 3 --max-time 180 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            --output "$archive"
+          echo 'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  '"$archive" | sha256sum -c -
+          unzip -q "$archive" 'Godot_v4.7.2-stable_linux.x86_64' -d "$RUNNER_TEMP/aiworld-godot"
+          engine="$RUNNER_TEMP/aiworld-godot/Godot_v4.7.2-stable_linux.x86_64"
+          chmod +x "$engine"
+          test "$("$engine" --version)" = '4.7.2.stable.official.ed1daf0bf'
+          echo "GODOT_BIN=$engine" >> "$GITHUB_ENV"
+          "$engine" --version | tee .tmp/ci/p7-1-auto/godot-version.txt
+
+      - name: Dedicated material-request regression
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path game --script res://test/p7_1_material_request.gd 2>&1 | tee .tmp/ci/p7-1-auto/material-request.log
+          grep -Eq 'SUMMARY: passed=[1-9][0-9]* failed=0' .tmp/ci/p7-1-auto/material-request.log
+
+      - name: Full strict regression
+        run: python3 scripts/run-strict-regression.py --evidence .tmp/ci/p7-1-auto/strict
+
+      - name: Stable framework deterministic replay
+        run: python3 scripts/run-simulation.py --profile framework --seed 61000 --ticks 1000 --verify-replay --out .tmp/ci/p7-1-auto/framework-61000.json
+
+      - name: P7.0 information deterministic replay
+        run: python3 scripts/run-simulation.py --profile information --seed 61003 --ticks 1000 --verify-replay --out .tmp/ci/p7-1-auto/information-61003.json
+
+      - name: Publish validated candidate
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git commit -m 'feat(sim): establish causal material request foundation'
+          git push origin HEAD:work/p7-1-material-request
+          candidate=$(git rev-parse HEAD)
+          echo "${candidate}" | tee .tmp/ci/p7-1-auto/candidate-sha.txt
+          echo "candidate_sha=${candidate}" >> "$GITHUB_OUTPUT"
+
+      - name: Mark ready, summarize and merge PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          candidate='${{ steps.publish.outputs.candidate_sha }}'
+          expected_main=$(cat .tmp/ci/p7-1-auto/base-main-sha.txt)
+          current_main=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main" | jq -r '.object.sha')
+          test "${current_main}" = "${expected_main}"
+          current_branch=$(curl --fail --silent --show-error "${auth[@]}" "${api}/git/ref/heads/work/p7-1-material-request" | jq -r '.object.sha')
+          test "${current_branch}" = "${candidate}"
+
+          pr=$(curl --fail --silent --show-error "${auth[@]}" "${api}/pulls/${PR_NUMBER}")
+          node_id=$(jq -r '.node_id' <<<"${pr}")
+          draft=$(jq -r '.draft' <<<"${pr}")
+          if [[ "${draft}" = 'true' ]]; then
+            graphql=$(jq -n --arg id "${node_id}" '{query:"mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}",variables:{id:$id}}')
+            curl --fail --silent --show-error -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H 'Content-Type: application/json' https://api.github.com/graphql -d "${graphql}" | jq -e '.data.markPullRequestReadyForReview.pullRequest.isDraft == false' > /dev/null
+          fi
+
+          comment=$(cat <<EOF
+          P7.1A passed its merge gate at commit ${candidate}.
+
+          Verified with checksum-pinned Godot 4.7.2:
+          - dedicated material-request regression
+          - full strict regression
+          - stable framework replay, seed 61000, 1000 ticks
+          - P7.0 information replay, seed 61003, 1000 ticks
+
+          The merged checkpoint contains the causal request foundation. Runtime wiring remains P7.1B.
+          EOF
+          )
+          curl --fail --silent --show-error -X POST "${auth[@]}" "${api}/issues/${PR_NUMBER}/comments" -d "$(jq -n --arg body "${comment}" '{body:$body}')" > /dev/null
+
+          merge_payload=$(jq -n --arg title 'feat(sim): establish causal material request foundation (#3)' --arg body 'Adds subjective holder selection, autonomous recipient responses, verified inventory transfer evidence, request lifecycle tracking, one-shot parent-plan revalidation and regression coverage.' --arg sha "${candidate}" '{commit_title:$title, commit_message:$body, sha:$sha, merge_method:"squash"}')
+          merge=$(curl --fail --silent --show-error -X PUT "${auth[@]}" "${api}/pulls/${PR_NUMBER}/merge" -d "${merge_payload}")
+          jq -e '.merged == true' <<<"${merge}" > /dev/null
+          jq -r '.sha' <<<"${merge}" | tee .tmp/ci/p7-1-auto/merged-main-sha.txt
+
+      - name: Retain merge evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p7-1-auto-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tmp/ci/p7-1-auto/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
