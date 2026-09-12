@@ -300,15 +300,15 @@ func _test_p3a3_llm_offline() -> void:
 	_check("p3a3_no_config_falls_back", bool(out_nc.get("ok", false)) and str(out_nc.get("renderer", "")) == "template",
 		"renderer=%s" % str(out_nc.get("renderer", "")))
 	# 2. 在测试作用域内注入占位环境配置；清洁源码无需本地密钥文件。
-	var env_names := ["AIWORD_LLM_BASE_URL", "AIWORD_LLM_API_KEY", "AIWORD_LLM_MODEL"]
+	var env_names := ["AIWORLD_LLM_BASE_URL", "AIWORLD_LLM_API_KEY", "AIWORLD_LLM_MODEL"]
 	var env_values := {}
 	var env_present := {}
 	for name in env_names:
 		env_values[name] = OS.get_environment(name)
 		env_present[name] = OS.has_environment(name)
-	OS.set_environment("AIWORD_LLM_BASE_URL", "https://example.invalid/v1")
-	OS.set_environment("AIWORD_LLM_API_KEY", "test-placeholder-key")
-	OS.set_environment("AIWORD_LLM_MODEL", "test-model")
+	OS.set_environment("AIWORLD_LLM_BASE_URL", "https://example.invalid/v1")
+	OS.set_environment("AIWORLD_LLM_API_KEY", "test-placeholder-key")
+	OS.set_environment("AIWORLD_LLM_MODEL", "test-model")
 	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
 	for name in env_names:
 		if bool(env_present[name]):

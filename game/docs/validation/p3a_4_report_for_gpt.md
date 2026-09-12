@@ -39,7 +39,7 @@ tools/Godot_v4.7.2-stable_win64_console.exe --headless --path game --script res:
 
 **凭据配置**（二选一）：
 1. `game/config/ai.local.json`：`{"base_url": "...", "api_key": "...", "model": "..."}`
-2. 环境变量 `AIWORD_LLM_BASE_URL` + `AIWORD_LLM_API_KEY`（+ `AIWORD_LLM_MODEL`）
+2. 环境变量 `AIWORLD_LLM_BASE_URL` + `AIWORLD_LLM_API_KEY`（+ `AIWORLD_LLM_MODEL`）
 
 ## 三、测试（NX + NY 4/4，套件 49/49）
 

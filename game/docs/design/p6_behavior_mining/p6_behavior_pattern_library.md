@@ -50,7 +50,7 @@ Problem（问题） → Perceived Situation（感知处境） → Knowledge Used
 
 ### Resource scarcity / Competition / Property `部分 NOT_IMPLEMENTED`
 - 稀缺 → 配给（定额/顺序）→ 储藏私有化 → 偷窃/争夺 → 规则/惩罚。
-- **共同结构**：资源竞争是制度（P2）与暴力（P6.7）的交汇点——AIWord 已有制度层，缺暴力终端。
+- **共同结构**：资源竞争是制度（P2）与暴力（P6.7）的交汇点——AIWorld 已有制度层，缺暴力终端。
 
 ### Cooperation / Leadership / Trust / Coalition `部分已有`
 - 合作模式：分工（守火/觅食/建造轮班）；领导（能力型/魅力型/暴力型）；信任（共患难积累/一次背叛崩塌）；联盟（多数派/弱者联合）。
@@ -58,7 +58,7 @@ Problem（问题） → Perceived Situation（感知处境） → Knowledge Used
 
 ### Deception / Trade `NOT_IMPLEMENTED`
 - 欺骗：隐瞒发现（私藏食物）/夸大能力/假信号；交易：以物易物/劳务交换/信息换保护。
-- **共同结构**：欺骗与交易的共同前置是**信息不对称**——AIWord 的隐藏状态哲学天然支持。
+- **共同结构**：欺骗与交易的共同前置是**信息不对称**——AIWorld 的隐藏状态哲学天然支持。
 
 ### Isolation（孤独）
 - 独处者：自言自语/写日记/驯化动物为伴/规律作息维持理智（SOURCE_DERIVED：Crusoe/Blue Dolphins/Pincher Martin）。

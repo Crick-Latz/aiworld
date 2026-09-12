@@ -1,6 +1,6 @@
 # 代码位置索引（供 GPT 评审）
 
-仓库：`D:\Project_AI\aiword` ｜ 模拟层代码共 33 个 GDScript 文件、约 5000 行（不含测试/场景/文档）
+仓库：`D:\Project_AI\aiworld` ｜ 模拟层代码共 33 个 GDScript 文件、约 5000 行（不含测试/场景/文档）
 所有路径相对 `game/`。FG-R1 严格门禁为 16 套 471 项全绿；权威记录见 `docs/validation/freeze_gate_r1_report_for_gpt.md`。
 
 ---
@@ -103,7 +103,7 @@
 
 ## P3a-3 新增（2026-09-06）
 
-- `narrative/llm_narrative_renderer.gd`：最小权限真实 LLM Renderer。输入=claim package（beat 选中的主张 + epistemic_status，无 EventLog/WorldState/事件原文）；输出契约=`{sentences:[{text, claim_ids}]}`——解析层校验 claim_ids ⊆ IR（幻觉 id 剔除整句），底层 ids 由 derive_sources 系统派生。Prompt 硬约束（不是 Story Generator/禁新事实动机情绪对话因果/认识层级保持/BELIEVED 只能写"某人认为"）。配置门控：`config/ai.local.json` 或 `AIWORD_LLM_BASE_URL/AIWORD_LLM_API_KEY` 环境变量——未配置返回 null 走 Template fallback（零网络默认）。Observer 已接线（配置存在才启用 LLM）。
+- `narrative/llm_narrative_renderer.gd`：最小权限真实 LLM Renderer。输入=claim package（beat 选中的主张 + epistemic_status，无 EventLog/WorldState/事件原文）；输出契约=`{sentences:[{text, claim_ids}]}`——解析层校验 claim_ids ⊆ IR（幻觉 id 剔除整句），底层 ids 由 derive_sources 系统派生。Prompt 硬约束（不是 Story Generator/禁新事实动机情绪对话因果/认识层级保持/BELIEVED 只能写"某人认为"）。配置门控：`config/ai.local.json` 或 `AIWORLD_LLM_BASE_URL/AIWORLD_LLM_API_KEY` 环境变量——未配置返回 null 走 Template fallback（零网络默认）。Observer 已接线（配置存在才启用 LLM）。
 
 ---
 

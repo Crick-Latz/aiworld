@@ -72,7 +72,7 @@ run 是可重启的计划执行轮次，不是独立 NPC，也不是独立试验
 ## 验证与重跑
 
 ```powershell
-# 在 D:\Project_AI\aiword 执行。已有输出不覆盖；重跑请显式指定新的 --out 绝对路径。
+# 在 D:\Project_AI\aiworld 执行。已有输出不覆盖；重跑请显式指定新的 --out 绝对路径。
 tools\Godot_v4.7.2-stable_win64_console.exe --headless --path game --script res://test/p6_3b_execution_pilot.gd -- --self-test
 tools\Godot_v4.7.2-stable_win64_console.exe --headless --path game --script res://test/p6_3b_execution_pilot.gd
 ```
