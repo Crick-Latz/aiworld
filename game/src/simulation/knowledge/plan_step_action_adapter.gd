@@ -18,6 +18,8 @@ const MAIN_SUCCESS_EVENTS := {
 	"build_shelter": "shelter_built",
 	"gather_wood": "gathered_wood",
 	"gather_shells": "gathered_shells",
+	# P7.2：履约 MAIN 步以承诺终态事件为完成证据（tracker 会再核对 commitment_id）。
+	"repay_debt": "COMMITMENT_FULFILLED",
 }
 
 ## ACQUIRE：item_id → 实得事件类型（材料落袋证明）
@@ -101,15 +103,21 @@ static func _match_craft(step: Dictionary, valid_actions: Array, ctx: Dictionary
 		return {"candidates": [], "skip": false, "blocker_reason": "NO_REGISTRY_CANDIDATE"}
 	return {"candidates": out, "skip": false, "blocker_reason": ""}
 
-## MAIN：按步骤行动名匹配（planner 已把 via_rule 映射为 action_name）
+## MAIN：按步骤行动名匹配（planner 已把 via_rule 映射为 action_name）。
+## P7.2：步骤绑定 commitment_id 时，候选的 obligation 必须是同一承诺（身份不漂移）。
 static func _match_main(step: Dictionary, valid_actions: Array) -> Dictionary:
 	var action_name := str(step.get("action_name", ""))
 	if action_name == "":
 		return {"candidates": [], "skip": false, "blocker_reason": "MALFORMED_STEP"}
+	var step_commitment := str(step.get("commitment_id", ""))
 	var out: Array = []
 	for c in valid_actions:
-		if typeof(c) == TYPE_DICTIONARY and str(c.get("action", "")) == action_name:
-			out.append(c)
+		if typeof(c) != TYPE_DICTIONARY or str(c.get("action", "")) != action_name:
+			continue
+		if step_commitment != "" \
+				and str((c.get("obligation", {}) as Dictionary).get("commitment_id", "")) != step_commitment:
+			continue
+		out.append(c)
 	if out.is_empty():
 		return {"candidates": [], "skip": false, "blocker_reason": "NO_REGISTRY_CANDIDATE"}
 	return {"candidates": out, "skip": false, "blocker_reason": ""}
