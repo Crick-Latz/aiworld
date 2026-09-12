@@ -210,6 +210,21 @@
       "name": "p7_1_runtime_wiring",
       "script": "res://test/p7_1_runtime_wiring.gd",
       "expected": 72
+    },
+    {
+      "name": "p7_2_commitment",
+      "script": "res://test/p7_2_commitment.gd",
+      "expected": 35
+    },
+    {
+      "name": "p7_2_commitment_hardening",
+      "script": "res://test/p7_2_commitment_hardening.gd",
+      "expected": 18
+    },
+    {
+      "name": "p7_2_runtime_chain",
+      "script": "res://test/p7_2_runtime_chain.gd",
+      "expected": 34
     }
   ]
 }
