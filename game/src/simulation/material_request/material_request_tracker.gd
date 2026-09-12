@@ -128,6 +128,24 @@ func accept_counter(request_id: String, tick: int) -> bool:
 	_requests[request_id] = request
 	return true
 
+func reject_counter(request_id: String, tick: int, reason: String = "COUNTER_REJECTED") -> bool:
+	if not _requests.has(request_id):
+		return false
+	var request: Dictionary = _requests[request_id]
+	if String(request.get("status", "")) != Contract.STATUS_WAITING_REQUESTER:
+		return false
+	request["response_outcome"] = Contract.OUTCOME_COUNTER_REJECTED
+	request["response_reason"] = reason
+	request["status"] = Contract.STATUS_ACTIVE
+	request["accepted_quantity"] = 0
+	request["updated_tick"] = tick
+	_append_history(request, "COUNTER_REJECTED", tick, {
+		"reason": reason,
+		"counter": (request.get("last_counter", {}) as Dictionary).duplicate(true),
+	})
+	_requests[request_id] = request
+	return true
+
 func record_transfer_evidence(request_id: String, event: Dictionary, tick: int) -> bool:
 	if not _requests.has(request_id):
 		return false

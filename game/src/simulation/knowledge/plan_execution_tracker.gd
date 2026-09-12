@@ -232,6 +232,63 @@ func _complete_main(run: Dictionary, step: Dictionary, event_segment: Array,
 	_note(run, tick, "MAIN_NOT_SUCCEEDED", str(step.get("step_id", "")), str(run.get("selected_candidate_key", "")), action_name)
 	return {"advanced": false}
 
+## A successful material transfer grants one revalidation opportunity. It never
+## restores the run directly and never bypasses a still-missing blocker.
+func request_parent_revalidation(actor_id: String, plan_id: String, tick: int,
+		transfer_event_id: String, parent_run_id: String, blocker_step_id: String) -> Dictionary:
+	var run: Dictionary = runs.get(actor_id, {})
+	if run.is_empty() or str(run.get("plan_id", "")) != plan_id:
+		return {}
+	if str(run.get("run_id", "")) != parent_run_id:
+		return {}
+	if str(run.get("current_step_id", "")) != blocker_step_id:
+		return {}
+	if str(run.get("state", "")) != "BLOCKED":
+		return {}
+	var token := {
+		"actor_id": actor_id,
+		"plan_id": plan_id,
+		"root_goal": str(run.get("root_goal", "")),
+		"step_id": str(run.get("current_step_id", "")),
+		"transfer_event_id": transfer_event_id,
+		"requested_tick": tick,
+	}
+	run["parent_revalidation_pending"] = token.duplicate(true)
+	runs[actor_id] = run
+	if _cooldown.has(actor_id):
+		(_cooldown[actor_id] as Dictionary).erase(plan_id)
+	_trace(run, tick, "PARENT_PLAN_REVALIDATION_REQUESTED",
+		"BLOCKED", "BLOCKED", str(run.get("current_step_id", "")), "", [], transfer_event_id)
+	return token
+
+## Consume the one-shot opportunity after proposals are rebuilt from current
+## subjective state. A plan that is still blocked or no longer proposed fails closed.
+func consume_parent_revalidation(actor_id: String, proposals: Array, tick: int) -> Dictionary:
+	var run: Dictionary = runs.get(actor_id, {})
+	if run.is_empty():
+		return {}
+	var token: Dictionary = run.get("parent_revalidation_pending", {})
+	if token.is_empty():
+		return {}
+	run["parent_revalidation_pending"] = {}
+	var plan_id := str(token.get("plan_id", ""))
+	var ready := false
+	for proposal in proposals:
+		if typeof(proposal) != TYPE_DICTIONARY:
+			continue
+		if str(proposal.get("plan_id", "")) == plan_id and str(proposal.get("status", "")) == "READY":
+			ready = true
+			break
+	runs[actor_id] = run
+	if not ready or str(run.get("plan_id", "")) != plan_id:
+		_trace(run, tick, "PARENT_PLAN_REVALIDATION_REJECTED",
+			"BLOCKED", "BLOCKED", str(run.get("current_step_id", "")), "", [], "PLAN_STILL_BLOCKED_OR_REPLACED")
+		return {"ok": false, "reason": "PLAN_STILL_BLOCKED_OR_REPLACED", "plan_id": plan_id}
+	_trace(run, tick, "PARENT_PLAN_REVALIDATED",
+		"BLOCKED", "BLOCKED", str(run.get("current_step_id", "")), "", [], str(token.get("transfer_event_id", "")))
+	return {"ok": true, "reason": "PARENT_PLAN_REVALIDATED", "plan_id": plan_id,
+		"transfer_event_id": str(token.get("transfer_event_id", ""))}
+
 # ── 内部 ──
 
 func _valuation_context(run: Dictionary) -> Dictionary:

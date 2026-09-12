@@ -205,6 +205,11 @@
       "name": "p7_1_material_request_hardening",
       "script": "res://test/p7_1_material_request_hardening.gd",
       "expected": 14
+    },
+    {
+      "name": "p7_1_runtime_wiring",
+      "script": "res://test/p7_1_runtime_wiring.gd",
+      "expected": 72
     }
   ]
 }

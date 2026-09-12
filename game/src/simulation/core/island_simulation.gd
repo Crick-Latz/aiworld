@@ -4,6 +4,14 @@ extends RefCounted
 const FIXED_LOCATION_ACTIONS := ["forage_berries", "drink_water", "fish", "gather_shells",
 	"search_ruins", "gather_wood", "search_resource_source"]
 const TRAVEL_STALL_LIMIT := 8
+const Contract = preload("res://src/simulation/material_request/material_request_contract.gd")
+const MATERIAL_REQUEST_RETRYABLE_REASONS := [
+	"REQUEST_EXPIRED",
+	"TARGET_MISSING",
+	"GIVER_INVENTORY_CHANGED",
+	"TRANSFER_FAILED",
+	"REQUEST_QUANTITY_STALE",
+]
 ## 荒岛世界模拟器（阶段 B）：取代 StorySimulation。
 ## 没有预设剧情。只有三个有性格的人、一座有资源的岛、和一套互动规则。
 ## 故事是模拟的输出，不是输入。
@@ -34,6 +42,10 @@ var agency_plan_adoption_enabled := false
 # P7.0：UNKNOWN_SOURCE → 搜索/询问信息子目标。默认 false，framework 基线不变。
 var agency_information_subgoals_enabled := false
 var _information_tracker_state: InformationSubgoalTracker = null
+# P7.1B：真实材料 blocker -> 主观持有者请求 -> 协商 -> 真实转移 -> 父计划重验。
+# 默认 false，framework / information 的既有轨迹不变。
+var agency_material_requests_enabled := false
+var _material_request_runtime: MaterialRequestRuntimeBridge = null
 # 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
 var _information_rngs := {}
 var _adoption_rngs := {}
@@ -258,6 +270,8 @@ func step() -> Array:
 	_update_world_time()
 	_update_weather()
 	var new_events: Array = []
+	if agency_material_requests_enabled:
+		new_events.append_array(_material_requests_expire_due())
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
 	for id in actors:
@@ -332,6 +346,8 @@ func _ordered_ids() -> Array:
 	return ids
 
 func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
+	if agency_material_requests_enabled:
+		_material_requests_process_actor(id, a, new_events)
 	# 如果正在执行行动，倒计时
 	if int(a.get("action_ticks_left", 0)) > 0:
 		# 追踪移动：指向人的行动逐 tick 走向对方（对方会走动，追不上=扑空）；
@@ -408,7 +424,7 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if actor_view.has("_execution_receipt"):
 		a["_execution_receipt"] = actor_view["_execution_receipt"].duplicate(true)
 	# P6.3B-1：决策后通知执行 tracker（选中/暂停/前提失效）
-	_plan_execution_on_decision(id, a, decision)
+	_plan_execution_on_decision(id, a, decision, agency_extra)
 
 	# 如果目标不是当前位置，先移动（每 tick 1 格）
 	var target = decision.get("target", null)
@@ -447,6 +463,14 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 	var out := {"mode": str(agency_mode), "ctx": ctx, "context_hash": h,
 		"problems": problems, "proposals": proposals,
 		"causal_step_value_enabled": agency_causal_step_value_enabled}
+	if agency_material_requests_enabled and str(agency_mode) == "LIVE_BRIDGE":
+		out["material_requests_enabled"] = true
+		var revalidated: Dictionary = _execution_tracker().consume_parent_revalidation(id, proposals, tick)
+		if not revalidated.is_empty() and bool(revalidated.get("ok", false)):
+			_emit("PARENT_PLAN_REVALIDATED", id, "%s 在材料到位后重新验证父计划" % a["display_name"], {
+				"plan_id": str(revalidated.get("plan_id", "")),
+				"transfer_event_id": str(revalidated.get("transfer_event_id", "")),
+			})
 	# P7.0：从结构化 UNKNOWN_SOURCE blocker 形成一个当前信息子目标。
 	# tracker 只拿主观 ctx、proposals 和自身 needs，不接触地图真值。
 	if agency_information_subgoals_enabled and str(agency_mode) == "LIVE_BRIDGE":
@@ -535,7 +559,7 @@ func agency_plan_run(actor_id: String) -> Dictionary:
 ## 决策后通知 tracker：只接受当次执行凭据，不从旧认知 trace 重挂身份。
 ## 继续意图也会启动新的物理行动；与仍在执行同一次行动严格区分。
 ## 选中时把行动身份存到 actor（不污染共享 Registry 候选对象），完成时原样带回。
-func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary) -> void:
+func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary, agency_extra: Dictionary = {}) -> void:
 	if not agency_plan_execution_enabled or str(agency_mode) != "LIVE_BRIDGE":
 		return
 	# Consume once; historical cognitive traces cannot authorize a new physical attempt.
@@ -552,6 +576,10 @@ func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary
 		return
 	var ident: Dictionary = _execution_tracker().on_decision(id, decision, ex, tick)
 	a["_plan_exec_inflight"] = ident
+	if agency_material_requests_enabled and str(ex.get("blocker_reason", "")) in [
+			"MATERIALS_MISSING", "NO_KNOWN_SOURCE", "NO_REGISTRY_CANDIDATE"
+	]:
+		_material_requests_on_blocker(id, a, ex, agency_extra)
 
 ## P6.3B-1 §六 + R1 §四：行动完成回调——事件段 + 实际库存 + 行动身份；
 ## tracker 核对 run_id/attempt_id/step_id/candidate_key 与实际结果
@@ -568,6 +596,383 @@ func _information_subgoal_on_complete(id: String, a: Dictionary, action: Diction
 		return
 	var ctx_after := AgencyContextBuilder.build(self, a)
 	_information_tracker_state.on_action_complete(id, action, event_segment, ctx_after, tick)
+
+func _material_request_runtime_bridge() -> MaterialRequestRuntimeBridge:
+	if _material_request_runtime == null:
+		_material_request_runtime = MaterialRequestRuntimeBridge.new(_world_seed)
+	return _material_request_runtime
+
+func agency_material_request_trace() -> Array:
+	if _material_request_runtime == null:
+		return []
+	return _material_request_runtime.trace_snapshot()
+
+func agency_material_request_rng_states() -> Dictionary:
+	if _material_request_runtime == null:
+		return {}
+	return _material_request_runtime.rng_states()
+
+func agency_material_request(request_id: String) -> Dictionary:
+	if _material_request_runtime == null:
+		return {}
+	return _material_request_runtime.request(request_id)
+
+func _material_requests_on_blocker(id: String, a: Dictionary, execution: Dictionary, agency_extra: Dictionary) -> void:
+	var run := agency_plan_run(id)
+	if run.is_empty():
+		return
+	var step := _material_run_step(run, str(execution.get("step_id", "")))
+	if step.is_empty():
+		return
+	var ctx: Dictionary = agency_extra.get("ctx", AgencyContextBuilder.build(self, a))
+	var recipes: RecipeCatalog = agency_extra.get("catalog", _recipe_catalog_if_any())
+	var root_goal := str(run.get("root_goal", ""))
+	var result := _material_request_runtime_bridge().ensure_request_for_blocker(
+		id,
+		run,
+		step,
+		ctx,
+		tick,
+		recipes,
+		_material_need_urgency(a, root_goal),
+		str(execution.get("blocker_reason", ""))
+	)
+	if bool(result.get("created", false)):
+		_emit_material_request_event("MATERIAL_REQUEST_CREATED", str(result.get("request", {}).get("requester_id", id)),
+			result.get("request", {}))
+
+func _material_requests_expire_due() -> Array:
+	var out: Array = []
+	for request in _material_request_runtime_bridge().expire_due(tick):
+		_emit_material_request_event("MATERIAL_REQUEST_EXPIRED", str(request.get("requester_id", "")), request)
+		out.append(events[events.size() - 1])
+	return out
+
+func _material_requests_process_actor(id: String, a: Dictionary, new_events: Array) -> void:
+	var bridge := _material_request_runtime_bridge()
+	var actor_view := _build_actor_view(id, a)
+	var pending := bridge.pending_requests_for(id)
+	for request in pending:
+		var stale_reason := _material_request_run_mismatch_reason(str(request.get("requester_id", "")), request)
+		if stale_reason != "":
+			bridge.fail_request(str(request.get("request_id", "")), tick, stale_reason)
+			_emit_material_request_event("MATERIAL_REQUEST_FAILED", str(request.get("requester_id", "")), request, {
+				"reason": stale_reason,
+			})
+			continue
+		var requester_id := str(request.get("requester_id", ""))
+		var target_id := str(request.get("target_id", ""))
+		if requester_id == id:
+			_material_requests_process_requester(id, a, actor_view, request, new_events)
+		if target_id == id and str(bridge.request(str(request.get("request_id", ""))).get("status", "")) == Contract.STATUS_WAITING_RESPONSE:
+			_material_requests_process_responder(id, a, request, new_events)
+	for request in bridge.restartable_terminal_requests_for(id):
+		_material_requests_restart_if_still_needed(id, a, request)
+
+func _material_requests_process_requester(
+	requester_id: String,
+	a: Dictionary,
+	actor_view: Dictionary,
+	request: Dictionary,
+	new_events: Array
+) -> void:
+	var bridge := _material_request_runtime_bridge()
+	var status := str(request.get("status", ""))
+	match status:
+		Contract.STATUS_ACTIVE:
+			var beliefs := bridge.build_holder_beliefs(requester_id, str(request.get("item_id", "")), actor_view, tick)
+			var offered := bridge.try_offer(str(request.get("request_id", "")), beliefs, tick)
+			if bool(offered.get("ok", false)):
+				_emit_material_request_event("MATERIAL_REQUEST_OFFERED", requester_id, offered.get("request", {}))
+		Contract.STATUS_WAITING_REQUESTER:
+			var current_gap := _material_request_current_gap(requester_id, a, request)
+			var counter: Dictionary = request.get("last_counter", {})
+			if current_gap <= 0:
+				if bridge.cancel_request(str(request.get("request_id", "")), tick, "NO_LONGER_NEEDED"):
+					_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+						"reason": "NO_LONGER_NEEDED",
+					})
+			elif bool(counter.get("requires_exchange", false)):
+				var rejected_condition := bridge.reject_counter(
+					str(request.get("request_id", "")), tick, "COUNTER_CONDITION_UNSUPPORTED")
+				if bool(rejected_condition.get("ok", false)):
+					_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+						rejected_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
+			elif int(request.get("accepted_quantity", 0)) > current_gap:
+				var cancelled_stale := bridge.cancel_request(
+					str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE")
+				if cancelled_stale:
+					_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id,
+						bridge.request(str(request.get("request_id", ""))), {"reason": "REQUEST_QUANTITY_STALE"})
+			else:
+				var accepted := bridge.accept_counter(str(request.get("request_id", "")), tick)
+				if bool(accepted.get("ok", false)):
+					_emit_material_request_event("MATERIAL_COUNTER_ACCEPTED", requester_id, accepted.get("request", {}))
+					_material_requests_try_transfer(requester_id, a, accepted.get("request", {}), new_events)
+		Contract.STATUS_WAITING_TRANSFER:
+			_material_requests_try_transfer(requester_id, a, request, new_events)
+
+func _material_requests_process_responder(
+	responder_id: String,
+	a: Dictionary,
+	request: Dictionary,
+	new_events: Array
+) -> void:
+	var requester_id := str(request.get("requester_id", ""))
+	if not actors.has(requester_id) or not _is_nearby(a["tile"], actors[requester_id]["tile"]):
+		return
+	var bridge := _material_request_runtime_bridge()
+	var context := _material_recipient_context(responder_id, requester_id, str(request.get("item_id", "")))
+	var result := bridge.respond(str(request.get("request_id", "")), responder_id, context, tick)
+	if not bool(result.get("ok", false)):
+		return
+	var response: Dictionary = result.get("response", {})
+	var outcome := str(response.get("outcome", ""))
+	var event_name: String = {
+		Contract.OUTCOME_ACCEPT: "MATERIAL_REQUEST_ACCEPTED",
+		Contract.OUTCOME_REFUSE: "MATERIAL_REQUEST_REFUSED",
+		Contract.OUTCOME_COUNTER: "MATERIAL_REQUEST_COUNTERED",
+		Contract.OUTCOME_UNKNOWN: "MATERIAL_REQUEST_UNKNOWN_RESPONSE",
+	}.get(outcome, "MATERIAL_REQUEST_UNKNOWN_RESPONSE")
+	_emit_material_request_event(event_name, requester_id, result.get("request", {}), {
+		"responder_id": responder_id,
+		"response_outcome": outcome,
+		"response_reason": str(response.get("reason", "")),
+	})
+	if outcome == Contract.OUTCOME_ACCEPT:
+		_material_requests_try_transfer(requester_id, actors[requester_id], result.get("request", {}), new_events)
+
+func _material_requests_try_transfer(
+	requester_id: String,
+	requester: Dictionary,
+	request: Dictionary,
+	new_events: Array
+) -> void:
+	var target_id := str(request.get("target_id", ""))
+	if not actors.has(target_id):
+		_material_request_runtime_bridge().fail_request(str(request.get("request_id", "")), tick, "TARGET_MISSING")
+		_emit_material_request_event("MATERIAL_REQUEST_FAILED", requester_id, request, {"reason": "TARGET_MISSING"})
+		return
+	if not _is_nearby(requester["tile"], actors[target_id]["tile"]):
+		return
+	var current_gap := _material_request_current_gap(requester_id, requester, request)
+	if current_gap <= 0:
+		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "NO_LONGER_NEEDED"):
+			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+				"reason": "NO_LONGER_NEEDED",
+			})
+		return
+	if int(request.get("accepted_quantity", 0)) > current_gap:
+		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE"):
+			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+				"reason": "REQUEST_QUANTITY_STALE",
+			})
+		return
+	var result := _material_request_runtime_bridge().transfer(
+		str(request.get("request_id", "")),
+		actors[target_id]["inventory"],
+		requester["inventory"],
+		tick
+	)
+	if bool(result.get("ok", false)):
+		var transfer_event: Dictionary = result.get("event", {})
+		_emit_material_transfer_event(target_id, transfer_event)
+		_emit_material_request_event("MATERIAL_REQUEST_RESOLVED", requester_id, result.get("request", {}), {
+			"transfer_event_id": str(transfer_event.get("event_id", "")),
+		})
+		_material_requests_handle_revalidation(result)
+	else:
+		_emit_material_request_event("MATERIAL_TRANSFER_FAILED", requester_id, result.get("request", request), {
+			"reason": str(result.get("reason", "TRANSFER_FAILED")),
+		})
+
+func _material_requests_handle_revalidation(transfer_result: Dictionary) -> void:
+	var request: Dictionary = transfer_result.get("request", {})
+	var revalidation: Dictionary = transfer_result.get("revalidation", {})
+	if request.is_empty() or revalidation.is_empty():
+		return
+	var requester_id := str(request.get("requester_id", ""))
+	if not actors.has(requester_id):
+		return
+	var token := _execution_tracker().request_parent_revalidation(
+		requester_id,
+		str(request.get("parent_plan_id", "")),
+		tick,
+		str(revalidation.get("transfer_event_id", "")),
+		str(request.get("parent_run_id", "")),
+		str(request.get("blocker_step_id", ""))
+	)
+	if token.is_empty():
+		return
+	_emit_material_request_event("PARENT_PLAN_REVALIDATION_REQUESTED", requester_id, request, {
+		"plan_id": str(request.get("parent_plan_id", "")),
+		"transfer_event_id": str(revalidation.get("transfer_event_id", "")),
+	})
+	# A partial counter may leave the same material gap. Start the next request now
+	# from the refreshed subjective context; the old request is already terminal.
+	var requester: Dictionary = actors[requester_id]
+	var run := agency_plan_run(requester_id)
+	if run.is_empty() or str(run.get("plan_id", "")) != str(request.get("parent_plan_id", "")):
+		return
+	var step := _material_run_step(run, str(request.get("blocker_step_id", "")))
+	if step.is_empty():
+		return
+	var ctx := AgencyContextBuilder.build(self, requester)
+	var follow_up := _material_request_runtime_bridge().ensure_request_for_blocker(
+		requester_id,
+		run,
+		step,
+		ctx,
+		tick,
+		_recipe_catalog_if_any(),
+		_material_need_urgency(requester, str(run.get("root_goal", ""))),
+		str(request.get("blocker_reason", "")),
+		str(request.get("request_id", "")),
+		"PARTIAL_TRANSFER"
+	)
+	if bool(follow_up.get("created", false)):
+		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, follow_up.get("request", {}), {
+			"retry_of_request_id": str(request.get("request_id", "")),
+			"previous_terminal_reason": "PARTIAL_TRANSFER",
+		})
+
+func _material_requests_restart_if_still_needed(requester_id: String, a: Dictionary, old_request: Dictionary) -> void:
+	var terminal_reason := _material_request_terminal_reason(old_request)
+	if terminal_reason not in MATERIAL_REQUEST_RETRYABLE_REASONS:
+		return
+	if _material_request_run_mismatch_reason(requester_id, old_request) != "":
+		return
+	var current_gap := _material_request_current_gap(requester_id, a, old_request)
+	if current_gap <= 0:
+		return
+	var run := agency_plan_run(requester_id)
+	var step := _material_run_step(run, str(old_request.get("blocker_step_id", "")))
+	if step.is_empty():
+		return
+	var ctx := AgencyContextBuilder.build(self, a)
+	var result := _material_request_runtime_bridge().ensure_request_for_blocker(
+		requester_id,
+		run,
+		step,
+		ctx,
+		tick,
+		_recipe_catalog_if_any(),
+		_material_need_urgency(a, str(run.get("root_goal", ""))),
+		str(old_request.get("blocker_reason", "")),
+		str(old_request.get("request_id", "")),
+		terminal_reason
+	)
+	if bool(result.get("created", false)):
+		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, result.get("request", {}), {
+			"retry_of_request_id": str(old_request.get("request_id", "")),
+			"previous_terminal_reason": terminal_reason,
+		})
+
+func _material_request_terminal_reason(request: Dictionary) -> String:
+	var reason := str(request.get("response_reason", ""))
+	if reason == "" and str(request.get("status", "")) == Contract.STATUS_EXPIRED:
+		return "REQUEST_EXPIRED"
+	return reason
+
+func _material_request_current_gap(requester_id: String, a: Dictionary, request: Dictionary) -> int:
+	var run := agency_plan_run(requester_id)
+	if _material_request_run_mismatch_reason(requester_id, request) != "":
+		return 0
+	var step := _material_run_step(run, str(request.get("blocker_step_id", "")))
+	if step.is_empty():
+		return 0
+	var gap := _material_request_runtime_bridge().material_gap(
+		step,
+		run,
+		AgencyContextBuilder.build(self, a),
+		_recipe_catalog_if_any()
+	)
+	return int(gap.get("quantity", 0))
+
+func _material_request_run_mismatch_reason(requester_id: String, request: Dictionary) -> String:
+	var run := agency_plan_run(requester_id)
+	if run.is_empty() or str(run.get("run_id", "")) != str(request.get("parent_run_id", "")):
+		return "PARENT_RUN_CHANGED"
+	if str(run.get("plan_id", "")) != str(request.get("parent_plan_id", "")):
+		return "PARENT_RUN_CHANGED"
+	if str(run.get("current_step_id", "")) != str(request.get("blocker_step_id", "")):
+		return "BLOCKER_CHANGED"
+	return ""
+
+func _material_recipient_context(responder_id: String, requester_id: String, item_id: String) -> Dictionary:
+	var responder: Dictionary = actors[responder_id]
+	var traits: Dictionary = (responder["personality"] as PersonalityProfile).traits
+	var trust := relationships.composite_trust(responder_id, requester_id)
+	var relationship_value := MaterialRequestRuntimeBridge.relationship_signal(trust)
+	var trust_value := MaterialRequestRuntimeBridge.trust_probability(trust)
+	var need_pressure := _material_need_pressure(responder, item_id)
+	var obligations_count := (responder.get("my_obligations", []) as Array).size()
+	return {
+		"inventory_quantity": int(responder["inventory"].get(item_id, 0)),
+		"reserve_quantity": 0,
+		"relationship": relationship_value,
+		"trust": trust_value,
+		"generosity": clampf((float(traits.get("altruism", 0.5)) + float(traits.get("empathy", 0.5))) * 0.5, 0.0, 1.0),
+		"own_need_pressure": need_pressure,
+		"risk_aversion": clampf(float(traits.get("caution", 0.5)), 0.0, 1.0),
+		"commitment_load": clampf(float(obligations_count) / 3.0, 0.0, 1.0),
+		"exchange_offer_value": 0.0,
+	}
+
+func _material_need_pressure(actor: Dictionary, item_id: String) -> float:
+	var tags: Array = _item_catalog_if_any().tags_of(item_id)
+	var need_key := ""
+	if tags.has("FOOD_ITEM"):
+		need_key = "hunger"
+	elif tags.has("WATER_ITEM"):
+		need_key = "thirst"
+	if need_key != "":
+		return clampf(float(actor["needs"].get(need_key, 0)) / 1000.0, 0.0, 1.0)
+	return clampf(maxf(float(actor["needs"].get("hunger", 0)), float(actor["needs"].get("thirst", 0))) / 2000.0, 0.0, 1.0)
+
+func _material_need_urgency(actor: Dictionary, root_goal: String) -> float:
+	var need_key: String = {"HUNGER": "hunger", "THIRST": "thirst", "ISOLATION": "social"}.get(root_goal, "")
+	if need_key == "":
+		return 0.5
+	return clampf(float(actor["needs"].get(need_key, 0)) / 1000.0, 0.0, 1.0)
+
+func _material_run_step(run: Dictionary, step_id: String) -> Dictionary:
+	for step in run.get("steps", []):
+		if typeof(step) == TYPE_DICTIONARY and str(step.get("step_id", "")) == step_id:
+			return (step as Dictionary).duplicate(true)
+	return {}
+
+func _emit_material_request_event(
+	event_type: String,
+	requester_id: String,
+	request: Dictionary,
+	extra: Dictionary = {}
+) -> void:
+	var payload := {
+		"request_id": str(request.get("request_id", "")),
+		"requester_id": str(request.get("requester_id", requester_id)),
+		"target_id": str(request.get("target_id", "")),
+		"parent_plan_id": str(request.get("parent_plan_id", "")),
+		"parent_run_id": str(request.get("parent_run_id", "")),
+		"blocker_step_id": str(request.get("blocker_step_id", "")),
+		"blocker_reason": str(request.get("blocker_reason", "")),
+		"item_id": str(request.get("item_id", "")),
+		"quantity": int(request.get("requested_quantity", 0)),
+		"accepted_quantity": int(request.get("accepted_quantity", 0)),
+		"request_status": str(request.get("status", "")),
+	}
+	for key in extra:
+		payload[key] = extra[key]
+	_emit(event_type, requester_id, _material_request_event_text(event_type, request), payload)
+
+func _emit_material_transfer_event(giver_id: String, transfer_event: Dictionary) -> void:
+	var payload := transfer_event.duplicate(true)
+	payload.erase("type")
+	_emit(Contract.EVENT_ITEM_TRANSFER_COMPLETED, giver_id,
+		"%s 将材料交给了 %s" % [giver_id, str(transfer_event.get("to_actor_id", ""))], payload)
+
+func _material_request_event_text(event_type: String, request: Dictionary) -> String:
+	return "%s %s %s" % [event_type, str(request.get("requester_id", "")), str(request.get("item_id", ""))]
 
 func _agency_planner_slim(proposals: Array) -> void:
 	AgencyActionBridge.annotate_steps(proposals)
@@ -1740,6 +2145,13 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 			if demonstrated_source != "":
 				a["tom"].add_evidence(actor_id, InformationExchangePolicy.knowledge_predicate(demonstrated_source),
 					1.0, 0.65, int(e.get("seq", -1)), tick)
+			if agency_material_requests_enabled:
+				for observation in MaterialRequestRuntimeBridge.possession_observations(e):
+					var holder_id := str(observation.get("actor_id", ""))
+					var observed_item := str(observation.get("item_id", ""))
+					if holder_id != "" and holder_id != id and observed_item != "":
+						a["tom"].add_evidence(holder_id, MaterialRequestRuntimeBridge.holder_predicate(observed_item),
+							1.0, 0.65, int(e.get("seq", -1)), tick)
 		# P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → descriptive_compliance
 		var evt_rule := str(e.get("rule_id", ""))
 		if evt_rule != "" and id != actor_id:
