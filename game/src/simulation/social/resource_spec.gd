@@ -79,5 +79,19 @@ static func semantics_of(event: Dictionary) -> Dictionary:
 			return {"act": "PROMISE", "object": str(event.get("object", "food")), "response": "FULFILLED"}
 		"promise_broken":
 			return {"act": "PROMISE", "object": str(event.get("object", "food")), "response": "VIOLATED"}
+		# P7.2：新承诺事件映射到同一 PROMISE 语义（旧认知层读 act/response，
+		# 不读 event_type）——不产生第二套认知更新。
+		"COMMITMENT_CREATED":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "PENDING"}
+		"COMMITMENT_ACTIVATED":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "ACCEPT"}
+		"COMMITMENT_FULFILLED":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "FULFILLED"}
+		"COMMITMENT_VIOLATED":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "VIOLATED"}
+		"COMMITMENT_CANCELLED":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "CANCELLED"}
+		"COMMITMENT_TERMS_MISMATCH":
+			return {"act": "PROMISE", "object": str(event.get("object_id", "food")), "response": "MISUNDERSTOOD"}
 		_:
 			return {}

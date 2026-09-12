@@ -8,7 +8,8 @@
       "causal_step_value": false,
       "plan_adoption": false,
       "information_subgoals": false,
-      "material_requests": false
+      "material_requests": false,
+      "commitment_consequences": false
     },
     "execution": {
       "agency_mode": "LIVE_BRIDGE",
@@ -16,7 +17,8 @@
       "causal_step_value": false,
       "plan_adoption": false,
       "information_subgoals": false,
-      "material_requests": false
+      "material_requests": false,
+      "commitment_consequences": false
     },
     "causal": {
       "agency_mode": "LIVE_BRIDGE",
@@ -24,7 +26,8 @@
       "causal_step_value": true,
       "plan_adoption": false,
       "information_subgoals": false,
-      "material_requests": false
+      "material_requests": false,
+      "commitment_consequences": false
     },
     "framework": {
       "agency_mode": "LIVE_BRIDGE",
@@ -32,7 +35,8 @@
       "causal_step_value": true,
       "plan_adoption": true,
       "information_subgoals": false,
-      "material_requests": false
+      "material_requests": false,
+      "commitment_consequences": false
     },
     "information": {
       "agency_mode": "LIVE_BRIDGE",
@@ -40,7 +44,8 @@
       "causal_step_value": true,
       "plan_adoption": true,
       "information_subgoals": true,
-      "material_requests": false
+      "material_requests": false,
+      "commitment_consequences": false
     },
     "material_request": {
       "agency_mode": "LIVE_BRIDGE",
@@ -48,7 +53,17 @@
       "causal_step_value": true,
       "plan_adoption": true,
       "information_subgoals": true,
-      "material_requests": true
+      "material_requests": true,
+      "commitment_consequences": false
+    },
+    "commitment": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true
     }
   }
 }

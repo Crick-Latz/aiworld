@@ -17,6 +17,10 @@ func evaluate(request: Dictionary, recipient_context: Dictionary, roll: float) -
 	var request_urgency := clampf(float(request.get("urgency", 0.5)), 0.0, 1.0)
 	var offer_value := clampf(float(recipient_context.get("exchange_offer_value", 0.0)), 0.0, 1.0)
 	var bounded_roll := clampf(roll, 0.0, 1.0)
+	# P7.2：授予方上下文声明承诺机制可用时，交换型 counter 附带具体条款
+	# （promise_object/quantity/due_ticks）——旧 profile 不设此标志，输出不变。
+	var exchange_terms_enabled := bool(recipient_context.get("exchange_terms_enabled", false))
+	var exchange_due_ticks := int(recipient_context.get("exchange_due_ticks", 240))
 
 	if surplus <= 0:
 		return _result(
@@ -48,16 +52,19 @@ func evaluate(request: Dictionary, recipient_context: Dictionary, roll: float) -
 		# request conflicts with their needs, risk or commitments.
 		if bounded_roll <= accept_probability or offer_value >= 0.35 or relationship >= 0.65:
 			var counter_quantity := surplus
+			var partial: Dictionary = {
+				"quantity": counter_quantity,
+				"requires_exchange": offer_value < 0.35 and own_need > 0.35,
+			}
+			if exchange_terms_enabled:
+				partial["terms"] = _exchange_terms(str(request.get("item_id", "")), counter_quantity, exchange_due_ticks)
 			return _result(
 				Contract.OUTCOME_COUNTER,
 				"PARTIAL_SURPLUS_COUNTER",
 				counter_quantity,
 				accept_probability,
 				surplus,
-				{
-					"quantity": counter_quantity,
-					"requires_exchange": offer_value < 0.35 and own_need > 0.35,
-				}
+				partial
 			)
 		return _result(
 			Contract.OUTCOME_REFUSE,
@@ -84,6 +91,8 @@ func evaluate(request: Dictionary, recipient_context: Dictionary, roll: float) -
 			"requires_exchange": true,
 			"minimum_offer_value": minf(1.0, maxf(0.35, bounded_roll - accept_probability)),
 		}
+		if exchange_terms_enabled:
+			counter["terms"] = _exchange_terms(str(request.get("item_id", "")), requested, exchange_due_ticks)
 		return _result(
 			Contract.OUTCOME_COUNTER,
 			"COOPERATION_REQUIRES_CONDITION",
@@ -118,4 +127,11 @@ func _result(
 		"surplus": surplus,
 		"counter": counter.duplicate(true),
 		"mutated_inventory": false,
+	}
+
+func _exchange_terms(item_id: String, promise_quantity: int, due_ticks: int) -> Dictionary:
+	return {
+		"promise_object": item_id,
+		"promise_quantity": maxi(1, promise_quantity),
+		"due_ticks": maxi(60, due_ticks),
 	}

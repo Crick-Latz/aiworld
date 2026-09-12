@@ -11,8 +11,10 @@ static func fingerprint(sim: IslandSimulation) -> Dictionary:
 		"adoption_sha256": AgencyMeasure.canon(sim.agency_adoption_trace()).sha256_text(),
 		"information_sha256": AgencyMeasure.canon(sim.agency_information_trace()).sha256_text(),
 		"material_request_sha256": AgencyMeasure.canon(sim.agency_material_request_trace()).sha256_text(),
+		"commitment_sha256": AgencyMeasure.canon(sim.agency_commitment_trace()).sha256_text(),
 		"information_rng_states": sim.agency_information_rng_states(),
 		"material_request_rng_states": sim.agency_material_request_rng_states(),
+		"commitment_rng_states": sim.agency_commitment_rng_states(),
 		"state_sha256": AgencyMeasure.canon(_encode(sim, {})).sha256_text(),
 		"adoption_rng_states": sim.agency_adoption_rng_states(),
 	}
@@ -41,9 +43,14 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 	for row in sim.agency_material_request_trace():
 		var material_event := str(row.get("event", ""))
 		material_requests[material_event] = int(material_requests.get(material_event, 0)) + 1
+	var commitments := {}
+	for row in sim.agency_commitment_trace():
+		var commitment_event := str(row.get("event", ""))
+		commitments[commitment_event] = int(commitments.get(commitment_event, 0)) + 1
 	return {"tick": sim.tick, "actors": sim.actors.size(), "event_counts": events,
 		"execution_counts": executions, "execution_reasons": reasons, "adoption_counts": adoption,
 		"information_counts": information, "material_request_counts": material_requests,
+		"commitment_counts": commitments,
 		"planner_calls": sim.agency_planner_calls, "planner_cache_hits": sim.agency_cache_hits}
 
 static func _encode(value: Variant, active: Dictionary) -> Variant:
@@ -70,7 +77,12 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 			var object := {"script": script.resource_path, "state": {}}
 			for property in value.get_property_list():
 				var key := str(property["name"])
-				if key == "map_query" or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
+				# P7.2：commitment 运行时桥与开关位不进入 state 编码——其权威状态在
+				# obligations（仍被哈希），追加式历史由 commitment_sha256 单独覆盖；
+				# 排除是为了旧 profile 与 P7.2 前基线保持逐位 state 兼容（map_query 同例）。
+				if key == "map_query" or key == "_commitment_runtime" \
+						or key == "agency_commitment_consequences_enabled" \
+						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)
 			active.erase(identity)
