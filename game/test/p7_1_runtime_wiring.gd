@@ -11,6 +11,8 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_test_review_fixes()
+	_test_lifecycle_recovery()
+	_test_counter_rejection_continues_holder_search()
 	_test_request_from_blocker_and_subjective_target()
 	_test_accept_refuse_counter_and_transfer()
 	_test_runtime_island_wiring()
@@ -103,7 +105,9 @@ func _test_review_fixes() -> void:
 	_check("stale_parent_run_cannot_transfer",
 		str(stale_sim.agency_material_request(stale_request_id).get("status", "")) == Contract.STATUS_FAILED
 		and int(stale_giver["inventory"].get("shells", 0)) == stale_giver_before
-		and int(stale_requester["inventory"].get("shells", 0)) == stale_requester_before,
+		and int(stale_requester["inventory"].get("shells", 0)) == stale_requester_before
+		and stale_sim._material_request_runtime_bridge().pending_requests_for(
+			str(stale_pair["requester_id"])).is_empty(),
 		str(stale_sim.agency_material_request(stale_request_id)))
 
 	var fulfilled_pair := _runtime_pair(72003)
@@ -148,8 +152,8 @@ func _test_review_fixes() -> void:
 	var conditional_before := int(conditional_requester["inventory"].get("shells", 0))
 	conditional_sim._material_requests_process_actor(
 		str(conditional_pair["requester_id"]), conditional_requester, [])
-	_check("conditional_counter_is_explicitly_declined",
-		str(conditional_sim.agency_material_request(conditional_id).get("status", "")) == Contract.STATUS_CANCELLED
+	_check("conditional_counter_rejection_keeps_request_active",
+		str(conditional_sim.agency_material_request(conditional_id).get("status", "")) == Contract.STATUS_ACTIVE
 		and int(conditional_requester["inventory"].get("shells", 0)) == conditional_before,
 		str(conditional_sim.agency_material_request(conditional_id)))
 
@@ -224,6 +228,160 @@ func _test_review_fixes() -> void:
 	})
 	_check("revalidation_event_not_emitted_without_token",
 		_count_events(event_sim.events, "PARENT_PLAN_REVALIDATION_REQUESTED") == event_before)
+
+func _test_lifecycle_recovery() -> void:
+	var expiry := _open_runtime_request(72010, 3, "expiry")
+	var expiry_sim: IslandSimulation = expiry["sim"]
+	var expiry_bridge = expiry_sim._material_request_runtime_bridge()
+	var expiry_old_id := str(expiry["request_id"])
+	expiry_sim.tick = 50
+	expiry_bridge.coordinator.tracker._requests[expiry_old_id]["expires_tick"] = 40
+	expiry_sim._material_requests_expire_due()
+	expiry_sim._material_requests_process_actor(
+		str(expiry["requester_id"]), expiry["requester"], [])
+	var expiry_pending: Array = expiry_bridge.pending_requests_for(str(expiry["requester_id"]))
+	var expiry_new: Dictionary = expiry_pending[0] if expiry_pending.size() == 1 else {}
+	_check("expired_craft_request_is_recreated",
+		str(expiry_bridge.request(expiry_old_id).get("status", "")) == Contract.STATUS_EXPIRED
+		and str(expiry_new.get("request_id", "")) != expiry_old_id
+		and str(expiry_new.get("parent_run_id", "")) == str(expiry["run"].get("run_id", ""))
+		and str(expiry_new.get("blocker_step_id", "")) == str(expiry["step"].get("step_id", ""))
+		and int(expiry_new.get("requested_quantity", 0)) == 3
+		and str(expiry_new.get("retry_of_request_id", "")) == expiry_old_id
+		and str(expiry_new.get("retry_reason", "")) == "REQUEST_EXPIRED",
+		"old=%s new=%s" % [str(expiry_bridge.request(expiry_old_id)), str(expiry_new)])
+	_check("expired_request_world_event_keeps_execution_identity",
+		_event_has_identity(expiry_sim.events, "MATERIAL_REQUEST_EXPIRED", expiry_old_id,
+			str(expiry["run"].get("run_id", "")), str(expiry["step"].get("step_id", "")), "MATERIALS_MISSING"))
+	_check("expired_request_trace_keeps_execution_identity",
+		_traces_have_identity(expiry_bridge, expiry_old_id,
+			["MATERIAL_REQUEST_CREATED", "MATERIAL_REQUEST_EXPIRED"],
+			str(expiry["run"].get("run_id", "")), str(expiry["step"].get("step_id", "")), "MATERIALS_MISSING"))
+
+	var missing := _open_runtime_request(72011, 2, "missing")
+	var missing_sim: IslandSimulation = missing["sim"]
+	var missing_bridge = missing_sim._material_request_runtime_bridge()
+	var missing_old_id := str(missing["request_id"])
+	var missing_giver: Dictionary = missing["giver"]
+	_set_runtime_waiting_transfer(missing, 2)
+	missing_sim.tick = 3
+	missing_sim.actors.erase(str(missing["giver_id"]))
+	missing_sim._material_requests_process_actor(
+		str(missing["requester_id"]), missing["requester"], [])
+	var missing_pending: Array = missing_bridge.pending_requests_for(str(missing["requester_id"]))
+	var missing_new: Dictionary = missing_pending[0] if missing_pending.size() == 1 else {}
+	_check("missing_target_recreates_request_without_inventory_mutation",
+		str(missing_bridge.request(missing_old_id).get("status", "")) == Contract.STATUS_FAILED
+		and str(missing_bridge.request(missing_old_id).get("response_reason", "")) == "TARGET_MISSING"
+		and str(missing_new.get("request_id", "")) != missing_old_id
+		and int(missing_new.get("requested_quantity", 0)) == 2
+		and int(missing_giver["inventory"].get("shells", 0)) == 2
+		and int(missing["requester"]["inventory"].get("shells", 0)) == 0,
+		"old=%s new=%s" % [str(missing_bridge.request(missing_old_id)), str(missing_new)])
+	_check("failed_request_trace_keeps_execution_identity",
+		_traces_have_identity(missing_bridge, missing_old_id,
+			["MATERIAL_REQUEST_CREATED", "MATERIAL_REQUEST_FAILED"],
+			str(missing["run"].get("run_id", "")), str(missing["step"].get("step_id", "")), "MATERIALS_MISSING"))
+
+	var inventory := _open_runtime_request(72012, 2, "inventory")
+	var inventory_sim: IslandSimulation = inventory["sim"]
+	var inventory_bridge = inventory_sim._material_request_runtime_bridge()
+	var inventory_old_id := str(inventory["request_id"])
+	_set_runtime_waiting_transfer(inventory, 2)
+	inventory_sim.tick = 4
+	inventory["giver"]["inventory"]["shells"] = 0
+	inventory_sim._material_requests_process_actor(
+		str(inventory["requester_id"]), inventory["requester"], [])
+	var inventory_pending: Array = inventory_bridge.pending_requests_for(str(inventory["requester_id"]))
+	var inventory_new: Dictionary = inventory_pending[0] if inventory_pending.size() == 1 else {}
+	_check("inventory_changed_recreates_request_from_current_gap",
+		str(inventory_bridge.request(inventory_old_id).get("status", "")) == Contract.STATUS_FAILED
+		and str(inventory_bridge.request(inventory_old_id).get("response_reason", "")) == "GIVER_INVENTORY_CHANGED"
+		and str(inventory_new.get("request_id", "")) != inventory_old_id
+		and int(inventory_new.get("requested_quantity", 0)) == 2
+		and int(inventory["giver"]["inventory"].get("shells", 0)) == 0
+		and int(inventory["requester"]["inventory"].get("shells", 0)) == 0,
+		"old=%s new=%s" % [str(inventory_bridge.request(inventory_old_id)), str(inventory_new)])
+	_check("inventory_failure_trace_keeps_execution_identity",
+		_traces_have_identity(inventory_bridge, inventory_old_id,
+			["MATERIAL_REQUEST_CREATED", "MATERIAL_TRANSFER_FAILED"],
+			str(inventory["run"].get("run_id", "")), str(inventory["step"].get("step_id", "")), "MATERIALS_MISSING"))
+
+	var stale := _open_runtime_request(72013, 3, "stale")
+	var stale_sim: IslandSimulation = stale["sim"]
+	var stale_bridge = stale_sim._material_request_runtime_bridge()
+	var stale_old_id := str(stale["request_id"])
+	_set_runtime_waiting_counter(stale, 3)
+	stale_sim.tick = 5
+	stale["requester"]["inventory"]["shells"] = 2
+	stale_sim._material_requests_process_actor(
+		str(stale["requester_id"]), stale["requester"], [])
+	var stale_pending: Array = stale_bridge.pending_requests_for(str(stale["requester_id"]))
+	var stale_new: Dictionary = stale_pending[0] if stale_pending.size() == 1 else {}
+	_check("stale_accepted_quantity_recreates_request_for_current_gap",
+		str(stale_bridge.request(stale_old_id).get("status", "")) == Contract.STATUS_CANCELLED
+		and str(stale_bridge.request(stale_old_id).get("response_reason", "")) == "REQUEST_QUANTITY_STALE"
+		and str(stale_new.get("request_id", "")) != stale_old_id
+		and int(stale_new.get("requested_quantity", 0)) == 1
+		and int(stale["requester"]["inventory"].get("shells", 0)) == 2,
+		"old=%s new=%s" % [str(stale_bridge.request(stale_old_id)), str(stale_new)])
+	_check("stale_request_trace_keeps_execution_identity",
+		_traces_have_identity(stale_bridge, stale_old_id,
+			["MATERIAL_REQUEST_CREATED", "MATERIAL_REQUEST_CANCELLED"],
+			str(stale["run"].get("run_id", "")), str(stale["step"].get("step_id", "")), "MATERIALS_MISSING"))
+
+	var fulfilled := _open_runtime_request(72014, 2, "fulfilled")
+	var fulfilled_sim: IslandSimulation = fulfilled["sim"]
+	var fulfilled_bridge = fulfilled_sim._material_request_runtime_bridge()
+	var fulfilled_old_id := str(fulfilled["request_id"])
+	_set_runtime_waiting_transfer(fulfilled, 2)
+	fulfilled["requester"]["inventory"]["wood"] = 2
+	fulfilled["requester"]["inventory"]["shells"] = 2
+	fulfilled_sim._material_requests_process_actor(
+		str(fulfilled["requester_id"]), fulfilled["requester"], [])
+	_check("no_longer_needed_does_not_recreate_request",
+		str(fulfilled_bridge.request(fulfilled_old_id).get("status", "")) == Contract.STATUS_CANCELLED
+		and str(fulfilled_bridge.request(fulfilled_old_id).get("response_reason", "")) == "NO_LONGER_NEEDED"
+		and fulfilled_bridge.pending_requests_for(str(fulfilled["requester_id"])).is_empty(),
+		str(fulfilled_bridge.pending_requests_for(str(fulfilled["requester_id"]))))
+
+func _test_counter_rejection_continues_holder_search() -> void:
+	var triple := _runtime_triple(72015)
+	var sim: IslandSimulation = triple["sim"]
+	var requester_id := str(triple["requester_id"])
+	var first_holder := str(triple["giver_id"])
+	var second_holder := str(triple["third_id"])
+	var step := _craft_step()
+	var run := _run_fixture(requester_id, "PLAN_HUNGER_fish_food")
+	run["run_id"] = requester_id + "#counter-reject"
+	run["current_step_id"] = str(step.get("step_id", ""))
+	run["steps"] = [step]
+	run["state"] = "BLOCKED"
+	sim._execution_tracker().runs[requester_id] = run
+	var opened := sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		requester_id, run, step, AgencyContextBuilder.build(sim, triple["requester"]),
+		sim.tick, _recipes(), 0.8, "MATERIALS_MISSING")
+	var request_id := str(opened.get("request", {}).get("request_id", ""))
+	var request: Dictionary = sim._material_request_runtime_bridge().coordinator.tracker._requests[request_id]
+	request["status"] = Contract.STATUS_WAITING_REQUESTER
+	request["target_id"] = first_holder
+	request["accepted_quantity"] = 1
+	request["last_counter"] = {"quantity": 1, "requires_exchange": true}
+	sim._material_requests_process_actor(requester_id, triple["requester"], [])
+	var rejected: Dictionary = sim.agency_material_request(request_id)
+	_check("counter_rejection_keeps_same_request_active",
+		str(rejected.get("status", "")) == Contract.STATUS_ACTIVE
+		and int(rejected.get("accepted_quantity", -1)) == 0
+		and str(rejected.get("response_outcome", "")) == Contract.OUTCOME_COUNTER_REJECTED
+		and _has_event(sim.events, "MATERIAL_COUNTER_REJECTED"), str(rejected))
+	_check("counter_rejection_preserves_rejected_counter_history",
+		_history_has_counter_rejection(rejected, first_holder), str(rejected.get("history", [])))
+	sim._material_requests_process_actor(requester_id, triple["requester"], [])
+	var next_offer: Dictionary = sim.agency_material_request(request_id)
+	_check("rejected_counter_holder_is_excluded_from_next_offer",
+		str(next_offer.get("status", "")) == Contract.STATUS_WAITING_RESPONSE
+		and str(next_offer.get("target_id", "")) == second_holder
+		and str(next_offer.get("target_id", "")) != first_holder, str(next_offer))
 
 func _test_request_from_blocker_and_subjective_target() -> void:
 	var bridge := Bridge.new(71001)
@@ -384,6 +542,9 @@ func _test_runtime_island_wiring() -> void:
 	_check("runtime_decision_creates_one_material_request", pending.size() == 1
 		and str(pending[0].get("item_id", "")) == "shells", str(pending))
 	var before_id := str(pending[0].get("request_id", ""))
+	_check("runtime_request_separates_blocker_reason_and_step_kind",
+		str(pending[0].get("blocker_reason", "")) == "MATERIALS_MISSING"
+		and str(pending[0].get("blocker_step_kind", "")) == "CRAFT", str(pending[0]))
 	sim._material_requests_on_blocker(requester_id, requester, execution_receipt, {
 		"ctx": ctx, "catalog": sim._recipe_catalog_if_any(),
 	})
@@ -412,6 +573,17 @@ func _test_runtime_island_wiring() -> void:
 		and _has_event(sim.events, Contract.EVENT_ITEM_TRANSFER_COMPLETED)
 		and _has_event(sim.events, "MATERIAL_REQUEST_RESOLVED")
 		and _has_event(sim.events, "PARENT_PLAN_REVALIDATION_REQUESTED"))
+	_check("runtime_chain_events_keep_execution_identity",
+		_event_has_identity(sim.events, "MATERIAL_REQUEST_CREATED", before_id,
+			str(run.get("run_id", "")), str(step.get("step_id", "")), "MATERIALS_MISSING")
+		and _event_has_identity(sim.events, "MATERIAL_REQUEST_RESOLVED", before_id,
+			str(run.get("run_id", "")), str(step.get("step_id", "")), "MATERIALS_MISSING")
+		and _event_has_request_id(sim.events, Contract.EVENT_ITEM_TRANSFER_COMPLETED, before_id),
+		str(sim.events))
+	_check("runtime_chain_trace_keeps_execution_identity",
+		_traces_have_identity(sim._material_request_runtime_bridge(), before_id,
+			["MATERIAL_REQUEST_CREATED", "MATERIAL_REQUEST_RESOLVED"],
+			str(run.get("run_id", "")), str(step.get("step_id", "")), "MATERIALS_MISSING"))
 	var ready_plan := {"plan_id": "PLAN_HUNGER_fish_food", "root_goal": "HUNGER", "status": "READY"}
 	var revalidated := sim._execution_tracker().consume_parent_revalidation(requester_id, [ready_plan], sim.tick)
 	var revalidated_again := sim._execution_tracker().consume_parent_revalidation(requester_id, [ready_plan], sim.tick)
@@ -466,6 +638,85 @@ func _open_and_offer(bridge, request_id: String, quantity: int, target_id: Strin
 	var offered: Dictionary = bridge.try_offer(actual_id, beliefs, 2)
 	_check("bridge_offer_created", bool(offered.get("ok", false)), str(offered))
 	return actual_id
+
+func _open_runtime_request(seed_value: int, quantity: int, suffix: String) -> Dictionary:
+	var pair := _runtime_pair(seed_value)
+	var sim: IslandSimulation = pair["sim"]
+	var requester_id := str(pair["requester_id"])
+	var step := _craft_step(quantity)
+	var run := _run_fixture(requester_id, "PLAN_HUNGER_fish_food")
+	run["run_id"] = requester_id + "#" + suffix
+	run["current_step_id"] = str(step.get("step_id", ""))
+	run["steps"] = [step]
+	run["state"] = "BLOCKED"
+	sim._execution_tracker().runs[requester_id] = run
+	var opened := sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		requester_id,
+		run,
+		step,
+		AgencyContextBuilder.build(sim, pair["requester"]),
+		sim.tick,
+		_recipes(),
+		0.8,
+		"MATERIALS_MISSING"
+	)
+	pair["step"] = step
+	pair["run"] = run
+	pair["opened"] = opened
+	pair["request_id"] = str(opened.get("request", {}).get("request_id", ""))
+	return pair
+
+func _runtime_triple(seed_value: int) -> Dictionary:
+	var created := SimulationBootstrap.create(seed_value, "material_request")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var third_id := str(ids[2])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	var third: Dictionary = sim.actors[third_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	third["tile"] = Vector2i(12, 10)
+	requester["inventory"] = {"wood": 1}
+	giver["inventory"] = {"shells": 2}
+	third["inventory"] = {"shells": 2}
+	for holder in [giver, third]:
+		holder["personality"] = PersonalityProfile.new({"altruism": 1.0, "empathy": 1.0, "caution": 0.0}, {})
+	for holder_id in [giver_id, third_id]:
+		sim.relationships.adjust(holder_id, requester_id, "benevolence", 1000)
+		sim.relationships.adjust(holder_id, requester_id, "reliability", 1000)
+		sim.relationships.adjust(holder_id, requester_id, "obligation", 1000)
+		(requester["tom"] as TheoryOfMind).add_evidence(
+			holder_id, Bridge.holder_predicate("shells"), 1.0, 1.0, -1, sim.tick)
+	return {
+		"sim": sim,
+		"requester_id": requester_id,
+		"giver_id": giver_id,
+		"third_id": third_id,
+		"requester": requester,
+		"giver": giver,
+		"third": third,
+	}
+
+func _set_runtime_waiting_transfer(runtime: Dictionary, accepted_quantity: int) -> void:
+	var bridge = (runtime["sim"] as IslandSimulation)._material_request_runtime_bridge()
+	var request: Dictionary = bridge.coordinator.tracker._requests[str(runtime["request_id"])]
+	request["status"] = Contract.STATUS_WAITING_TRANSFER
+	request["target_id"] = str(runtime["giver_id"])
+	request["accepted_quantity"] = accepted_quantity
+	request["response_outcome"] = Contract.OUTCOME_ACCEPT
+	request["last_counter"] = {}
+
+func _set_runtime_waiting_counter(runtime: Dictionary, accepted_quantity: int) -> void:
+	var bridge = (runtime["sim"] as IslandSimulation)._material_request_runtime_bridge()
+	var request: Dictionary = bridge.coordinator.tracker._requests[str(runtime["request_id"])]
+	request["status"] = Contract.STATUS_WAITING_REQUESTER
+	request["target_id"] = str(runtime["giver_id"])
+	request["accepted_quantity"] = accepted_quantity
+	request["last_counter"] = {"quantity": accepted_quantity, "requires_exchange": false}
 
 func _runtime_pair(seed_value: int) -> Dictionary:
 	var created := SimulationBootstrap.create(seed_value, "material_request")
@@ -567,6 +818,64 @@ func _count_events(events: Array, event_type: String) -> int:
 		if typeof(event) == TYPE_DICTIONARY and str(event.get("type", "")) == event_type:
 			count += 1
 	return count
+
+func _event_has_request_id(events: Array, event_type: String, request_id: String) -> bool:
+	for event in events:
+		if typeof(event) != TYPE_DICTIONARY or str(event.get("type", "")) != event_type:
+			continue
+		if str(event.get("request_id", "")) == request_id:
+			return true
+	return false
+
+func _event_has_identity(
+	events: Array,
+	event_type: String,
+	request_id: String,
+	parent_run_id: String,
+	blocker_step_id: String,
+	blocker_reason: String
+) -> bool:
+	for event in events:
+		if typeof(event) != TYPE_DICTIONARY or str(event.get("type", "")) != event_type:
+			continue
+		if str(event.get("request_id", "")) != request_id:
+			continue
+		if str(event.get("parent_run_id", "")) == parent_run_id \
+				and str(event.get("blocker_step_id", "")) == blocker_step_id \
+				and str(event.get("blocker_reason", "")) == blocker_reason:
+			return true
+	return false
+
+func _traces_have_identity(
+	bridge,
+	request_id: String,
+	event_names: Array,
+	parent_run_id: String,
+	blocker_step_id: String,
+	blocker_reason: String
+) -> bool:
+	var found := {}
+	for trace in bridge.trace_snapshot():
+		if str(trace.get("request_id", "")) != request_id:
+			continue
+		var event_name := str(trace.get("event", ""))
+		if event_name not in event_names:
+			continue
+		if str(trace.get("parent_run_id", "")) == parent_run_id \
+				and str(trace.get("blocker_step_id", "")) == blocker_step_id \
+				and str(trace.get("blocker_reason", "")) == blocker_reason:
+			found[event_name] = true
+	return found.size() == event_names.size()
+
+func _history_has_counter_rejection(request: Dictionary, target_id: String) -> bool:
+	for entry in request.get("history", []):
+		if typeof(entry) != TYPE_DICTIONARY or str(entry.get("kind", "")) != "COUNTER_REJECTED":
+			continue
+		var payload: Dictionary = entry.get("payload", {})
+		var counter: Dictionary = payload.get("counter", {})
+		if bool(counter.get("requires_exchange", false)):
+			return true
+	return false
 
 func _check(label: String, ok: bool, detail: String = "") -> void:
 	if ok:

@@ -8,7 +8,6 @@ const REQUEST_TTL_TICKS := 48
 const MAX_HOLDER_BELIEF_AGE_TICKS := 240
 const INTERACTION_RANGE := 8
 const MIN_HOLDER_BELIEF := 0.08
-const MIN_RESPONSE_PRESSURE := 0.05
 
 var coordinator
 var traces: Array = []
@@ -31,7 +30,10 @@ func ensure_request_for_blocker(
 	ctx: Dictionary,
 	now_tick: int,
 	recipes: RecipeCatalog,
-	urgency: float = 0.5
+	urgency: float = 0.5,
+	blocker_reason: String = "",
+	retry_of_request_id: String = "",
+	retry_reason: String = ""
 ) -> Dictionary:
 	var gap := material_gap(step, run, ctx, recipes)
 	var item_id := str(gap.get("item_id", ""))
@@ -69,7 +71,10 @@ func ensure_request_for_blocker(
 	}
 	request["parent_run_id"] = parent_run_id
 	request["blocker_step_id"] = blocker_step_id
-	request["blocker_reason"] = str(step.get("step_kind", step.get("kind", "")))
+	request["blocker_reason"] = blocker_reason
+	request["blocker_step_kind"] = str(step.get("kind", ""))
+	request["retry_of_request_id"] = retry_of_request_id
+	request["retry_reason"] = retry_reason
 	var opened: Dictionary = coordinator.open_request(request)
 	if not bool(opened.get("ok", false)):
 		return {"ok": false, "created": false, "reason": "REQUEST_OPEN_FAILED", "errors": opened.get("errors", [])}
@@ -206,6 +211,18 @@ func decline_counter(request_id: String, now_tick: int, reason: String = "REQUES
 		_trace("MATERIAL_COUNTER_DECLINED", coordinator.tracker.get_request(request_id), now_tick, reason)
 	return {"ok": cancelled, "reason": reason, "request": coordinator.tracker.get_request(request_id)}
 
+func reject_counter(request_id: String, now_tick: int, reason: String = "COUNTER_REJECTED") -> Dictionary:
+	var request: Dictionary = coordinator.tracker.get_request(request_id)
+	if request.is_empty() or str(request.get("status", "")) != Contract.STATUS_WAITING_REQUESTER:
+		return {"ok": false, "reason": "REQUEST_NOT_WAITING_REQUESTER", "request": request}
+	var target_id := str(request.get("target_id", ""))
+	var rejected: bool = coordinator.tracker.reject_counter(request_id, now_tick, reason)
+	if rejected:
+		if target_id != "":
+			_remember_refusal(request_id, target_id)
+		_trace("MATERIAL_COUNTER_REJECTED", coordinator.tracker.get_request(request_id), now_tick, reason)
+	return {"ok": rejected, "reason": reason, "request": coordinator.tracker.get_request(request_id)}
+
 func transfer(request_id: String, giver_inventory: Dictionary, receiver_inventory: Dictionary, now_tick: int) -> Dictionary:
 	var request: Dictionary = coordinator.tracker.get_request(request_id)
 	if request.is_empty() or str(request.get("status", "")) != Contract.STATUS_WAITING_TRANSFER:
@@ -264,6 +281,25 @@ func pending_requests_for(actor_id: String) -> Array:
 		return str(a.get("request_id", "")) < str(b.get("request_id", "")))
 	return out
 
+func restartable_terminal_requests_for(requester_id: String) -> Array:
+	var out: Array = []
+	var seen_blockers := {}
+	for request_id in coordinator.tracker.snapshot():
+		var request: Dictionary = coordinator.tracker.get_request(str(request_id))
+		if str(request.get("requester_id", "")) != requester_id:
+			continue
+		if not Contract.is_terminal(str(request.get("status", ""))):
+			continue
+		var blocker_key: String = str((_meta.get(str(request_id), {}) as Dictionary).get("blocker_key", ""))
+		if blocker_key == "" or str(_request_by_blocker.get(blocker_key, "")) != str(request_id):
+			continue
+		if seen_blockers.has(blocker_key):
+			continue
+		seen_blockers[blocker_key] = true
+		out.append(request)
+	out.sort_custom(func(a, b): return str(a.get("request_id", "")) < str(b.get("request_id", "")))
+	return out
+
 func request(request_id: String) -> Dictionary:
 	return coordinator.tracker.get_request(request_id)
 
@@ -316,9 +352,6 @@ static func relationship_signal(raw_trust: int) -> float:
 
 static func trust_probability(raw_trust: int) -> float:
 	return clampf((float(raw_trust) + 1000.0) / 2000.0, 0.0, 1.0)
-
-static func normalize_relationship(raw_trust: int) -> float:
-	return trust_probability(raw_trust)
 
 static func possession_observations(event: Dictionary) -> Array:
 	var out: Array = []
@@ -376,10 +409,15 @@ func _trace(
 		"requester_id": str(request.get("requester_id", "")),
 		"target_id": str(request.get("target_id", "")),
 		"parent_plan_id": str(request.get("parent_plan_id", "")),
+		"parent_run_id": str(request.get("parent_run_id", "")),
+		"blocker_step_id": str(request.get("blocker_step_id", "")),
+		"blocker_reason": str(request.get("blocker_reason", "")),
 		"item_id": str(request.get("item_id", "")),
 		"quantity": int(request.get("requested_quantity", 0)),
 		"accepted_quantity": int(request.get("accepted_quantity", 0)),
 		"status": str(request.get("status", "")),
 		"reason": reason,
 		"evidence_event_id": evidence_event_id,
+		"retry_of_request_id": str(request.get("retry_of_request_id", "")),
+		"retry_reason": str(request.get("retry_reason", "")),
 	})

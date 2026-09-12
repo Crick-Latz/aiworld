@@ -5,6 +5,13 @@ const FIXED_LOCATION_ACTIONS := ["forage_berries", "drink_water", "fish", "gathe
 	"search_ruins", "gather_wood", "search_resource_source"]
 const TRAVEL_STALL_LIMIT := 8
 const Contract = preload("res://src/simulation/material_request/material_request_contract.gd")
+const MATERIAL_REQUEST_RETRYABLE_REASONS := [
+	"REQUEST_EXPIRED",
+	"TARGET_MISSING",
+	"GIVER_INVENTORY_CHANGED",
+	"TRANSFER_FAILED",
+	"REQUEST_QUANTITY_STALE",
+]
 ## 荒岛世界模拟器（阶段 B）：取代 StorySimulation。
 ## 没有预设剧情。只有三个有性格的人、一座有资源的岛、和一套互动规则。
 ## 故事是模拟的输出，不是输入。
@@ -627,7 +634,8 @@ func _material_requests_on_blocker(id: String, a: Dictionary, execution: Diction
 		ctx,
 		tick,
 		recipes,
-		_material_need_urgency(a, root_goal)
+		_material_need_urgency(a, root_goal),
+		str(execution.get("blocker_reason", ""))
 	)
 	if bool(result.get("created", false)):
 		_emit_material_request_event("MATERIAL_REQUEST_CREATED", str(result.get("request", {}).get("requester_id", id)),
@@ -658,6 +666,8 @@ func _material_requests_process_actor(id: String, a: Dictionary, new_events: Arr
 			_material_requests_process_requester(id, a, actor_view, request, new_events)
 		if target_id == id and str(bridge.request(str(request.get("request_id", ""))).get("status", "")) == Contract.STATUS_WAITING_RESPONSE:
 			_material_requests_process_responder(id, a, request, new_events)
+	for request in bridge.restartable_terminal_requests_for(id):
+		_material_requests_restart_if_still_needed(id, a, request)
 
 func _material_requests_process_requester(
 	requester_id: String,
@@ -683,17 +693,17 @@ func _material_requests_process_requester(
 						"reason": "NO_LONGER_NEEDED",
 					})
 			elif bool(counter.get("requires_exchange", false)):
-				var declined_condition := bridge.decline_counter(
+				var rejected_condition := bridge.reject_counter(
 					str(request.get("request_id", "")), tick, "COUNTER_CONDITION_UNSUPPORTED")
-				if bool(declined_condition.get("ok", false)):
-					_emit_material_request_event("MATERIAL_COUNTER_DECLINED", requester_id,
-						declined_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
+				if bool(rejected_condition.get("ok", false)):
+					_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+						rejected_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
 			elif int(request.get("accepted_quantity", 0)) > current_gap:
-				var declined_stale := bridge.decline_counter(
+				var cancelled_stale := bridge.cancel_request(
 					str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE")
-				if bool(declined_stale.get("ok", false)):
-					_emit_material_request_event("MATERIAL_COUNTER_DECLINED", requester_id,
-						declined_stale.get("request", {}), {"reason": "REQUEST_QUANTITY_STALE"})
+				if cancelled_stale:
+					_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id,
+						bridge.request(str(request.get("request_id", ""))), {"reason": "REQUEST_QUANTITY_STALE"})
 			else:
 				var accepted := bridge.accept_counter(str(request.get("request_id", "")), tick)
 				if bool(accepted.get("ok", false)):
@@ -815,10 +825,54 @@ func _material_requests_handle_revalidation(transfer_result: Dictionary) -> void
 		ctx,
 		tick,
 		_recipe_catalog_if_any(),
-		_material_need_urgency(requester, str(run.get("root_goal", "")))
+		_material_need_urgency(requester, str(run.get("root_goal", ""))),
+		str(request.get("blocker_reason", "")),
+		str(request.get("request_id", "")),
+		"PARTIAL_TRANSFER"
 	)
 	if bool(follow_up.get("created", false)):
-		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, follow_up.get("request", {}))
+		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, follow_up.get("request", {}), {
+			"retry_of_request_id": str(request.get("request_id", "")),
+			"previous_terminal_reason": "PARTIAL_TRANSFER",
+		})
+
+func _material_requests_restart_if_still_needed(requester_id: String, a: Dictionary, old_request: Dictionary) -> void:
+	var terminal_reason := _material_request_terminal_reason(old_request)
+	if terminal_reason not in MATERIAL_REQUEST_RETRYABLE_REASONS:
+		return
+	if _material_request_run_mismatch_reason(requester_id, old_request) != "":
+		return
+	var current_gap := _material_request_current_gap(requester_id, a, old_request)
+	if current_gap <= 0:
+		return
+	var run := agency_plan_run(requester_id)
+	var step := _material_run_step(run, str(old_request.get("blocker_step_id", "")))
+	if step.is_empty():
+		return
+	var ctx := AgencyContextBuilder.build(self, a)
+	var result := _material_request_runtime_bridge().ensure_request_for_blocker(
+		requester_id,
+		run,
+		step,
+		ctx,
+		tick,
+		_recipe_catalog_if_any(),
+		_material_need_urgency(a, str(run.get("root_goal", ""))),
+		str(old_request.get("blocker_reason", "")),
+		str(old_request.get("request_id", "")),
+		terminal_reason
+	)
+	if bool(result.get("created", false)):
+		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, result.get("request", {}), {
+			"retry_of_request_id": str(old_request.get("request_id", "")),
+			"previous_terminal_reason": terminal_reason,
+		})
+
+func _material_request_terminal_reason(request: Dictionary) -> String:
+	var reason := str(request.get("response_reason", ""))
+	if reason == "" and str(request.get("status", "")) == Contract.STATUS_EXPIRED:
+		return "REQUEST_EXPIRED"
+	return reason
 
 func _material_request_current_gap(requester_id: String, a: Dictionary, request: Dictionary) -> int:
 	var run := agency_plan_run(requester_id)
@@ -899,6 +953,9 @@ func _emit_material_request_event(
 		"requester_id": str(request.get("requester_id", requester_id)),
 		"target_id": str(request.get("target_id", "")),
 		"parent_plan_id": str(request.get("parent_plan_id", "")),
+		"parent_run_id": str(request.get("parent_run_id", "")),
+		"blocker_step_id": str(request.get("blocker_step_id", "")),
+		"blocker_reason": str(request.get("blocker_reason", "")),
 		"item_id": str(request.get("item_id", "")),
 		"quantity": int(request.get("requested_quantity", 0)),
 		"accepted_quantity": int(request.get("accepted_quantity", 0)),
