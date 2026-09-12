@@ -61,6 +61,19 @@ func confidence_of(other_id: String, key: String) -> float:
 	var n := (e["evidence_pos"] as Array).size() + (e["evidence_neg"] as Array).size()
 	return 1.0 - pow(0.6, n) if n > 0 else 0.0
 
+func last_evidence_tick(other_id: String, key: String) -> int:
+	if not _models.has(other_id):
+		return -1
+	var e: Dictionary = _models[other_id].get(key, {})
+	if e.is_empty():
+		return -1
+	var newest := -1
+	for collection in [e.get("evidence_pos", []), e.get("evidence_neg", [])]:
+		for evidence in collection:
+			if typeof(evidence) == TYPE_DICTIONARY:
+				newest = maxi(newest, int(evidence.get("tick", -1)))
+	return newest
+
 ## 读出的信念 = 方向 × 置信度（证据少 → 接近中性，不敢下结论）
 func belief_about(other_id: String, key: String) -> float:
 	if not _models.has(other_id):

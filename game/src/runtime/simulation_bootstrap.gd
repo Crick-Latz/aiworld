@@ -19,14 +19,18 @@ static func configure(sim: IslandSimulation, profile: String = "") -> Dictionary
 		return {"ok": false, "error": "ADOPTION_REQUIRES_EXECUTION"}
 	if bool(config.get("information_subgoals", false)) and not bool(config.get("plan_execution", false)):
 		return {"ok": false, "error": "INFORMATION_REQUIRES_EXECUTION"}
+	if bool(config.get("material_requests", false)) and not bool(config.get("plan_execution", false)):
+		return {"ok": false, "error": "MATERIAL_REQUESTS_REQUIRE_EXECUTION"}
 	if (bool(config.get("plan_execution", false)) or bool(config.get("causal_step_value", false)) \
-			or bool(config.get("information_subgoals", false))) and str(config["agency_mode"]) != "LIVE_BRIDGE":
+			or bool(config.get("information_subgoals", false)) or bool(config.get("material_requests", false))) \
+			and str(config["agency_mode"]) != "LIVE_BRIDGE":
 		return {"ok": false, "error": "EXECUTION_REQUIRES_LIVE_BRIDGE"}
 	sim.agency_mode = str(config["agency_mode"])
 	sim.agency_plan_execution_enabled = bool(config.get("plan_execution", false))
 	sim.agency_causal_step_value_enabled = bool(config.get("causal_step_value", false))
 	sim.agency_plan_adoption_enabled = bool(config.get("plan_adoption", false))
 	sim.agency_information_subgoals_enabled = bool(config.get("information_subgoals", false))
+	sim.agency_material_requests_enabled = bool(config.get("material_requests", false))
 	return {"ok": true, "profile": profile, "config": config.duplicate(true)}
 
 static func create(seed_value: int, profile: String = "") -> Dictionary:
