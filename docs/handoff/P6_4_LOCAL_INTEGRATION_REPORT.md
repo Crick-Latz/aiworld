@@ -2,7 +2,7 @@
 
 整合日期：2026-09-10
 
-本地项目：`D:\Project_AI\aiword`
+本地项目：`D:\Project_AI\aiworld`
 
 范围：P6.3B-4 因果步骤价值、P6.4 Framework/Plan Adoption、P6.N0 Cognitive Cases，以及本地兼容修复
 
@@ -144,7 +144,7 @@ C:\Users\12072\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 - `.tmp/p6_4_local_world_61000.json`
 - `.tmp/run-20260910T101728740354Z/`
 
-对外交付目录使用 `D:\Project_AI\aiword-deliveries\P6_4_LOCAL_INTEGRATION_20260910\`，其中包含整合后源码 ZIP、验收日志 ZIP 和导出清单。源码 ZIP 排除 `.git`、`.tmp`、Godot 缓存、引擎、依赖缓存及本地敏感配置。
+对外交付目录使用 `D:\Project_AI\aiworld-deliveries\P6_4_LOCAL_INTEGRATION_20260910\`，其中包含整合后源码 ZIP、验收日志 ZIP 和导出清单。源码 ZIP 排除 `.git`、`.tmp`、Godot 缓存、引擎、依赖缓存及本地敏感配置。
 
 解压审阅目录 `.tmp/p6_4_delivery_review/` 与源码对照目录
 `.tmp/p6_4_source_reference/` 在导出完成后曾按绝对路径校验并尝试精确删除，但宿主执行策略阻止了递归删除命令。两者仍位于 Git 忽略的 `.tmp` 内，不进入源码包；未改用跨 shell 或更危险的删除手段绕过策略。

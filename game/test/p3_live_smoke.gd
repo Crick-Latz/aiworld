@@ -1,7 +1,7 @@
 extends SceneTree
 ## P3a-3 Live 冒烟脚本（用户有 API 凭据时一键跑通全链）：
 ##   真实 600-tick 模拟 → IR → claim package → LLM API → 解析 → Validator → 输出对比
-## 运行前提：game/config/ai.local.json 或 AIWORD_LLM_BASE_URL + AIWORD_LLM_API_KEY
+## 运行前提：game/config/ai.local.json 或 AIWORLD_LLM_BASE_URL + AIWORLD_LLM_API_KEY
 ## 运行：tools/Godot_v4.7.2-stable_win64_console.exe --headless --path game --script res://test/p3_live_smoke.gd
 
 var _f := false
@@ -17,7 +17,7 @@ func _run() -> void:
 	var cfg: Dictionary = LlmNarrativeRenderer.load_config()
 	if cfg.is_empty():
 		print("SMOKE_FAIL no_config")
-		print("请创建 game/config/ai.local.json 或设置 AIWORD_LLM_BASE_URL + AIWORD_LLM_API_KEY")
+		print("请创建 game/config/ai.local.json 或设置 AIWORLD_LLM_BASE_URL + AIWORLD_LLM_API_KEY")
 		quit(1)
 		return
 	print("SMOKE_CONFIG model=%s base=%s" % [str(cfg.get("model", "?")), str(cfg.get("base_url", "?")).substr(0, 30)])

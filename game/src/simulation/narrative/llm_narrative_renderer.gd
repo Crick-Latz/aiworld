@@ -183,15 +183,15 @@ static func _collect(sentences: Array, field: String) -> Array:
 				out.append(v)
 	return out
 
-## 配置加载：ai.local.json > 环境变量（AIWORD_LLM_BASE_URL/AIWORD_LLM_API_KEY/AIWORD_LLM_MODEL）
+## 配置加载：ai.local.json > 环境变量（AIWORLD_LLM_BASE_URL/AIWORLD_LLM_API_KEY/AIWORLD_LLM_MODEL）
 static func load_config() -> Dictionary:
 	var path := "res://config/ai.local.json"
 	if FileAccess.file_exists(path):
 		var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if typeof(parsed) == TYPE_DICTIONARY and parsed.has("api_key"):
 			return parsed
-	var base := OS.get_environment("AIWORD_LLM_BASE_URL")
-	var key := OS.get_environment("AIWORD_LLM_API_KEY")
+	var base := OS.get_environment("AIWORLD_LLM_BASE_URL")
+	var key := OS.get_environment("AIWORLD_LLM_API_KEY")
 	if base != "" and key != "":
-		return {"base_url": base, "api_key": key, "model": OS.get_environment("AIWORD_LLM_MODEL")}
+		return {"base_url": base, "api_key": key, "model": OS.get_environment("AIWORLD_LLM_MODEL")}
 	return {}

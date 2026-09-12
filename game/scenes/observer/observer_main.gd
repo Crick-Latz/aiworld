@@ -478,10 +478,10 @@ func _refresh_hud() -> void:
 				tir["_title"] = ThreadSummaryRenderer.render_title(tir)
 				thread_irs.append(tir)
 			model["story_threads"] = thread_irs
-			# P4.3（§20）：LLM 线程渲染——AIWORD_THREAD_LLM=1 时，对前 3 条线程
+			# P4.3（§20）：LLM 线程渲染——AIWORLD_THREAD_LLM=1 时，对前 3 条线程
 			# 追加 _llm_title/_llm_summary + debug 回溯（sentence→claim_ids→sources）。
 			# 防重入：上一次渲染未完成就跳过；任何失败静默走模板（面板仍有 _summary）。
-			if OS.get_environment("AIWORD_THREAD_LLM") == "1" and not get_meta("_p43_busy", false):
+			if OS.get_environment("AIWORLD_THREAD_LLM") == "1" and not get_meta("_p43_busy", false):
 				set_meta("_p43_busy", true)
 				_p43_render_llm_threads(_te, thread_irs, ev_lookup)
 		# P3b-5: 对话转录——从最近社会事件提取 SpeechAct → 模板台词

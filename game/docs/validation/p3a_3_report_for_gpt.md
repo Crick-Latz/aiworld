@@ -47,7 +47,7 @@ temperature = 0.2（fidelity-only，第 27 条）；style 暂只 neutral_chronic
 
 ## 四、离线安全（默认零网络）
 
-- 配置：`game/config/ai.local.json`（gitignored）或 `AIWORD_LLM_BASE_URL` + `AIWORD_LLM_API_KEY` 环境变量
+- 配置：`game/config/ai.local.json`（gitignored）或 `AIWORLD_LLM_BASE_URL` + `AIWORLD_LLM_API_KEY` 环境变量
 - **未配置 → render 返回 null → Template fallback**（测试套件永不联网）
 - Observer 已接线：配置存在才启用 LLM，否则确定性 Template
 - API 故障/超时/残缺 → 同一 fallback 路径（P3a-1 已锁死的五故障模式）
@@ -69,7 +69,7 @@ temperature = 0.2（fidelity-only，第 27 条）；style 暂只 neutral_chronic
 
 代码层完成但**尚未对真实 API 发过一次请求**。需要你提供（二选一）：
 1. 在 `game/config/ai.local.json` 放 `{"base_url": "...", "api_key": "...", "model": "..."}`
-2. 或设环境变量 `AIWORD_LLM_BASE_URL` / `AIWORD_LLM_API_KEY` / `AIWORD_LLM_MODEL`
+2. 或设环境变量 `AIWORLD_LLM_BASE_URL` / `AIWORLD_LLM_API_KEY` / `AIWORLD_LLM_MODEL`
 
 配置后我可以跑一次 live 验证（构建 IR → 真实调用 → Validator 全链），并按第 27 条只评估 fidelity（是否忠实于 claims，不评估文采）。
 

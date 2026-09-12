@@ -65,7 +65,7 @@ LA 空线程→模板 · LB 合法输出接受 · LC 坏 JSON→fallback · LD �
 
 ## Observer 接入（§20）
 
-`observer_main.gd`：`AIWORD_THREAD_LLM=1` 时每 30 tick 对前 3 条线程追加 `_llm_title`/`_llm_summary`/`_llm_renderer` 与 `_llm_drilldown`（sentence→claim_ids→sources，debug 用；玩家普通模式只见文本）。防重入标志 `_p43_busy`；任何失败面板仍显示模板 `_summary`。
+`observer_main.gd`：`AIWORLD_THREAD_LLM=1` 时每 30 tick 对前 3 条线程追加 `_llm_title`/`_llm_summary`/`_llm_renderer` 与 `_llm_drilldown`（sentence→claim_ids→sources，debug 用；玩家普通模式只见文本）。防重入标志 `_p43_busy`；任何失败面板仍显示模板 `_summary`。
 
 ## 完成门（§28）
 
