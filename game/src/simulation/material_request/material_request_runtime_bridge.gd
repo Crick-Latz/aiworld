@@ -40,8 +40,10 @@ func ensure_request_for_blocker(
 		return {"ok": false, "created": false, "reason": "NO_MATERIAL_GAP"}
 
 	var parent_plan_id := str(run.get("plan_id", ""))
+	var parent_run_id := str(run.get("run_id", ""))
+	var blocker_step_id := str(step.get("step_id", ""))
 	var root_goal := str(run.get("root_goal", ""))
-	var blocker_key := "%s|%s|%s" % [requester_id, parent_plan_id, item_id]
+	var blocker_key := "%s|%s|%s|%s" % [requester_id, parent_run_id, blocker_step_id, item_id]
 	if _request_by_blocker.has(blocker_key):
 		var existing_id := str(_request_by_blocker[blocker_key])
 		var existing: Dictionary = coordinator.tracker.get_request(existing_id)
@@ -65,7 +67,8 @@ func ensure_request_for_blocker(
 	request["knowledge_context"] = {
 		"max_holder_belief_age_ticks": MAX_HOLDER_BELIEF_AGE_TICKS,
 	}
-	request["blocker_step_id"] = str(step.get("step_id", ""))
+	request["parent_run_id"] = parent_run_id
+	request["blocker_step_id"] = blocker_step_id
 	request["blocker_reason"] = str(step.get("step_kind", step.get("kind", "")))
 	var opened: Dictionary = coordinator.open_request(request)
 	if not bool(opened.get("ok", false)):
@@ -73,7 +76,7 @@ func ensure_request_for_blocker(
 	_request_by_blocker[blocker_key] = request_id
 	_meta[request_id] = {
 		"blocker_key": blocker_key,
-		"step_id": str(step.get("step_id", "")),
+		"step_id": blocker_step_id,
 		"step_kind": str(step.get("kind", "")),
 		"blocker_quantity": quantity,
 	}
@@ -116,14 +119,14 @@ func build_holder_beliefs(
 		var evidence_tick := tom.last_evidence_tick(peer_id, predicate)
 		if evidence_tick < 0:
 			evidence_tick = now_tick
-		var trust_norm := normalize_relationship(int(trust_of.get(peer_id, 0)))
+		var relationship_value := relationship_signal(int(trust_of.get(peer_id, 0)))
 		out.append({
 			"actor_id": peer_id,
 			"item_id": item_id,
 			"visible": true,
 			"believed_quantity": 1,
 			"confidence": confidence,
-			"relationship": trust_norm,
+			"relationship": relationship_value,
 			"expected_cooperation": tom.response_belief(peer_id, "shares_with_me"),
 			"distance": distance,
 			"evidence_tick": evidence_tick,
@@ -207,6 +210,11 @@ func transfer(request_id: String, giver_inventory: Dictionary, receiver_inventor
 	var request: Dictionary = coordinator.tracker.get_request(request_id)
 	if request.is_empty() or str(request.get("status", "")) != Contract.STATUS_WAITING_TRANSFER:
 		return {"ok": false, "reason": "REQUEST_NOT_WAITING_TRANSFER", "request": request, "event": {}}
+	if now_tick > int(request.get("expires_tick", now_tick)):
+		coordinator.tracker.expire_due(now_tick)
+		var expired: Dictionary = coordinator.tracker.get_request(request_id)
+		_trace("MATERIAL_REQUEST_EXPIRED", expired, now_tick, "REQUEST_EXPIRED")
+		return {"ok": false, "reason": "REQUEST_EXPIRED", "request": expired, "event": {}, "mutated": false}
 	var result: Dictionary = coordinator.transfer_and_resolve(
 		request_id,
 		giver_inventory,
@@ -227,6 +235,12 @@ func fail_request(request_id: String, now_tick: int, reason: String) -> bool:
 	if failed:
 		_trace("MATERIAL_REQUEST_FAILED", coordinator.tracker.get_request(request_id), now_tick, reason)
 	return failed
+
+func cancel_request(request_id: String, now_tick: int, reason: String) -> bool:
+	var cancelled: bool = coordinator.tracker.cancel(request_id, now_tick, reason)
+	if cancelled:
+		_trace("MATERIAL_REQUEST_CANCELLED", coordinator.tracker.get_request(request_id), now_tick, reason)
+	return cancelled
 
 func expire_due(now_tick: int) -> Array:
 	var expired: Array = coordinator.tracker.expire_due(now_tick)
@@ -282,24 +296,29 @@ func material_gap(step: Dictionary, run: Dictionary, ctx: Dictionary, recipes: R
 		var recipe: Dictionary = recipes.spec(recipe_id)
 		if recipe.is_empty():
 			return {}
-		var missing: Dictionary = RecipePlanAdapter.missing_ingredients(
-			recipe.get("ingredients", {}),
-			possessed
-		)
-		var keys: Array = missing.keys()
+		var keys: Array = (recipe.get("ingredients", {}) as Dictionary).keys()
 		keys.sort()
-		if keys.is_empty():
-			return {}
-		var item_id := str(keys[0])
-		var quantity := int(missing[item_id]) * maxi(1, int(step.get("quantity", 1)))
-		return {"item_id": item_id, "quantity": quantity}
+		var craft_quantity := maxi(1, int(step.get("quantity", 1)))
+		for key in keys:
+			var item_id := str(key)
+			var required_total := int(recipe["ingredients"][key]) * craft_quantity
+			var gap := required_total - int(possessed.get(item_id, 0))
+			if gap > 0:
+				return {"item_id": item_id, "quantity": gap}
+		return {}
 	return {}
 
 static func holder_predicate(item_id: String) -> String:
 	return "has_item:" + item_id
 
-static func normalize_relationship(raw_trust: int) -> float:
+static func relationship_signal(raw_trust: int) -> float:
+	return clampf(float(raw_trust) / 1000.0, -1.0, 1.0)
+
+static func trust_probability(raw_trust: int) -> float:
 	return clampf((float(raw_trust) + 1000.0) / 2000.0, 0.0, 1.0)
+
+static func normalize_relationship(raw_trust: int) -> float:
+	return trust_probability(raw_trust)
 
 static func possession_observations(event: Dictionary) -> Array:
 	var out: Array = []

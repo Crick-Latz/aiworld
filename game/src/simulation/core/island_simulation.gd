@@ -645,6 +645,13 @@ func _material_requests_process_actor(id: String, a: Dictionary, new_events: Arr
 	var actor_view := _build_actor_view(id, a)
 	var pending := bridge.pending_requests_for(id)
 	for request in pending:
+		var stale_reason := _material_request_run_mismatch_reason(str(request.get("requester_id", "")), request)
+		if stale_reason != "":
+			bridge.fail_request(str(request.get("request_id", "")), tick, stale_reason)
+			_emit_material_request_event("MATERIAL_REQUEST_FAILED", str(request.get("requester_id", "")), request, {
+				"reason": stale_reason,
+			})
+			continue
 		var requester_id := str(request.get("requester_id", ""))
 		var target_id := str(request.get("target_id", ""))
 		if requester_id == id:
@@ -668,15 +675,30 @@ func _material_requests_process_requester(
 			if bool(offered.get("ok", false)):
 				_emit_material_request_event("MATERIAL_REQUEST_OFFERED", requester_id, offered.get("request", {}))
 		Contract.STATUS_WAITING_REQUESTER:
-			if _material_request_still_needed(requester_id, a, request):
+			var current_gap := _material_request_current_gap(requester_id, a, request)
+			var counter: Dictionary = request.get("last_counter", {})
+			if current_gap <= 0:
+				if bridge.cancel_request(str(request.get("request_id", "")), tick, "NO_LONGER_NEEDED"):
+					_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+						"reason": "NO_LONGER_NEEDED",
+					})
+			elif bool(counter.get("requires_exchange", false)):
+				var declined_condition := bridge.decline_counter(
+					str(request.get("request_id", "")), tick, "COUNTER_CONDITION_UNSUPPORTED")
+				if bool(declined_condition.get("ok", false)):
+					_emit_material_request_event("MATERIAL_COUNTER_DECLINED", requester_id,
+						declined_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
+			elif int(request.get("accepted_quantity", 0)) > current_gap:
+				var declined_stale := bridge.decline_counter(
+					str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE")
+				if bool(declined_stale.get("ok", false)):
+					_emit_material_request_event("MATERIAL_COUNTER_DECLINED", requester_id,
+						declined_stale.get("request", {}), {"reason": "REQUEST_QUANTITY_STALE"})
+			else:
 				var accepted := bridge.accept_counter(str(request.get("request_id", "")), tick)
 				if bool(accepted.get("ok", false)):
 					_emit_material_request_event("MATERIAL_COUNTER_ACCEPTED", requester_id, accepted.get("request", {}))
 					_material_requests_try_transfer(requester_id, a, accepted.get("request", {}), new_events)
-			else:
-				var declined := bridge.decline_counter(str(request.get("request_id", "")), tick)
-				if bool(declined.get("ok", false)):
-					_emit_material_request_event("MATERIAL_COUNTER_DECLINED", requester_id, declined.get("request", {}))
 		Contract.STATUS_WAITING_TRANSFER:
 			_material_requests_try_transfer(requester_id, a, request, new_events)
 
@@ -723,6 +745,19 @@ func _material_requests_try_transfer(
 		return
 	if not _is_nearby(requester["tile"], actors[target_id]["tile"]):
 		return
+	var current_gap := _material_request_current_gap(requester_id, requester, request)
+	if current_gap <= 0:
+		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "NO_LONGER_NEEDED"):
+			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+				"reason": "NO_LONGER_NEEDED",
+			})
+		return
+	if int(request.get("accepted_quantity", 0)) > current_gap:
+		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE"):
+			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
+				"reason": "REQUEST_QUANTITY_STALE",
+			})
+		return
 	var result := _material_request_runtime_bridge().transfer(
 		str(request.get("request_id", "")),
 		actors[target_id]["inventory"],
@@ -749,18 +784,20 @@ func _material_requests_handle_revalidation(transfer_result: Dictionary) -> void
 	var requester_id := str(request.get("requester_id", ""))
 	if not actors.has(requester_id):
 		return
-	_emit_material_request_event("PARENT_PLAN_REVALIDATION_REQUESTED", requester_id, request, {
-		"plan_id": str(request.get("parent_plan_id", "")),
-		"transfer_event_id": str(revalidation.get("transfer_event_id", "")),
-	})
 	var token := _execution_tracker().request_parent_revalidation(
 		requester_id,
 		str(request.get("parent_plan_id", "")),
 		tick,
-		str(revalidation.get("transfer_event_id", ""))
+		str(revalidation.get("transfer_event_id", "")),
+		str(request.get("parent_run_id", "")),
+		str(request.get("blocker_step_id", ""))
 	)
 	if token.is_empty():
 		return
+	_emit_material_request_event("PARENT_PLAN_REVALIDATION_REQUESTED", requester_id, request, {
+		"plan_id": str(request.get("parent_plan_id", "")),
+		"transfer_event_id": str(revalidation.get("transfer_event_id", "")),
+	})
 	# A partial counter may leave the same material gap. Start the next request now
 	# from the refreshed subjective context; the old request is already terminal.
 	var requester: Dictionary = actors[requester_id]
@@ -783,35 +820,44 @@ func _material_requests_handle_revalidation(transfer_result: Dictionary) -> void
 	if bool(follow_up.get("created", false)):
 		_emit_material_request_event("MATERIAL_REQUEST_CREATED", requester_id, follow_up.get("request", {}))
 
-func _material_request_still_needed(requester_id: String, a: Dictionary, request: Dictionary) -> bool:
+func _material_request_current_gap(requester_id: String, a: Dictionary, request: Dictionary) -> int:
 	var run := agency_plan_run(requester_id)
-	if run.is_empty() or str(run.get("plan_id", "")) != str(request.get("parent_plan_id", "")):
-		return false
-	if str(run.get("state", "")) != "BLOCKED":
-		return false
+	if _material_request_run_mismatch_reason(requester_id, request) != "":
+		return 0
 	var step := _material_run_step(run, str(request.get("blocker_step_id", "")))
 	if step.is_empty():
-		return false
+		return 0
 	var gap := _material_request_runtime_bridge().material_gap(
 		step,
 		run,
 		AgencyContextBuilder.build(self, a),
 		_recipe_catalog_if_any()
 	)
-	return int(gap.get("quantity", 0)) > 0
+	return int(gap.get("quantity", 0))
+
+func _material_request_run_mismatch_reason(requester_id: String, request: Dictionary) -> String:
+	var run := agency_plan_run(requester_id)
+	if run.is_empty() or str(run.get("run_id", "")) != str(request.get("parent_run_id", "")):
+		return "PARENT_RUN_CHANGED"
+	if str(run.get("plan_id", "")) != str(request.get("parent_plan_id", "")):
+		return "PARENT_RUN_CHANGED"
+	if str(run.get("current_step_id", "")) != str(request.get("blocker_step_id", "")):
+		return "BLOCKER_CHANGED"
+	return ""
 
 func _material_recipient_context(responder_id: String, requester_id: String, item_id: String) -> Dictionary:
 	var responder: Dictionary = actors[responder_id]
 	var traits: Dictionary = (responder["personality"] as PersonalityProfile).traits
 	var trust := relationships.composite_trust(responder_id, requester_id)
-	var relationships_norm := MaterialRequestRuntimeBridge.normalize_relationship(trust)
+	var relationship_value := MaterialRequestRuntimeBridge.relationship_signal(trust)
+	var trust_value := MaterialRequestRuntimeBridge.trust_probability(trust)
 	var need_pressure := _material_need_pressure(responder, item_id)
 	var obligations_count := (responder.get("my_obligations", []) as Array).size()
 	return {
 		"inventory_quantity": int(responder["inventory"].get(item_id, 0)),
 		"reserve_quantity": 0,
-		"relationship": relationships_norm,
-		"trust": relationships_norm,
+		"relationship": relationship_value,
+		"trust": trust_value,
 		"generosity": clampf((float(traits.get("altruism", 0.5)) + float(traits.get("empathy", 0.5))) * 0.5, 0.0, 1.0),
 		"own_need_pressure": need_pressure,
 		"risk_aversion": clampf(float(traits.get("caution", 0.5)), 0.0, 1.0),

@@ -235,9 +235,13 @@ func _complete_main(run: Dictionary, step: Dictionary, event_segment: Array,
 ## A successful material transfer grants one revalidation opportunity. It never
 ## restores the run directly and never bypasses a still-missing blocker.
 func request_parent_revalidation(actor_id: String, plan_id: String, tick: int,
-		transfer_event_id: String) -> Dictionary:
+		transfer_event_id: String, parent_run_id: String, blocker_step_id: String) -> Dictionary:
 	var run: Dictionary = runs.get(actor_id, {})
 	if run.is_empty() or str(run.get("plan_id", "")) != plan_id:
+		return {}
+	if str(run.get("run_id", "")) != parent_run_id:
+		return {}
+	if str(run.get("current_step_id", "")) != blocker_step_id:
 		return {}
 	if str(run.get("state", "")) != "BLOCKED":
 		return {}

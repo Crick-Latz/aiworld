@@ -10,12 +10,220 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	_test_review_fixes()
 	_test_request_from_blocker_and_subjective_target()
 	_test_accept_refuse_counter_and_transfer()
 	_test_runtime_island_wiring()
 	_test_profiles_and_determinism()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
+
+func _test_review_fixes() -> void:
+	_check("relationship_signal_preserves_sign",
+		is_equal_approx(Bridge.relationship_signal(-1000), -1.0)
+		and is_equal_approx(Bridge.relationship_signal(0), 0.0)
+		and is_equal_approx(Bridge.relationship_signal(1000), 1.0))
+	_check("trust_probability_uses_probability_scale",
+		is_equal_approx(Bridge.trust_probability(-1000), 0.0)
+		and is_equal_approx(Bridge.trust_probability(0), 0.5)
+		and is_equal_approx(Bridge.trust_probability(1000), 1.0))
+
+	var bridge := Bridge.new(72001)
+	var step := _craft_step(3)
+	var run := _run_fixture("requester", "PLAN_HUNGER_fish_food")
+	var first_gap := bridge.material_gap(step, run, {"possessed_items": {"shells": 1}}, _recipes())
+	_check("craft_quantity_scales_requirement_before_gap",
+		str(first_gap.get("item_id", "")) == "shells" and int(first_gap.get("quantity", 0)) == 2,
+		str(first_gap))
+	var items := ItemCatalog.load_default()
+	var synthetic_recipes := RecipeCatalog.new(items)
+	synthetic_recipes.recipes["synthetic_multi"] = {
+		"recipe_id": "synthetic_multi",
+		"ingredients": {"shells": 2},
+		"outputs": {"fish_spear": 1},
+		"required_capabilities": [],
+		"duration_ticks": 1,
+		"compat_action": "craft_fish_spear",
+		"knowledge_refs": [],
+	}
+	var synthetic_step := PlanStepSpec.make(
+		"CRAFT", "CRAFT:synthetic", "PENDING", "craft_fish_spear", "fish_spear",
+		3, "synthetic_multi", "FISH", [], [], [], [], "synthetic"
+	)
+	var second_gap := bridge.material_gap(synthetic_step, run, {"possessed_items": {"shells": 1}}, synthetic_recipes)
+	_check("craft_gap_handles_ingredient_greater_than_one",
+		int(second_gap.get("quantity", 0)) == 5, str(second_gap))
+
+	var hostile_view := _actor_view("requester", Vector2i(10, 10), "holder", Vector2i(11, 10))
+	hostile_view["trust_of"]["holder"] = -1000
+	(hostile_view["tom"] as TheoryOfMind).add_evidence("holder", Bridge.holder_predicate("shells"), 1.0, 1.0, -1, 1)
+	var hostile_candidate: Dictionary = bridge.build_holder_beliefs("requester", "shells", hostile_view, 1)[0]
+	_check("hostile_candidate_relationship_is_not_double_normalized",
+		is_equal_approx(float(hostile_candidate.get("relationship", 99.0)), -1.0), str(hostile_candidate))
+	var hostile_response := MaterialRequestResponsePolicy.new().evaluate(
+		Contract.make_request("hostile", "requester", "shells", 1, "HUNGER", "plan", 0, 10),
+		{
+			"inventory_quantity": 1, "reserve_quantity": 0,
+			"relationship": -1.0, "trust": 0.0, "generosity": 0.0,
+			"own_need_pressure": 1.0, "risk_aversion": 1.0,
+			"commitment_load": 1.0, "exchange_offer_value": 0.0,
+		},
+		0.5
+	)
+	_check("hostile_relationship_stays_hostile",
+		str(hostile_response.get("outcome", "")) == Contract.OUTCOME_REFUSE
+		and float(hostile_response.get("accept_probability", 1.0)) < 0.1, str(hostile_response))
+
+	var stale_pair := _runtime_pair(72002)
+	var stale_sim: IslandSimulation = stale_pair["sim"]
+	var stale_requester: Dictionary = stale_pair["requester"]
+	var stale_giver: Dictionary = stale_pair["giver"]
+	var stale_step := _craft_step()
+	var stale_run := _run_fixture(str(stale_pair["requester_id"]), "PLAN_HUNGER_fish_food")
+	stale_run["run_id"] = str(stale_pair["requester_id"]) + "#old"
+	stale_run["current_step_id"] = str(stale_step.get("step_id", ""))
+	stale_run["steps"] = [stale_step]
+	stale_sim._execution_tracker().runs[str(stale_pair["requester_id"])] = stale_run
+	var stale_opened := stale_sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		str(stale_pair["requester_id"]), stale_run, stale_step,
+		AgencyContextBuilder.build(stale_sim, stale_requester), 1, _recipes(), 0.8)
+	var stale_request_id := str(stale_opened.get("request", {}).get("request_id", ""))
+	var stale_view := stale_sim._build_actor_view(str(stale_pair["requester_id"]), stale_requester)
+	stale_sim._material_request_runtime_bridge().try_offer(stale_request_id,
+		stale_sim._material_request_runtime_bridge().build_holder_beliefs(
+			str(stale_pair["requester_id"]), "shells", stale_view, 2), 2)
+	stale_sim._material_request_runtime_bridge().respond(
+		stale_request_id, str(stale_pair["giver_id"]), _generous_context(2), 3)
+	var run_b := stale_run.duplicate(true)
+	run_b["run_id"] = str(stale_pair["requester_id"]) + "#new"
+	stale_sim._execution_tracker().runs[str(stale_pair["requester_id"])] = run_b
+	var stale_giver_before := int(stale_giver["inventory"].get("shells", 0))
+	var stale_requester_before := int(stale_requester["inventory"].get("shells", 0))
+	stale_sim._material_requests_process_actor(str(stale_pair["requester_id"]), stale_requester, [])
+	_check("stale_parent_run_cannot_transfer",
+		str(stale_sim.agency_material_request(stale_request_id).get("status", "")) == Contract.STATUS_FAILED
+		and int(stale_giver["inventory"].get("shells", 0)) == stale_giver_before
+		and int(stale_requester["inventory"].get("shells", 0)) == stale_requester_before,
+		str(stale_sim.agency_material_request(stale_request_id)))
+
+	var fulfilled_pair := _runtime_pair(72003)
+	var fulfilled_sim: IslandSimulation = fulfilled_pair["sim"]
+	var fulfilled_requester: Dictionary = fulfilled_pair["requester"]
+	var fulfilled_giver: Dictionary = fulfilled_pair["giver"]
+	var fulfilled_run := _run_fixture(str(fulfilled_pair["requester_id"]), "PLAN_HUNGER_fish_food")
+	fulfilled_run["run_id"] = str(fulfilled_pair["requester_id"]) + "#fulfilled"
+	fulfilled_sim._execution_tracker().runs[str(fulfilled_pair["requester_id"])] = fulfilled_run
+	var fulfilled_opened := fulfilled_sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		str(fulfilled_pair["requester_id"]), fulfilled_run, _craft_step(),
+		AgencyContextBuilder.build(fulfilled_sim, fulfilled_requester), 1, _recipes(), 0.8)
+	var fulfilled_id := str(fulfilled_opened.get("request", {}).get("request_id", ""))
+	var fulfilled_beliefs := fulfilled_sim._material_request_runtime_bridge().build_holder_beliefs(
+		str(fulfilled_pair["requester_id"]), "shells",
+		fulfilled_sim._build_actor_view(str(fulfilled_pair["requester_id"]), fulfilled_requester), 2)
+	fulfilled_sim._material_request_runtime_bridge().try_offer(fulfilled_id, fulfilled_beliefs, 2)
+	fulfilled_sim._material_request_runtime_bridge().respond(
+		fulfilled_id, str(fulfilled_pair["giver_id"]), _generous_context(2), 3)
+	fulfilled_requester["inventory"]["shells"] = 1
+	var fulfilled_giver_before := int(fulfilled_giver["inventory"].get("shells", 0))
+	fulfilled_sim._material_requests_process_actor(str(fulfilled_pair["requester_id"]), fulfilled_requester, [])
+	_check("transfer_cancels_when_material_no_longer_needed",
+		str(fulfilled_sim.agency_material_request(fulfilled_id).get("status", "")) == Contract.STATUS_CANCELLED
+		and int(fulfilled_giver["inventory"].get("shells", 0)) == fulfilled_giver_before,
+		str(fulfilled_sim.agency_material_request(fulfilled_id)))
+
+	var conditional_pair := _runtime_pair(72004)
+	var conditional_sim: IslandSimulation = conditional_pair["sim"]
+	var conditional_requester: Dictionary = conditional_pair["requester"]
+	var conditional_run := _run_fixture(str(conditional_pair["requester_id"]), "PLAN_HUNGER_fish_food")
+	conditional_run["run_id"] = str(conditional_pair["requester_id"]) + "#conditional"
+	conditional_sim._execution_tracker().runs[str(conditional_pair["requester_id"])] = conditional_run
+	var conditional_opened := conditional_sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		str(conditional_pair["requester_id"]), conditional_run, _craft_step(2),
+		{"possessed_items": {}}, 1, _recipes(), 0.8)
+	var conditional_id := str(conditional_opened.get("request", {}).get("request_id", ""))
+	var conditional_request: Dictionary = conditional_sim._material_request_runtime_bridge().coordinator.tracker._requests[conditional_id]
+	conditional_request["status"] = Contract.STATUS_WAITING_REQUESTER
+	conditional_request["accepted_quantity"] = 1
+	conditional_request["last_counter"] = {"quantity": 1, "requires_exchange": true}
+	var conditional_before := int(conditional_requester["inventory"].get("shells", 0))
+	conditional_sim._material_requests_process_actor(
+		str(conditional_pair["requester_id"]), conditional_requester, [])
+	_check("conditional_counter_is_explicitly_declined",
+		str(conditional_sim.agency_material_request(conditional_id).get("status", "")) == Contract.STATUS_CANCELLED
+		and int(conditional_requester["inventory"].get("shells", 0)) == conditional_before,
+		str(conditional_sim.agency_material_request(conditional_id)))
+
+	var active_pair := _runtime_pair(72005)
+	var active_sim: IslandSimulation = active_pair["sim"]
+	var active_requester: Dictionary = active_pair["requester"]
+	active_pair["requester"]["inventory"] = {"wood": 0}
+	active_pair["giver"]["inventory"] = {"wood": 2}
+	var active_step := PlanStepSpec.make(
+		"ACQUIRE", "ACQUIRE:wood", "PENDING", "", "wood", 2, "", "",
+		[], [], [], [], "acquire wood"
+	)
+	var active_run := _run_fixture(str(active_pair["requester_id"]), "PLAN_HUNGER_wood")
+	active_run["run_id"] = str(active_pair["requester_id"]) + "#active"
+	active_run["current_step_id"] = str(active_step.get("step_id", ""))
+	active_run["steps"] = [active_step]
+	active_run["state"] = "ACTIVE"
+	active_sim._execution_tracker().runs[str(active_pair["requester_id"])] = active_run
+	var active_opened := active_sim._material_request_runtime_bridge().ensure_request_for_blocker(
+		str(active_pair["requester_id"]), active_run, active_step,
+		{"possessed_items": {}}, 1, _recipes(), 0.8)
+	var active_id := str(active_opened.get("request", {}).get("request_id", ""))
+	var active_request: Dictionary = active_sim._material_request_runtime_bridge().coordinator.tracker._requests[active_id]
+	active_request["status"] = Contract.STATUS_WAITING_REQUESTER
+	active_request["target_id"] = str(active_pair["giver_id"])
+	active_request["accepted_quantity"] = 1
+	active_request["last_counter"] = {"quantity": 1, "requires_exchange": false}
+	active_sim._material_requests_process_actor(str(active_pair["requester_id"]), active_requester, [])
+	_check("active_acquire_counter_can_transfer",
+		int(active_requester["inventory"].get("wood", 0)) == 1
+		and int(active_pair["giver"]["inventory"].get("wood", 0)) == 1,
+		str(active_sim.agency_material_request(active_id)))
+
+	var expiry_bridge := Bridge.new(72006)
+	var expiry_id := _open_and_offer(expiry_bridge, "expiry", 1, "holder", 1)
+	expiry_bridge.respond(expiry_id, "holder", _generous_context(1), 20)
+	expiry_bridge.coordinator.tracker._requests[expiry_id]["expires_tick"] = 25
+	var expiry_giver := {"shells": 1}
+	var expiry_receiver := {"shells": 0}
+	var at_expiry := expiry_bridge.transfer(expiry_id, expiry_giver, expiry_receiver, 25)
+	_check("transfer_at_expiry_tick_still_valid",
+		bool(at_expiry.get("ok", false)) and int(expiry_receiver.get("shells", 0)) == 1, str(at_expiry))
+	var expired_id := _open_and_offer(expiry_bridge, "expired", 1, "holder", 1)
+	expiry_bridge.respond(expired_id, "holder", _generous_context(1), 20)
+	expiry_bridge.coordinator.tracker._requests[expired_id]["expires_tick"] = 25
+	var expired_giver := {"shells": 1}
+	var expired_receiver := {"shells": 0}
+	var after_expiry := expiry_bridge.transfer(expired_id, expired_giver, expired_receiver, 26)
+	_check("transfer_after_expiry_fails_without_mutation",
+		not bool(after_expiry.get("ok", true))
+		and str(after_expiry.get("reason", "")) == "REQUEST_EXPIRED"
+		and int(expired_giver.get("shells", 0)) == 1
+		and int(expired_receiver.get("shells", 0)) == 0, str(after_expiry))
+
+	var event_pair := _runtime_pair(72007)
+	var event_sim: IslandSimulation = event_pair["sim"]
+	var event_requester_id := str(event_pair["requester_id"])
+	var event_run := _run_fixture(event_requester_id, "PLAN_HUNGER_fish_food")
+	event_run["run_id"] = event_requester_id + "#event"
+	event_run["state"] = "ACTIVE"
+	event_sim._execution_tracker().runs[event_requester_id] = event_run
+	var event_request := {
+		"request_id": "event-request", "requester_id": event_requester_id,
+		"parent_plan_id": "PLAN_HUNGER_fish_food", "parent_run_id": event_run["run_id"],
+		"blocker_step_id": event_run["current_step_id"], "item_id": "shells",
+		"requested_quantity": 1, "accepted_quantity": 1, "target_id": str(event_pair["giver_id"]),
+	}
+	var event_before := _count_events(event_sim.events, "PARENT_PLAN_REVALIDATION_REQUESTED")
+	event_sim._material_requests_handle_revalidation({
+		"request": event_request,
+		"revalidation": {"transfer_event_id": "transfer:event"},
+	})
+	_check("revalidation_event_not_emitted_without_token",
+		_count_events(event_sim.events, "PARENT_PLAN_REVALIDATION_REQUESTED") == event_before)
 
 func _test_request_from_blocker_and_subjective_target() -> void:
 	var bridge := Bridge.new(71001)
@@ -215,7 +423,7 @@ func _test_runtime_island_wiring() -> void:
 	replaced_tracker.runs[requester_id] = replaced_run
 	_check("replaced_parent_plan_cannot_be_revived",
 		replaced_tracker.request_parent_revalidation(requester_id, "PLAN_HUNGER_other", sim.tick,
-			"transfer:replacement").is_empty())
+			"transfer:replacement", "other-run", "other-step").is_empty())
 
 func _test_profiles_and_determinism() -> void:
 	var framework := SimulationBootstrap.create(71020, "framework")
@@ -258,6 +466,34 @@ func _open_and_offer(bridge, request_id: String, quantity: int, target_id: Strin
 	var offered: Dictionary = bridge.try_offer(actual_id, beliefs, 2)
 	_check("bridge_offer_created", bool(offered.get("ok", false)), str(offered))
 	return actual_id
+
+func _runtime_pair(seed_value: int) -> Dictionary:
+	var created := SimulationBootstrap.create(seed_value, "material_request")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	sim.actors.erase(str(ids[2]))
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	requester["inventory"] = {"wood": 1}
+	giver["inventory"] = {"shells": 2}
+	giver["personality"] = PersonalityProfile.new({"altruism": 1.0, "empathy": 1.0, "caution": 0.0}, {})
+	sim.relationships.adjust(giver_id, requester_id, "benevolence", 1000)
+	sim.relationships.adjust(giver_id, requester_id, "reliability", 1000)
+	sim.relationships.adjust(giver_id, requester_id, "obligation", 1000)
+	(requester["tom"] as TheoryOfMind).add_evidence(
+		giver_id, Bridge.holder_predicate("shells"), 1.0, 1.0, -1, sim.tick)
+	return {
+		"sim": sim,
+		"requester_id": requester_id,
+		"giver_id": giver_id,
+		"requester": requester,
+		"giver": giver,
+	}
 
 func _run_fixture(requester_id: String, plan_id: String) -> Dictionary:
 	var step := _craft_step()
@@ -324,6 +560,13 @@ func _has_event(events: Array, event_type: String) -> bool:
 		if typeof(event) == TYPE_DICTIONARY and str(event.get("type", "")) == event_type:
 			return true
 	return false
+
+func _count_events(events: Array, event_type: String) -> int:
+	var count := 0
+	for event in events:
+		if typeof(event) == TYPE_DICTIONARY and str(event.get("type", "")) == event_type:
+			count += 1
+	return count
 
 func _check(label: String, ok: bool, detail: String = "") -> void:
 	if ok:
