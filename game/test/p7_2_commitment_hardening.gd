@@ -20,6 +20,8 @@ func _run() -> void:
 	_test_due_estimate_and_mismatch()
 	_test_load_and_terms()
 	_test_response_policy_terms_compat()
+	_test_truthful_mismatch_payload()
+	_test_audit_hash_sensitivity()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -167,3 +169,58 @@ func _test_response_policy_terms_compat() -> void:
 		str(legacy.get("reason", "")) == str(modern.get("reason", ""))
 		and is_equal_approx(float(legacy.get("accept_probability", -1.0)),
 			float(modern.get("accept_probability", -2.0))))
+
+func _test_truthful_mismatch_payload() -> void:
+	# P7.2A F：报价条款=A 的真实期限估计（可长于对方要求）；单一真源 Contract.terms_match。
+	var Bridge = preload("res://src/simulation/commitment/commitment_runtime_bridge.gd")
+	var bridge = Bridge.new()
+	var request := {"request_id": "m", "requester_id": "a", "item_id": "shells", "requested_quantity": 2}
+	var counter := {"quantity": 2, "requires_exchange": true,
+		"terms": {"promise_object": "wood", "promise_quantity": 2, "due_ticks": 240}}
+	var decision: Dictionary = bridge.requester_exchange_decision(request, counter, {
+		"need_urgency": 0.9, "own_reciprocity_norm": 0.8, "trust_in_creditor": 0.8,
+		"relationship": 0.8, "subjective_reobtainability": 0.2,
+		"active_commitment_load": 0.0, "promised_quantity_ratio": 0.3,
+	}, 0)
+	var demanded: Dictionary = decision.get("demanded_terms", {})
+	var offered: Dictionary = decision.get("offered_terms", {})
+	_check("mismatch_payload_reports_true_estimate",
+		int(offered.get("due_tick", 0)) > int(demanded.get("due_tick", 0))
+		and not bool(decision.get("terms_match", true)),
+		str(decision))
+	_check("mismatch_terms_match_uses_contract_truth",
+		not Contract.terms_match(demanded, offered)
+		and not bool(decision.get("accept", true)))
+	_check("promise_object_takes_protocol_priority",
+		str(demanded.get("object", "")) == "wood" and str(offered.get("object", "")) == "wood",
+		str(demanded))
+	var fitting: Dictionary = bridge.requester_exchange_decision(request, counter, {
+		"need_urgency": 0.9, "own_reciprocity_norm": 0.8, "trust_in_creditor": 0.8,
+		"relationship": 0.8, "subjective_reobtainability": 0.8,
+		"active_commitment_load": 0.0, "promised_quantity_ratio": 0.3,
+	}, 0)
+	_check("fitting_estimate_accepts_with_truthful_terms",
+		bool(fitting.get("accept", false))
+		and int((fitting.get("offered_terms", {}) as Dictionary).get("due_tick", 0))
+			<= int((fitting.get("demanded_terms", {}) as Dictionary).get("due_tick", 0)),
+		str(fitting))
+
+func _test_audit_hash_sensitivity() -> void:
+	# P7.2A H：authoritative obligations 变化必须反映进 state_sha256；
+	# 仅追加诊断 trace 必须反映进 commitment_sha256（且不动 state）。
+	var created := SimulationBootstrap.create(74001, "commitment")
+	var sim: IslandSimulation = created["sim"]
+	var fp1: Dictionary = SimulationAudit.fingerprint(sim)
+	sim.obligations.append(CommitmentContract.make("commitment:x:1:shells", "npc_oun",
+		"npc_weila", "shells", 1, 0, 500, "MATERIAL_REQUEST_COUNTER", "m",
+		{"object": "shells", "quantity": 1, "due_tick": 500}))
+	var fp2: Dictionary = SimulationAudit.fingerprint(sim)
+	_check("authoritative_ledger_change_moves_state_hash",
+		str(fp1["state_sha256"]) != str(fp2["state_sha256"]))
+	var traces: Array = sim._commitment_runtime_bridge().traces
+	traces.append({"event": "COMMITMENT_CREATED", "tick": 0, "commitment_id": "c"})
+	var fp3: Dictionary = SimulationAudit.fingerprint(sim)
+	_check("diagnostic_trace_append_moves_commitment_hash",
+		str(fp2["commitment_sha256"]) != str(fp3["commitment_sha256"]))
+	_check("trace_only_append_leaves_state_hash",
+		str(fp2["state_sha256"]) == str(fp3["state_sha256"]))

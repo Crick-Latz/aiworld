@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_settlement()
 	_test_violation_and_load()
 	_test_trace_and_rng()
+	_test_evidence_hardening()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -47,9 +48,9 @@ func _make_commitment(
 		_make_terms(object_id, quantity, due_tick))
 
 func _transfer_event(request_id: String, item_id: String = "shells", quantity: int = 2,
-		event_id: String = "transfer:t1") -> Dictionary:
+		event_id: String = "transfer:t1", from_actor: String = "b", to_actor: String = "a") -> Dictionary:
 	return {"event_id": event_id, "type": "ITEM_TRANSFER_COMPLETED", "request_id": request_id,
-		"item_id": item_id, "quantity": quantity, "from_actor_id": "b", "to_actor_id": "a",
+		"item_id": item_id, "quantity": quantity, "from_actor_id": from_actor, "to_actor_id": to_actor,
 		"evidence_kind": "WORLD_MUTATION"}
 
 func _test_contract_validation() -> void:
@@ -188,7 +189,7 @@ func _test_violation_and_load() -> void:
 		{"request_id": "material:a:5:shells", "requester_id": "a", "target_id": "gone", "item_id": "shells"},
 		_make_terms("shells", 1, 60), 10)
 	orphan_bridge.activate_from_transfer(orphan_ledger, {"request_id": "material:a:5:shells"},
-		_transfer_event("material:a:5:shells", "shells", 1, "t5"), 12)
+		_transfer_event("material:a:5:shells", "shells", 1, "t5", "gone"), 12)
 	var cancelled := orphan_bridge.cancel_orphaned(orphan_ledger, ["a", "b"], 60)
 	_check("creditor_gone_cancels_active",
 		cancelled.size() == 1
@@ -206,3 +207,69 @@ func _test_trace_and_rng() -> void:
 		and str((traces[0] as Dictionary).get("event", "")) == Contract.EVENT_COMMITMENT_CREATED
 		and str((traces[0] as Dictionary).get("source_request_id", "")) == "material:a:6:shells")
 	_check("commitment_layer_consumes_no_rng", bridge.rng_states().is_empty())
+
+func _test_evidence_hardening() -> void:
+	# P7.2A D：伪造/缺项来源转移证据不得激活——状态保持 PENDING、零副作用。
+	var forgeries := {
+		"wrong_type": _transfer_event("material:a:7:shells").duplicate(true),
+	}
+	forgeries["wrong_type"]["type"] = "promise_kept"
+	forgeries["blank_event_id"] = _transfer_event("material:a:7:shells")
+	forgeries["blank_event_id"]["event_id"] = ""
+	forgeries["wrong_kind"] = _transfer_event("material:a:7:shells")
+	forgeries["wrong_kind"]["evidence_kind"] = "HEARSAY"
+	forgeries["wrong_giver"] = _transfer_event("material:a:7:shells", "shells", 2, "t7", "c")
+	forgeries["wrong_receiver"] = _transfer_event("material:a:7:shells", "shells", 2, "t7", "b", "c")
+	for label in forgeries:
+		var bridge := Bridge.new()
+		var ledger: Array = []
+		bridge.open_commitment_for_request(ledger,
+			{"request_id": "material:a:7:shells", "requester_id": "a", "target_id": "b", "item_id": "shells"},
+			_make_terms("shells", 2, 60), 10)
+		var rejected: Dictionary = bridge.activate_from_transfer(ledger,
+			{"request_id": "material:a:7:shells", "accepted_quantity": 2}, forgeries[label], 20)
+		_check("forged_activation_%s_rejected" % label,
+			not bool(rejected.get("ok", false))
+			and str((ledger[0] as Dictionary).get("status", "")) == Contract.STATUS_PENDING_ACTIVATION,
+			str(rejected.get("reason", "")))
+	var short_bridge := Bridge.new()
+	var short_ledger: Array = []
+	short_bridge.open_commitment_for_request(short_ledger,
+		{"request_id": "material:a:8:shells", "requester_id": "a", "target_id": "b", "item_id": "shells"},
+		_make_terms("shells", 2, 60), 10)
+	var short_ev := _transfer_event("material:a:8:shells", "shells", 1)
+	var short_rejected: Dictionary = short_bridge.activate_from_transfer(short_ledger,
+		{"request_id": "material:a:8:shells", "accepted_quantity": 2}, short_ev, 20)
+	_check("activation_requires_accepted_quantity",
+		not bool(short_rejected.get("ok", false))
+		and str((short_ledger[0] as Dictionary).get("status", "")) == Contract.STATUS_PENDING_ACTIVATION,
+		str(short_rejected.get("reason", "")))
+	# P7.2A E：错误对手方不得结算（欠 B 的债不能被指向 C 的行动了结）。
+	var settle_bridge := Bridge.new()
+	var settle_ledger: Array = []
+	settle_bridge.open_commitment_for_request(settle_ledger,
+		{"request_id": "material:a:9:shells", "requester_id": "a", "target_id": "b", "item_id": "shells"},
+		_make_terms("shells", 2, 60), 10)
+	settle_bridge.activate_from_transfer(settle_ledger,
+		{"request_id": "material:a:9:shells", "accepted_quantity": 2},
+		_transfer_event("material:a:9:shells", "shells", 2, "t9"), 12)
+	var debtor_inv := {"shells": 2}
+	var creditor_inv := {"shells": 0}
+	var wrong_party := settle_bridge.settle(settle_ledger,
+		str((settle_ledger[0] as Dictionary).get("commitment_id", "")),
+		debtor_inv, creditor_inv, 30, "a", "c", "shells")
+	_check("wrong_party_settlement_rejected",
+		not bool(wrong_party.get("ok", false))
+		and str((settle_ledger[0] as Dictionary).get("status", "")) == Contract.STATUS_ACTIVE
+		and int(debtor_inv["shells"]) == 2 and int(creditor_inv["shells"]) == 0,
+		str(wrong_party.get("reason", "")))
+	# P7.2A E：伪造履约证据不得 FULFILLED。
+	var forged_fulfill := {"type": "promise_kept", "event_id": "x", "commitment_id":
+		str((settle_ledger[0] as Dictionary).get("commitment_id", "")), "quantity": 2,
+		"evidence_kind": "WORLD_MUTATION"}
+	var not_fulfilled: Dictionary = settle_bridge.tracker.fulfill(settle_ledger,
+		str((settle_ledger[0] as Dictionary).get("commitment_id", "")), forged_fulfill, 31)
+	_check("forged_fulfillment_evidence_rejected",
+		not bool(not_fulfilled.get("ok", false))
+		and str((settle_ledger[0] as Dictionary).get("status", "")) == Contract.STATUS_ACTIVE,
+		str(not_fulfilled.get("reason", "")))

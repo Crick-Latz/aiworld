@@ -23,6 +23,10 @@ func _run() -> void:
 	_test_transfer_failure_cancels_pending()
 	_test_violation_path_and_consequence()
 	_test_cognition_semantics_mapping(main)
+	_test_real_registry_fulfillment()
+	_test_pending_view_invisibility()
+	_test_terminal_view_synchronization()
+	_test_remote_creditor_violation()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -360,6 +364,7 @@ func _test_violation_path_and_consequence() -> void:
 	violated["activated_tick"] = 1
 	sim.obligations.append(violated)
 	sim.tick = 51
+	var trust_before := sim.relationships.composite_trust(giver_id, requester_id)
 	sim._commitments_check_due()
 	_check("overdue_commitment_violated_once",
 		str((sim.obligations[0] as Dictionary).get("status", "")) == CommitmentContract.STATUS_VIOLATED
@@ -368,10 +373,7 @@ func _test_violation_path_and_consequence() -> void:
 	_check("violation_event_addresses_creditor",
 		str(violated_event.get("to_id", "")) == giver_id
 		and str(violated_event.get("actor_id", "")) == requester_id)
-	# 债权人亲历违约 → 认知/关系变化 → 合作概率下降（同一 roll 对照）。
-	var giver: Dictionary = pair["giver"]
-	var trust_before := sim.relationships.composite_trust(giver_id, requester_id)
-	CognitiveTransition.process(giver, violated_event, {"relationships": sim.relationships, "tick": sim.tick})
+	# P7.2A：违约认知由 runtime _emit 通道完成（相邻债权人目击处理一次）——不再手工补刀。
 	var trust_after := sim.relationships.composite_trust(giver_id, requester_id)
 	_check("violation_lowers_creditor_trust", trust_after < trust_before,
 		"%d -> %d" % [trust_before, trust_after])
@@ -443,3 +445,272 @@ func _last_event(sim: IslandSimulation, event_type: String) -> Dictionary:
 		if str((e as Dictionary).get("type", "")) == event_type:
 			found = e
 	return found
+
+# ── P7.2A A：真实 ActionRegistry → Adapter → 决策身份 → _complete_action 全链 ──
+func _test_real_registry_fulfillment() -> void:
+	var pair := _pair(74010, 0.2)
+	var sim: IslandSimulation = pair["sim"]
+	var requester_id := str(pair["requester_id"])
+	var giver_id := str(pair["giver_id"])
+	var request := {"request_id": "material:a:r:shells", "requester_id": requester_id,
+		"target_id": giver_id, "item_id": "shells", "requested_quantity": 2,
+		"parent_plan_id": "P", "parent_run_id": requester_id + "#r", "blocker_step_id": "CRAFT:s"}
+	var bridge := sim._commitment_runtime_bridge()
+	var created: Dictionary = bridge.open_commitment_for_request(sim.obligations, request,
+		{"object": "shells", "quantity": 2, "due_tick": sim.tick + 240}, sim.tick)
+	var cid := str((created["commitment"] as Dictionary).get("commitment_id", ""))
+	bridge.activate_from_transfer(sim.obligations, {"request_id": "material:a:r:shells", "accepted_quantity": 2}, {
+		"event_id": "transfer:real:1", "type": "ITEM_TRANSFER_COMPLETED",
+		"request_id": "material:a:r:shells", "item_id": "shells", "quantity": 2,
+		"from_actor_id": giver_id, "to_actor_id": requester_id, "evidence_kind": "WORLD_MUTATION",
+	}, sim.tick)
+	sim._refresh_obligation_views(requester_id, giver_id)
+	pair["requester"]["inventory"] = {"shells": 2}
+	# 1) obligation plan READY。
+	var prepare: Dictionary = sim._agency_prepare(requester_id, pair["requester"])
+	var obligation_plans: Array = []
+	for proposal in (prepare.get("proposals", []) as Array):
+		if str((proposal as Dictionary).get("root_goal", "")) == "OBLIGATION":
+			obligation_plans.append(proposal)
+	var plan: Dictionary = obligation_plans[0] if obligation_plans.size() == 1 else {}
+	_check("registry_fixture_plan_ready",
+		str(plan.get("plan_id", "")) == "PLAN_OBLIGATION_" + cid, str(plan.get("plan_id", "")))
+	# 2) 真实 ActionRegistry 产生 repay_debt 候选（quantity=2、库存=2）。
+	var world := {"tick": sim.tick, "weather": "clear", "hour": 12}
+	var candidates: Array = ActionRegistry.get_available_actions(pair["requester"], world)
+	var repay_candidates: Array = []
+	for c in candidates:
+		if str((c as Dictionary).get("action", "")) == "repay_debt":
+			repay_candidates.append(c)
+	_check("registry_generates_commitment_repay_candidate",
+		repay_candidates.size() == 1
+		and str((repay_candidates[0] as Dictionary).get("target_actor", "")) == giver_id
+		and str(((repay_candidates[0] as Dictionary).get("obligation", {}) as Dictionary).get("commitment_id", "")) == cid,
+		str(repay_candidates.size()))
+	# 3) PlanStepActionAdapter 按 commitment_id 匹配同承诺。
+	var main_step: Dictionary = {}
+	for s in (plan.get("steps", []) as Array):
+		if str((s as Dictionary).get("kind", "")) == "MAIN":
+			main_step = s
+	var matched: Dictionary = PlanStepActionAdapter.match_candidates(main_step, candidates,
+		AgencyContextBuilder.build(sim, pair["requester"]))
+	_check("adapter_matches_same_commitment",
+		(matched.get("candidates", []) as Array).size() == 1
+		and str(matched.get("blocker_reason", "x")) == "",
+		str(matched.get("blocker_reason", "")))
+	# 4) 决策身份建立 + _complete_action 走完真实结算与计划完成。
+	var chosen: Dictionary = repay_candidates[0]
+	var run := {
+		"run_id": requester_id + "#r2", "actor_id": requester_id,
+		"plan_id": str(plan.get("plan_id", "")), "root_goal": "OBLIGATION",
+		"current_step_id": str(main_step.get("step_id", "")),
+		"steps": plan.get("steps", []), "state": "ACTIVE",
+		"baseline_items": {}, "pending": {}, "attempt_seq": 0, "missed_opportunities": 0,
+	}
+	sim._execution_tracker().runs[requester_id] = run
+	pair["requester"]["_execution_receipt"] = {
+		"actor_id": requester_id, "decision_tick": sim.tick,
+		"run_id": run["run_id"], "step_id": run["current_step_id"],
+		"selected": true, "candidate_key": AgencyActionBridge.candidate_key(chosen),
+		"chosen_key": AgencyActionBridge.candidate_key(chosen),
+		"selection_mode": "SOFTMAX", "blocker_reason": "",
+	}
+	sim._plan_execution_on_decision(requester_id, pair["requester"], chosen,
+		{"ctx": AgencyContextBuilder.build(sim, pair["requester"]),
+			"catalog": sim._recipe_catalog_if_any()})
+	var giver_before := int((pair["giver"]["inventory"] as Dictionary).get("shells", 0))
+	pair["requester"]["current_action"] = chosen
+	sim._complete_action(requester_id, pair["requester"], [])
+	_check("real_path_settles_and_fulfills",
+		str((sim.obligations[0] as Dictionary).get("status", "")) == CommitmentContract.STATUS_FULFILLED
+		and int((pair["requester"]["inventory"] as Dictionary).get("shells", 0)) == 0
+		and int((pair["giver"]["inventory"] as Dictionary).get("shells", 0)) == giver_before + 2
+		and _count_events(sim, CommitmentContract.EVENT_COMMITMENT_FULFILLED) == 1)
+	var run_after: Dictionary = sim.agency_plan_run(requester_id)
+	_check("real_path_completes_obligation_run",
+		str(run_after.get("state", "")) == "COMPLETED", str(run_after.get("state", "")))
+	# 5) 数量门槛：库存 1 < quantity 2 → 不产生承诺型 repay 候选。
+	var pair2 := _pair(74011, 0.2)
+	var sim2: IslandSimulation = pair2["sim"]
+	var r2 := str(pair2["requester_id"])
+	var g2 := str(pair2["giver_id"])
+	var b2 := sim2._commitment_runtime_bridge()
+	var c2: Dictionary = b2.open_commitment_for_request(sim2.obligations,
+		{"request_id": "m2", "requester_id": r2, "target_id": g2, "item_id": "shells"},
+		{"object": "shells", "quantity": 2, "due_tick": sim2.tick + 240}, sim2.tick)
+	b2.activate_from_transfer(sim2.obligations, {"request_id": "m2", "accepted_quantity": 2}, {
+		"event_id": "t2", "type": "ITEM_TRANSFER_COMPLETED", "request_id": "m2",
+		"item_id": "shells", "quantity": 2, "from_actor_id": g2, "to_actor_id": r2,
+		"evidence_kind": "WORLD_MUTATION",
+	}, sim2.tick)
+	sim2._refresh_obligation_views(r2, g2)
+	pair2["requester"]["inventory"] = {"shells": 1}
+	var candidates2: Array = ActionRegistry.get_available_actions(pair2["requester"], {"tick": sim2.tick})
+	var repay2: Array = []
+	for c in candidates2:
+		if str((c as Dictionary).get("action", "")) == "repay_debt":
+			repay2.append(c)
+	_check("insufficient_quantity_blocks_registry_candidate",
+		repay2.is_empty() and str((c2["commitment"] as Dictionary).get("status", "")) == CommitmentContract.STATUS_ACTIVE,
+		str(repay2.size()))
+
+# ── P7.2A B：PENDING 不进入任何债务视图、不产生行动、不计负担 ──
+func _test_pending_view_invisibility() -> void:
+	var pair := _pair(74012, 0.2)
+	var sim: IslandSimulation = pair["sim"]
+	var requester_id := str(pair["requester_id"])
+	var giver_id := str(pair["giver_id"])
+	var request_id := _open_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, pair["requester"], [])
+	var forced := RandomNumberGenerator.new()
+	forced.seed = 0
+	sim._material_request_runtime_bridge()._rngs[giver_id] = forced
+	sim._material_requests_process_actor(giver_id, pair["giver"], [])
+	if str(sim.agency_material_request(request_id).get("status", "")) != Contract.STATUS_WAITING_REQUESTER:
+		_check("pending_fixture_produced_counter", false,
+			str(sim.agency_material_request(request_id).get("status", "")))
+		return
+	# B 走远 → A 接受条款建 PENDING，但即时转移被距离阻断。
+	pair["giver"]["tile"] = Vector2i(60, 60)
+	pair["requester"]["inventory"] = {"shells": 2}  # 有货也不该能"提前还未成立的债"
+	sim._material_requests_process_actor(requester_id, pair["requester"], [])
+	if (sim.obligations as Array).is_empty():
+		_check("pending_fixture_created_pending", false, "no commitment")
+		return
+	_check("pending_not_in_debtor_view",
+		(pair["requester"].get("my_obligations", []) as Array).is_empty())
+	_check("pending_not_in_creditor_view",
+		(pair["giver"].get("owed_to_me", []) as Array).is_empty())
+	var candidates: Array = ActionRegistry.get_available_actions(pair["requester"], {"tick": sim.tick})
+	var repay: Array = []
+	for c in candidates:
+		if str((c as Dictionary).get("action", "")) == "repay_debt":
+			repay.append(c)
+	_check("pending_creates_no_repay_candidate", repay.is_empty(), str(repay.size()))
+	_check("pending_not_in_commitment_load",
+		sim._commitment_runtime_bridge().tracker.active_count_for_load(sim.obligations, requester_id) == 0)
+
+# ── P7.2A B：状态转移同步双方视图 ──
+func _test_terminal_view_synchronization() -> void:
+	var pair := _pair(74013, 0.2)
+	var sim: IslandSimulation = pair["sim"]
+	var requester_id := str(pair["requester_id"])
+	var giver_id := str(pair["giver_id"])
+	var bridge := sim._commitment_runtime_bridge()
+	var created: Dictionary = bridge.open_commitment_for_request(sim.obligations,
+		{"request_id": "m3", "requester_id": requester_id, "target_id": giver_id, "item_id": "shells"},
+		{"object": "shells", "quantity": 2, "due_tick": sim.tick + 240}, sim.tick)
+	var cid := str((created["commitment"] as Dictionary).get("commitment_id", ""))
+	sim._refresh_obligation_views(requester_id, giver_id)
+	_check("views_sync_pending_stays_invisible",
+		(pair["requester"].get("my_obligations", []) as Array).is_empty())
+	bridge.activate_from_transfer(sim.obligations, {"request_id": "m3", "accepted_quantity": 2}, {
+		"event_id": "t3", "type": "ITEM_TRANSFER_COMPLETED", "request_id": "m3",
+		"item_id": "shells", "quantity": 2, "from_actor_id": giver_id, "to_actor_id": requester_id,
+		"evidence_kind": "WORLD_MUTATION",
+	}, sim.tick)
+	sim._refresh_obligation_views(requester_id, giver_id)
+	_check("activation_enters_both_views",
+		(pair["requester"].get("my_obligations", []) as Array).size() == 1
+		and (pair["giver"].get("owed_to_me", []) as Array).size() == 1)
+	# 履约 → 双方视图出清。
+	pair["requester"]["inventory"] = {"shells": 2}
+	sim._do_repay(requester_id, pair["requester"],
+		{"target_actor": giver_id, "object": "shells", "obligation": sim.obligations[0]}, [])
+	_check("fulfilled_leaves_both_views",
+		(pair["requester"].get("my_obligations", []) as Array).is_empty()
+		and (pair["giver"].get("owed_to_me", []) as Array).is_empty())
+	# 第二笔 → 违约 → 双方视图出清。
+	var second: Dictionary = bridge.open_commitment_for_request(sim.obligations,
+		{"request_id": "m4", "requester_id": requester_id, "target_id": giver_id, "item_id": "shells"},
+		{"object": "shells", "quantity": 1, "due_tick": sim.tick + 240}, sim.tick)
+	bridge.activate_from_transfer(sim.obligations, {"request_id": "m4", "accepted_quantity": 1}, {
+		"event_id": "t4", "type": "ITEM_TRANSFER_COMPLETED", "request_id": "m4",
+		"item_id": "shells", "quantity": 1, "from_actor_id": giver_id, "to_actor_id": requester_id,
+		"evidence_kind": "WORLD_MUTATION",
+	}, sim.tick)
+	sim._refresh_obligation_views(requester_id, giver_id)
+	(sim.obligations[1] as Dictionary)["due_tick"] = sim.tick - 1
+	sim.tick += 1
+	sim._commitments_check_due()
+	_check("violated_leaves_both_views",
+		str((second["commitment"] as Dictionary).get("status", "")) == CommitmentContract.STATUS_VIOLATED
+		and (pair["requester"].get("my_obligations", []) as Array).is_empty()
+		and (pair["giver"].get("owed_to_me", []) as Array).is_empty())
+	# 第三笔 → 取消 → 视图出清。
+	var third: Dictionary = bridge.open_commitment_for_request(sim.obligations,
+		{"request_id": "m5", "requester_id": requester_id, "target_id": giver_id, "item_id": "shells"},
+		{"object": "shells", "quantity": 1, "due_tick": sim.tick + 240}, sim.tick)
+	sim._refresh_obligation_views(requester_id, giver_id)
+	bridge.cancel_for_request(sim.obligations, "m5", "SOURCE_REQUEST_FAILED", sim.tick + 1)
+	sim._commitments_on_request_terminal({"request_id": "m5"}, "SOURCE_REQUEST_FAILED", "TEST")
+	_check("cancelled_leaves_both_views",
+		str((third["commitment"] as Dictionary).get("status", "")) == CommitmentContract.STATUS_CANCELLED
+		and (pair["requester"].get("my_obligations", []) as Array).is_empty())
+
+# ── P7.2A C：远距离债权人直接得知违约（无位置泄漏；第三方不变；单次处理）──
+func _test_remote_creditor_violation() -> void:
+	var created := SimulationBootstrap.create(74014, "commitment")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var debtor_id := str(ids[0])
+	var creditor_id := str(ids[1])
+	var third_id := str(ids[2])
+	var debtor: Dictionary = sim.actors[debtor_id]
+	var creditor: Dictionary = sim.actors[creditor_id]
+	var third: Dictionary = sim.actors[third_id]
+	debtor["tile"] = Vector2i(10, 10)
+	creditor["tile"] = Vector2i(60, 60)  # 远离：不可见、不可听
+	third["tile"] = Vector2i(70, 70)     # 更远的无关第三方
+	creditor["inventory"] = {"shells": 3}  # 全额盈余 → 后续合作概率有效取值
+	var bridge := sim._commitment_runtime_bridge()
+	var rec: Dictionary = bridge.open_commitment_for_request(sim.obligations,
+		{"request_id": "mr", "requester_id": debtor_id, "target_id": creditor_id, "item_id": "shells",
+			"parent_plan_id": "P", "parent_run_id": "r", "blocker_step_id": "CRAFT:s"},
+		{"object": "shells", "quantity": 1, "due_tick": 50}, 10)
+	bridge.activate_from_transfer(sim.obligations, {"request_id": "mr", "accepted_quantity": 1}, {
+		"event_id": "tr", "type": "ITEM_TRANSFER_COMPLETED", "request_id": "mr",
+		"item_id": "shells", "quantity": 1, "from_actor_id": creditor_id, "to_actor_id": debtor_id,
+		"evidence_kind": "WORLD_MUTATION",
+	}, 12)
+	sim._refresh_obligation_views(debtor_id, creditor_id)
+	var trust_before := sim.relationships.composite_trust(creditor_id, debtor_id)
+	var third_trust_before := sim.relationships.composite_trust(third_id, debtor_id)
+	var third_memories_before := (third.get("memories", []) as Array).size()
+	var creditor_memories_before := (creditor.get("memories", []) as Array).size()
+	sim.tick = 51
+	sim._commitments_check_due()
+	sim._commitments_check_due()  # 第二次不得重复处理
+	_check("remote_violation_event_emitted_once",
+		_count_events(sim, CommitmentContract.EVENT_COMMITMENT_VIOLATED) == 1)
+	var trust_after := sim.relationships.composite_trust(creditor_id, debtor_id)
+	_check("remote_creditor_consequence_without_witness",
+		trust_after < trust_before, "%d -> %d" % [trust_before, trust_after])
+	_check("remote_creditor_memory_records_consequence",
+		(creditor.get("memories", []) as Array).size() > creditor_memories_before)
+	_check("remote_creditor_gains_no_position_knowledge",
+		(creditor["tom"] as TheoryOfMind).last_seen_of(debtor_id).is_empty(),
+		str((creditor["tom"] as TheoryOfMind).last_seen_of(debtor_id)))
+	_check("unrelated_far_third_party_unchanged",
+		sim.relationships.composite_trust(third_id, debtor_id) == third_trust_before
+		and (third.get("memories", []) as Array).size() == third_memories_before
+		and (third["tom"] as TheoryOfMind).last_seen_of(debtor_id).is_empty())
+	_check("remote_violated_leaves_views",
+		str((rec["commitment"] as Dictionary).get("status", "")) == CommitmentContract.STATUS_VIOLATED
+		and (debtor.get("my_obligations", []) as Array).is_empty()
+		and (creditor.get("owed_to_me", []) as Array).is_empty())
+	# runtime 后的后续合作概率：远债权人视角 p_violated < p_baseline（同一 roll）。
+	var policy := ResponsePolicy.new()
+	var request := {"request_id": "mx", "requester_id": debtor_id, "target_id": creditor_id,
+		"item_id": "shells", "requested_quantity": 1, "urgency": 0.8}
+	var ctx_after := sim._material_recipient_context(creditor_id, debtor_id, "shells")
+	var p_after := float(policy.evaluate(request, ctx_after, 0.5).get("accept_probability", -1.0))
+	var fresh := SimulationBootstrap.create(74014, "commitment")
+	var fsim: IslandSimulation = fresh["sim"]
+	var fids: Array = fsim.actors.keys()
+	fids.sort()
+	fsim.actors[str(fids[1])]["inventory"] = {"shells": 3}
+	var p_base := float(policy.evaluate(request, fsim._material_recipient_context(str(fids[1]), str(fids[0]), "shells"), 0.5).get("accept_probability", -1.0))
+	_check("remote_violation_lowers_future_cooperation", p_after < p_base,
+		"base=%.4f after=%.4f" % [p_base, p_after])
