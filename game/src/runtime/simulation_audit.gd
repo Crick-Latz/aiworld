@@ -82,6 +82,7 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 				# 排除是为了旧 profile 与 P7.2 前基线保持逐位 state 兼容（map_query 同例）。
 				if key == "map_query" or key == "_commitment_runtime" \
 						or key == "agency_commitment_consequences_enabled" \
+						or key == "agency_holder_evidence_reachability_enabled" \
 						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)

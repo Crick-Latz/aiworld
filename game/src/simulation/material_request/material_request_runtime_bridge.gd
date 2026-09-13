@@ -300,6 +300,16 @@ func restartable_terminal_requests_for(requester_id: String) -> Array:
 	out.sort_custom(func(a, b): return str(a.get("request_id", "")) < str(b.get("request_id", "")))
 	return out
 
+## P7.2B 只读：本次请求已被明确拒绝（REFUSE / counter 拒绝）的目标集合。
+## 唯一权威仍是 _refused_targets——本函数只是视图，不构成第二份状态。
+func excluded_targets_for(request_id: String) -> Array:
+	var refused: Dictionary = _refused_targets.get(request_id, {})
+	var excluded: Array = []
+	for target_id in refused:
+		excluded.append(str(target_id))
+	excluded.sort()
+	return excluded
+
 func request(request_id: String) -> Dictionary:
 	return coordinator.tracker.get_request(request_id)
 

@@ -9,7 +9,8 @@
       "plan_adoption": false,
       "information_subgoals": false,
       "material_requests": false,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "execution": {
       "agency_mode": "LIVE_BRIDGE",
@@ -18,7 +19,8 @@
       "plan_adoption": false,
       "information_subgoals": false,
       "material_requests": false,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "causal": {
       "agency_mode": "LIVE_BRIDGE",
@@ -27,7 +29,8 @@
       "plan_adoption": false,
       "information_subgoals": false,
       "material_requests": false,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "framework": {
       "agency_mode": "LIVE_BRIDGE",
@@ -36,7 +39,8 @@
       "plan_adoption": true,
       "information_subgoals": false,
       "material_requests": false,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "information": {
       "agency_mode": "LIVE_BRIDGE",
@@ -45,7 +49,8 @@
       "plan_adoption": true,
       "information_subgoals": true,
       "material_requests": false,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "material_request": {
       "agency_mode": "LIVE_BRIDGE",
@@ -54,7 +59,8 @@
       "plan_adoption": true,
       "information_subgoals": true,
       "material_requests": true,
-      "commitment_consequences": false
+      "commitment_consequences": false,
+      "holder_evidence_reachability": false
     },
     "commitment": {
       "agency_mode": "LIVE_BRIDGE",
@@ -63,7 +69,18 @@
       "plan_adoption": true,
       "information_subgoals": true,
       "material_requests": true,
-      "commitment_consequences": true
+      "commitment_consequences": true,
+      "holder_evidence_reachability": false
+    },
+    "holder_evidence": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true
     }
   }
 }
