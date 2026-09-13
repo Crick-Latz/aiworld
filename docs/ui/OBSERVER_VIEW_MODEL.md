@@ -4,7 +4,7 @@
 HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用）。HUD 不读取
 `island_sim` / `actor` / request tracker / commitments / 任何模拟内部对象。
 
-- 契约版本：`view_schema_version = "0.2"`（UI-R1；0.1 为旧 3D HUD）
+- 契约版本：`view_schema_version = "0.2"`（UI-R1 v2；Inspector 6 页制；0.1 为旧 3D HUD）
 - 文档分层：**CURRENT**（已组装并渲染）/ **OPTIONAL**（HUD 已渲染、模拟侧数据可能为空）/ **PLANNED**（壳已留、字段尚不存在）
 
 ## 顶层字段
@@ -49,17 +49,18 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | `personality.traits` | Array | CURRENT | 性格页·特质：`{key, label, value}`（10 项，中文标签） |
 | `personality.emotions` | Array | CURRENT | 性格页·情绪：`{key, value}`（|v|>0.05 才出现） |
 | `personality.beliefs` | Array | CURRENT | 性格页·信念：`{text, weight}` |
-| `decision` | Dictionary | CURRENT | 决策页：`{plan, step, reason, blocker}` |
-| `relationship_rows` | Array | CURRENT | 关系页：`{other_id, other_name, trust, tom:{has_food,generous,reliable}}` |
-| `plan_rows` | Array | CURRENT | 计划页：`{detail}`（意图/目标格/活跃目标） |
-| `history_rows` | Array | CURRENT | 历史页：`{day, seq, text}`（该角色相关事件，倒序 ≤12） |
+| `decision` | Dictionary | CURRENT | 决策页：`{plan, step, reason, blocker, next_step}` |
+| `relationship_rows` | Array | CURRENT | 关系页：`{other_id, other_name, trust, benevolence, reliability, change, tom}` |
+| `history_rows` | Array | CURRENT | 历史页·最近事件：`{day, seq, text}`（该角色相关事件，倒序 ≤12） |
+| `history_dialogue_rows` | Array | CURRENT | 历史页·最近对话：该角色台词（≤6 条回溯） |
+| `history_chain_rows` | Array | CURRENT | 历史页·行动链：该角色自身 cause_seq 链步（无则空→占位） |
 
 ### PLANNED（Inspector 壳已留、字段尚不存在）
 
 | 计划字段 | 说明 | 缺失原因 |
 |---|---|---|
 | `selected_actor.memory_items[].source_event_ids` | 记忆 → 事件溯源下钻 | 认知层记忆未带稳定事件引用（仅 seq） |
-| `selected_actor.personality.temperament` | 气质独立分组 | 目前特质与气质共用 10 项 traits，无独立气质模型 |
+| `selected_actor.personality.temperament` | 气质独立数据源 | UI 已按三组展示（基础特质/气质与风险偏好/社交倾向），数据仍来自同一 traits 表 |
 | `selected_actor.personality.social_tendencies` | 社交倾向独立分组 | 同上（暂以共情/社交/利他三项近似） |
 | `selected_actor.decision.candidates` | 决策候选与打分（决策可解释性） | decision trace 无候选列表，仅 reason |
 | `selected_actor.decision.blocker`（结构化） | 当前为文本"无"/描述 | P6 blocker 结构未暴露到 trace |

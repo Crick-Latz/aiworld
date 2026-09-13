@@ -2,9 +2,20 @@
 
 ## 目标
 
-把观察模式从 3D 视觉原型转向 2D 俯视像素原型：温暖、明亮、可读、轻量，
-可替换资产体系 + 可扩展 ViewModel 结构。只动 presentation / scene / assets-prep /
-inspector，不改模拟机制。
+把观察模式从 3D 视觉原型转向 2D 俯视像素**小地图**原型（UI-R1 v2）：温暖、明亮、
+可读、轻量，可替换资产体系 + 可扩展 ViewModel 结构。只动 presentation / scene /
+assets-prep / inspector，不改模拟机制。
+
+## 小地图（48×36 六分区舞台）
+
+- island 观察模式的世界收窄为 **48×36 tiles**（`observer_main` 在 build 时覆盖
+  width/depth 参数；`game/config` 与地图生成器/模拟代码零改动；`AIW_UI_MAP=full`
+  退回 64×64）。巡航/故事演示模式与全部测试的地图语义不受影响（island 四套件在
+  48×36 下全绿）。
+- 六分区：海滩/草地/树林由生成地图自然呈现；**营地**（小木屋/篝火/箱/桶/柜/井/围栏）、
+  **农地**（耕地 + 两档作物）、**工坊**（工作台/锯木台/木堆/石堆）在出生点邻域
+  确定性布景（`World2DProjector._dress_zones`，稳定排序不耗 RNG）。
+- 布景物件纯视觉（无碰撞），NPC 可穿过——原型已知限制。
 
 ## 像素规格（明确选择）
 
@@ -13,8 +24,9 @@ inspector，不改模拟机制。
 - **实现方式：运行时 `root.content_scale_size = 480×270`**（observer/ui_preview 场景自设；
   工程默认视口保持 1280×720——遗留 main.tscn 玩家原型与其 hud_layout 测试不受影响）
 - **窗口：1920×1080 默认**（`window_width/height_override`），`--resolution 1366x768` 验证小窗
-- **拉伸：canvas_items + keep**，全局面板纹理过滤 = Nearest
-  （`rendering/textures/canvas_textures/default_texture_filter=0`）→ 1080p 下整数 4× 像素完美
+- **拉伸：canvas_items + keep + scale_mode=integer**，全局面板纹理过滤 = Nearest
+  （`rendering/textures/canvas_textures/default_texture_filter=0`）→ 1080p 下整数 4×；
+  非整数窗口（如 1366×768）自动 letterbox 到最近整数倍
 
 ## 场景结构
 
@@ -57,6 +69,13 @@ ObserverHud（纯渲染：顶栏 / Inspector 7 页 / 时间线 4 页；占位文
 - HUD 组件不 import / get_node 任何模拟对象；缺字段渲染占位。
 - 离线迭代走 `scenes/ui/ui_preview.tscn`（9 套 fixture，与正式 HUD 同一场景）。
 - 截图工具 `scenes/observer/ui_capture.tscn`（preview/observer 两模式，`--` 后传参）。
+
+## 素材（v2：CC0 混合层）
+
+地形图集为**混合图集**：11 种地面 tile 来自 Kenney Tiny Farm（CC0，像素统计+双盲视觉
+核对后采纳，半透明区按主色展平，原始文件 vendor 于 `assets/pixel/third_party/`），
+其余帧与全部物件/NPC/图标仍为自制占位。生成器单一入口
+`assets/pixel/tools/generate_placeholders.py` 可完整复现。详见 `ASSET_MANIFEST.md`。
 
 ## 2D 地形派生（纯表现层）
 

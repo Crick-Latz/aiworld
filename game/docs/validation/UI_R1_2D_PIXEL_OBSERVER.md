@@ -1,6 +1,7 @@
 # UI-R1 2D 像素观察原型 —— 本地验证记录
 
-- 分支：`work/ui-r1-2d-pixel-observer`（基线 main `d693a2f`）
+- 分支：`work/ui-r1-2d-pixel-observer`（基线 main `d693a2f`；v2 迭代含 48×36 小地图、
+  6 页 Inspector、Kenney CC0 混合地形、整数倍放大）
 - 日期：2026-09-13
 - 引擎：Godot 4.7.2（`tools/Godot_v4.7.2-stable_win64_console.exe`，Windows）
 - 范围：presentation / scene / assets-prep / inspector；不触碰 simulation / runtime / config / scripts
@@ -68,3 +69,19 @@
 - Inspector 计划/历史页在 tick 早期数据稀疏（意图/记忆需要模拟推进）。
 - items/ 图标管线已建但无 UI 消费点；世界物件会延伸到面板下方（已知限制见
   ui-architecture.md）。
+
+
+## UI-R1 v2 迭代记录（同分支追加；v2 后完整回归 **PASS 42 套件 / 1269 断言 / 18 python 测试**，证据 .tmp/ui-r1-strict-evidence/）
+
+1. **小地图 48×36**：observer_main 在 island build 时覆盖地图尺寸（config/生成器/模拟零
+   改动；AIW_UI_MAP=full 退回）。四个 island 启动套件（island_sim/p0_cognition/
+   p1_social/execution_receipt）在 48×36 下全绿后才定为默认。
+2. **Inspector 7→6 页**：去 Plans；决策页加"下一步意图"；关系页加善意/可靠性/关系变化；
+   历史页改三段（最近事件/最近对话/承诺请求行动链）；性格页三组（基础特质/气质与风险
+   偏好/社交倾向）。plan_rows 字段随之退役（文档已更新）。
+3. **Kenney Tiny Farm（CC0）混合地形**：11 种地面 tile 并入图集；识别用像素统计仲裁
+   两次视觉核对（其中一次将水格 100/101 误判为树——统计仲裁否决）；树/围栏/树桩因
+   双盲结果矛盾保守不采用，保留自制。原始文件与 License vendor 入库。
+4. **整数倍放大**：`window/stretch/scale_mode=integer`；1366×768 下自动 letterbox。
+5. 新增物件 19 种（小木屋/箱/桶/柜/横竖围栏/井/工作台/锯木台/幼苗/花/杂草/大石/
+   木堆/石堆/作物两档/橡树/松树）+ farmland 地形帧；tree.png 由 tree_oak/tree_pine 取代。
