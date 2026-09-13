@@ -12,6 +12,7 @@ const FIXTURES := ["DEFAULT", "NPC_SELECTED", "NO_SELECTION", "LONG_EVENT_LOG", 
 	"WARNING", "MEMORY_FILLED", "DECISION_FILLED", "RELATIONS_FILLED"]
 
 func _ready() -> void:
+	get_tree().root.content_scale_size = Vector2i(480, 270) # 与正式观察同一像素画布
 	var fixture := str(OS.get_environment("AIW_PREVIEW_FIXTURE"))
 	if fixture == "" or not FIXTURES.has(fixture):
 		fixture = "DEFAULT"

@@ -1,5 +1,5 @@
 extends Node
-## UI-R1 截图工具（开发工具，不属于正式游戏流；放在 scenes/ui 允许目录内）。
+## UI-R1 截图工具（开发工具，不属于正式游戏流；归 m01 入口装配模块）。
 ## 用法（参数写在 -- 之后）：
 ##   mode=preview fixture=NPC_SELECTED tab=memory out=D:/abs/path.png frames=60
 ##   mode=observer select=npc_weila tab=overview bottom=events out=D:/abs/path.png frames=240

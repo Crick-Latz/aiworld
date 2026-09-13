@@ -54,7 +54,7 @@ ObserverHud（纯渲染：顶栏 / Inspector 7 页 / 时间线 4 页；占位文
 
 - HUD 组件不 import / get_node 任何模拟对象；缺字段渲染占位。
 - 离线迭代走 `scenes/ui/ui_preview.tscn`（9 套 fixture，与正式 HUD 同一场景）。
-- 截图工具 `scenes/ui/ui_capture.tscn`（preview/observer 两模式，`--` 后传参）。
+- 截图工具 `scenes/observer/ui_capture.tscn`（preview/observer 两模式，`--` 后传参）。
 
 ## 2D 地形派生（纯表现层）
 

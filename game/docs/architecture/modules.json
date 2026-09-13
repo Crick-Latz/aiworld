@@ -21,7 +21,9 @@
         "game/src/runtime/simulation_bootstrap.gd",
         "game/src/runtime/simulation_audit.gd",
         "game/src/runtime/simulation_cli.gd",
-        "game/config/simulation_profiles.json"
+        "game/config/simulation_profiles.json",
+        "game/scenes/observer/ui_capture.gd",
+        "game/scenes/observer/ui_capture.tscn"
       ],
       "public_entrypoints": [
         "场景装配与生命周期；不计算 NPC 目标/事件文案/库存"
@@ -140,7 +142,11 @@
         "game/src/map/prototype_mesh_library.gd",
         "game/src/map/map_projector.gd",
         "game/scenes/actors/npc.tscn",
-        "game/src/presentation/npc_visual.gd"
+        "game/src/presentation/npc_visual.gd",
+        "game/src/presentation/npc_2d.gd",
+        "game/src/presentation/pixel_tileset.gd",
+        "game/src/presentation/world2d_projector.gd",
+        "game/scenes/observer/npc_2d.tscn"
       ],
       "public_entrypoints": [
         "投影/视觉；动画完成不决定故事结果"
@@ -187,7 +193,8 @@
         "game/src/player/player_controller.gd",
         "game/src/player/player_interactor.gd",
         "game/src/player/interaction_target_selector.gd",
-        "game/scenes/actors/player.tscn"
+        "game/scenes/actors/player.tscn",
+        "game/src/presentation/observer_camera_2d.gd"
       ],
       "public_entrypoints": [
         "镜头/输入/拾取；观察输入不消耗模拟 RNG"

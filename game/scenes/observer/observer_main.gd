@@ -58,6 +58,9 @@ const ISLAND_SCENARIO := "res://data/scenarios/deserted_island.json"
 var island_sim: IslandSimulation = null
 
 func _ready() -> void:
+	# UI-R1：观察线内部渲染 480x270（16px tile 的 16:9 像素画布），窗口整倍放大。
+	# 工程默认视口保持 1280x720 不变——遗留 main.tscn 玩家原型与其布局测试不受影响。
+	get_tree().root.content_scale_size = Vector2i(480, 270)
 	var requested_mode := OS.get_environment("AIW_MODE")
 	story_mode = requested_mode != "wander"
 	hud.pause_requested.connect(_toggle_pause)
