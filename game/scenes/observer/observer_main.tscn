@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3 uid="uid://bobs01main0001"]
+[gd_scene load_steps=8 format=3 uid="uid://bobs01main0001"]
 
 [ext_resource type="Script" path="res://scenes/observer/observer_main.gd" id="1_obs"]
 [ext_resource type="Script" path="res://src/map/map_controller.gd" id="2_mapctl"]
 [ext_resource type="Script" path="res://src/camera/observer_camera.gd" id="3_cam"]
 [ext_resource type="PackedScene" path="res://scenes/observer/observer_hud.tscn" id="4_hud"]
+[ext_resource type="Script" path="res://src/presentation/observer_camera_2d.gd" id="5_cam2d"]
+[ext_resource type="Texture2D" path="res://assets/pixel/markers/selection_ring.png" id="6_ring"]
 
 [sub_resource type="Environment" id="Environment_obs"]
 background_mode = 1
@@ -49,5 +51,27 @@ current = true
 size = 40.0
 near = 0.1
 far = 400.0
+
+[node name="World2D" type="Node2D" parent="."]
+visible = false
+
+[node name="GroundTerrain" type="TileMapLayer" parent="World2D"]
+
+[node name="PropsRoot" type="Node2D" parent="World2D"]
+
+[node name="NpcRoot2D" type="Node2D" parent="World2D"]
+
+[node name="SelectionMarkers" type="Node2D" parent="World2D"]
+
+[node name="SelectionRing" type="Sprite2D" parent="World2D/SelectionMarkers"]
+visible = false
+z_index = 4
+position = Vector2(0, -2)
+texture = ExtResource("6_ring")
+
+[node name="Camera2D" type="Camera2D" parent="World2D"]
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+script = ExtResource("5_cam2d")
 
 [node name="ObserverHud" parent="." instance=ExtResource("4_hud")]

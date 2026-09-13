@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3 uid="uid://uir1npc2d0001"]
+
+[ext_resource type="Script" path="res://src/presentation/npc_2d.gd" id="1_npc2d"]
+[ext_resource type="Texture2D" path="res://assets/pixel/markers/shadow.png" id="2_shadow"]
+
+[node name="Npc2D" type="Node2D"]
+z_index = 5
+script = ExtResource("1_npc2d")
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 3.5)
+scale = Vector2(1.4, 1.2)
+texture = ExtResource("2_shadow")
+
+[node name="Body" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -2)
+
+[node name="NameLabel" type="Label" parent="."]
+offset_left = -32.0
+offset_top = -16.0
+offset_right = 32.0
+offset_bottom = -6.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.14, 0.1, 0.06, 0.9)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 7
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "?"

@@ -2,9 +2,13 @@ extends Node
 ## 观察模式装配根（OBS-01，M01）：只负责创建模块、注入端口、连接信号与销毁。
 ## 不在此计算 NPC 目标、拼每条事件文案；无 Player、无自动驾驶、无整树暂停。
 ## 模拟暂停与相机/UI 解耦：Simulation 停 tick，视觉插值冻结，相机/按钮仍可用。
+## UI-R1：island 默认模式切 2D 像素表现（World2D 子树）；wander/story 演示模式保留 3D。
 
 const DEMO_SPEC_PATH := "res://data/demo_world/world_spec.json"
 const NPC_SCENE := preload("res://scenes/actors/npc.tscn")
+const NPC2D_SCENE := preload("res://scenes/observer/npc_2d.tscn")
+# UI-R1 2D 模式的环境底色（暖色深水），进入 3D 演示模式时还原
+const ISLAND_BG_COLOR := Color8(38, 96, 132)
 const STORY_SCENARIOS := {
 	"baseline": "res://data/scenarios/lighthouse_baseline.json",
 	"control": "res://data/scenarios/lighthouse_control.json",
@@ -28,7 +32,8 @@ var speed_multiplier := 1
 var selected_actor_id := ""
 var _acc := 0.0
 var _frame_tick_count := 0
-var _npc_visuals: Dictionary = {} # id -> Node3D
+var _npc_visuals: Dictionary = {} # id -> Node3D（wander/story 3D 表现）
+var _npc_visuals_2d: Dictionary = {} # id -> Npc2D（island 2D 像素表现，UI-R1）
 var _warning := ""
 var _hud_event_cursor := 0
 var _lighthouse_lit := false
@@ -38,7 +43,14 @@ var _lighthouse_lit := false
 @onready var npc_root: Node3D = $World/NpcRoot
 @onready var camera_rig: ObserverCamera = $World/CameraRig
 @onready var camera: Camera3D = $World/CameraRig/YawPivot/MainCamera
+@onready var world_env: WorldEnvironment = $World/Environment
 @onready var hud: CanvasLayer = $ObserverHud
+@onready var world2d: Node2D = $World2D
+@onready var ground_layer: TileMapLayer = $World2D/GroundTerrain
+@onready var props_root_2d: Node2D = $World2D/PropsRoot
+@onready var npc_root_2d: Node2D = $World2D/NpcRoot2D
+@onready var selection_ring: Sprite2D = $World2D/SelectionMarkers/SelectionRing
+@onready var camera_2d: ObserverCamera2D = $World2D/Camera2D
 
 var _hud_refresh_acc := 0.0
 
@@ -111,6 +123,7 @@ func _boot() -> void:
 	else:
 		sim = SimulationCore.new(map_controller, actors_config, int(spec.get("seed", 0)))
 	camera_rig.center_on(Vector3(map_controller.map_size().x * 0.5, 0.0, map_controller.map_size().y * 0.5))
+	_enter_3d_mode()
 	_refresh_hud()
 
 func _boot_story_mode() -> void:
@@ -143,7 +156,11 @@ func _boot_island() -> void:
 	for c in npc_root.get_children():
 		npc_root.remove_child(c)
 		c.free()
+	for c in npc_root_2d.get_children():
+		npc_root_2d.remove_child(c)
+		c.free()
 	_npc_visuals.clear()
+	_npc_visuals_2d.clear()
 	selected_actor_id = ""
 	sim_paused = false
 	speed_multiplier = 1
@@ -164,14 +181,15 @@ func _boot_island() -> void:
 		var cfg = ac.duplicate()
 		cfg["spawn"] = spawn
 		actor_configs.append(cfg)
-		var visual = NPC_SCENE.instantiate()
-		npc_root.add_child(visual)
+		# UI-R1：island 模式的 NPC 用 2D 像素表现（Npc2D），不再创建 3D visual
+		var visual = NPC2D_SCENE.instantiate()
+		npc_root_2d.add_child(visual)
 		var id := str(cfg["id"])
 		var colors := {"npc_weila": [56, 178, 168], "npc_oun": [143, 107, 196], "npc_kadga": [63, 127, 191]}
 		var rgb: Array = colors.get(id, [128, 128, 128])
 		visual.setup(id, str(cfg.get("name", id)), Color8(rgb[0], rgb[1], rgb[2]))
 		visual.update_position(spawn, spawn, 0.0)
-		_npc_visuals[id] = visual
+		_npc_visuals_2d[id] = visual
 	island_sim = IslandSimulation.new(map_controller, int(scenario.get("seed", 20260905)), actor_configs)
 	# Assembly only: the observer uses the same explicit profile as headless runs.
 	var profile := ""
@@ -182,8 +200,36 @@ func _boot_island() -> void:
 		push_error("SIMULATION_PROFILE_FAILED: " + str(configured))
 		get_tree().quit(1)
 		return
-	camera_rig.center_on(Vector3(map_controller.map_size().x * 0.5, 0.0, map_controller.map_size().y * 0.5))
+	_enter_2d_mode()
 	_refresh_hud()
+
+## UI-R1：island 默认模式切 2D 像素表现（隐藏 3D 子树，投影地形，启用 Camera2D）。
+func _enter_2d_mode() -> void:
+	world_root.visible = false
+	camera.current = false
+	world2d.visible = true
+	World2DProjector.project(map_controller, ground_layer, props_root_2d)
+	camera_2d.enabled = true
+	camera_2d.make_current()
+	var map_px: Vector2i = map_controller.map_size() * 16
+	camera_2d.limit_left = 0
+	camera_2d.limit_top = 0
+	camera_2d.limit_right = map_px.x
+	camera_2d.limit_bottom = map_px.y
+	camera_2d.center_on(Vector2(map_px) * 0.5)
+	if world_env.environment != null:
+		world_env.environment.background_color = ISLAND_BG_COLOR
+	selection_ring.visible = false
+
+## 回到 3D 演示模式（wander/story）：还原环境与相机，收起 2D 子树。
+func _enter_3d_mode() -> void:
+	world2d.visible = false
+	camera_2d.enabled = false
+	world_root.visible = true
+	camera.current = true
+	if world_env.environment != null:
+		world_env.environment.background_color = Color(0.58, 0.66, 0.78, 1)
+	selection_ring.visible = false
 
 func _process_island(delta: float) -> void:
 	if not sim_paused:
@@ -194,10 +240,16 @@ func _process_island(delta: float) -> void:
 			_acc -= 1.0
 			_frame_tick_count += 1
 	var alpha := clampf(_acc, 0.0, 1.0)
-	for id in _npc_visuals:
+	var running := speed_multiplier >= 4
+	for id in _npc_visuals_2d:
 		if island_sim.actors.has(id):
 			var a: Dictionary = island_sim.actors[id]
-			(_npc_visuals[id] as Node3D).update_position(a["prev_tile"], a["tile"], alpha)
+			(_npc_visuals_2d[id] as Npc2D).update_position(a["prev_tile"], a["tile"], alpha, running)
+	if selected_actor_id != "" and _npc_visuals_2d.has(selected_actor_id):
+		selection_ring.visible = true
+		selection_ring.global_position = (_npc_visuals_2d[selected_actor_id] as Npc2D).global_position - Vector2(0, 2)
+	else:
+		selection_ring.visible = false
 	_hud_refresh_acc += delta
 	if _hud_refresh_acc >= 0.25:
 		_hud_refresh_acc = 0.0
@@ -310,6 +362,24 @@ func _do_save() -> void:
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# island 2D 模式（UI-R1）：Esc 暂停 + 左键点选 NPC；空白点击取消选择
+	if island_sim != null:
+		if event.is_action_pressed("cancel"):
+			_toggle_pause()
+			get_viewport().set_input_as_handled()
+		elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+				and (event as InputEventMouseButton).pressed:
+			var world_pos: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * (event as InputEventMouseButton).position
+			var best := ""
+			var best_d := 18.0
+			for id in _npc_visuals_2d:
+				var d: float = (_npc_visuals_2d[id] as Npc2D).global_position.distance_to(world_pos)
+				if d < best_d:
+					best_d = d
+					best = id
+			select_actor(best)
+			get_viewport().set_input_as_handled()
+		return
 	if story_sim == null and sim == null:
 		return
 	if event.is_action_pressed("cancel"):
@@ -331,6 +401,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_refresh_hud()
 		get_viewport().set_input_as_handled()
 
+## UI-R1：island 2D 选中入口（预览/截图工具也用它）；空串取消选择。
+func select_actor(actor_id: String) -> void:
+	selected_actor_id = actor_id
+	for id in _npc_visuals_2d:
+		(_npc_visuals_2d[id] as Npc2D).set_selected(id == selected_actor_id)
+	_refresh_hud()
+
 func rebuild() -> void:
 	_lighthouse_lit = false
 	_boot()
@@ -342,6 +419,7 @@ func switch_scenario(scenario_name: String) -> void:
 	_lighthouse_lit = false
 	story_sim = null
 	sim = null
+	island_sim = null # UI-R1：离开 island 2D 模式，回到 3D 演示路径
 	_boot()
 
 func get_current_scenario() -> String:
@@ -391,7 +469,7 @@ func _find_spawn_near(poi_id: String) -> Vector2i:
 
 func _refresh_hud() -> void:
 	var model := {
-		"view_schema_version": "0.1",
+		"view_schema_version": "0.2",
 		"state_revision": island_sim.tick if island_sim != null else 0,
 		"paused": sim_paused,
 		"speed_multiplier": speed_multiplier,
@@ -399,71 +477,18 @@ func _refresh_hud() -> void:
 		"warning_text": _warning,
 	}
 	if island_sim != null:
+		model["world_name"] = "荒岛 · 观察模式"
 		model["time_label"] = "第 %d 天 %02d:00" % [island_sim.world_time["day"], island_sim.world_time["hour"]]
 		var sel = null
 		if selected_actor_id != "" and island_sim.actors.has(selected_actor_id):
-			var a: Dictionary = island_sim.actors[selected_actor_id]
-			var p: PersonalityProfile = a["personality"]
-			var trace: Dictionary = a.get("last_decision_trace", {})
-			sel = {
-				"id": selected_actor_id,
-				"display_name": a["display_name"],
-				"activity_text": str(a["activity"]),
-				"goal_text": _island_goal_text(a),
-				"location_text": "(%d, %d)" % [a["tile"].x, a["tile"].y],
-				"inventory_text": _inv_text(a["inventory"]),
-			}
-			# 情绪和决策原因附加到活动文本
-			var emotions: Array = []
-			for key in ["joy", "fear", "anger", "sadness", "guilt"]:
-				var v: float = p.emotions.get(key, 0.0)
-				if absf(v) > 0.1:
-					var names := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤", "guilt": "内疚"}
-					emotions.append("%s%.0f%%" % [names[key], v * 100])
-			if not emotions.is_empty():
-				sel["activity_text"] += "\n情绪：" + "、".join(emotions)
-			if trace.has("reason"):
-				sel["activity_text"] += "\n原因：" + str(trace["reason"])
-			var needs: Dictionary = a["needs"]
-			sel["activity_text"] += "\n需求：饿%d/渴%d/累%d/孤独%d" % [
-				int(needs.get("hunger", 0)), int(needs.get("thirst", 0)),
-				1000 - int(needs.get("energy", 1000)), int(needs.get("social", 0)),
-			]
-			# P1: 一阶心智——"他以为别人是什么样的人"（可能是错的，这正是看点）
-			var tom: TheoryOfMind = a.get("tom", null)
-			if tom != null:
-				var tom_parts: Array = []
-				for oid in island_sim.actors:
-					if oid == selected_actor_id:
-						continue
-					var m: Dictionary = tom.model_of(oid)
-					if float(m["has_food"]) != 0.0 or float(m["generous"]) != 0.0 or float(m["reliable"]) != 0.0:
-						tom_parts.append("%s(食%+.1f 慷%+.1f 靠%+.1f)" % [
-							island_sim.actors[oid]["display_name"],
-							m["has_food"], m["generous"], m["reliable"]])
-				if not tom_parts.is_empty():
-					sel["activity_text"] += "\n心智：" + " ".join(tom_parts)
-			# P1: 有向信任——"我信谁多少"（对方未必同样信我）
-			var trust_parts: Array = []
-			for oid in island_sim.actors:
-				if oid == selected_actor_id:
-					continue
-				var t_val: int = island_sim.relationships.get_trust(selected_actor_id, oid)
-				if t_val != 0:
-					trust_parts.append("%s%+d" % [island_sim.actors[oid]["display_name"], t_val])
-			if not trust_parts.is_empty():
-				sel["activity_text"] += "\n信任：" + " ".join(trust_parts)
-			# P1: 最近的记忆（受助/被拒/受伤这些塑造关系的时刻）
-			var mems: Array = a.get("memories", [])
-			if not mems.is_empty():
-				var last_mem: Dictionary = mems[mems.size() - 1]
-				sel["activity_text"] += "\n记忆：" + str(last_mem.get("text", "")).substr(0, 40)
+			sel = _build_island_selected(island_sim.actors[selected_actor_id])
 		model["selected_actor"] = sel
 		var recent: Array = []
 		var all: Array = island_sim.events
 		for i in range(maxi(0, all.size() - MAX_EVENTS_PANEL), all.size()):
 			recent.append(all[i])
 		model["recent_events"] = recent
+		model["causal_chains"] = _build_causal_chains(recent)
 		# P4-3: 故事线——ThreadEngine 识别跨天线程
 		if island_sim != null and island_sim.tick % 30 == 0:
 			if not has_meta("_thread_engine"):
@@ -519,14 +544,17 @@ func _refresh_hud() -> void:
 			chron_lines.append("[color=#e8c170]%s[/color]" % str(chronicles[i]["text"]))
 		model["chronicle_text"] = "\n".join(chron_lines)
 	elif story_sim != null:
+		model["world_name"] = "灰雾港 · 故事模式"
 		var t: int = story_sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d%s" % [t / 1440 + 1, (t % 1440) / 60, t % 60,
 			" · 灯塔已点亮 ✨" if story_sim.lighthouse_lit else " · 灯塔未点亮"]
 		model["world_facts_text"] = "灯塔：%s" % ("已点亮" if story_sim.lighthouse_lit else "未点亮")
 	elif sim != null:
+		model["world_name"] = "灰雾港 · 巡航模式"
 		var t2: int = sim.tick
 		model["time_label"] = "第 %d 天 %02d:%02d" % [t2 / 1440 + 1, (t2 % 1440) / 60, t2 % 60]
 	else:
+		model["world_name"] = "灰雾港 · 观察模式"
 		model["time_label"] = "-"
 	var sel = null
 	if story_sim != null:
@@ -564,8 +592,9 @@ func _refresh_hud() -> void:
 			recent2.append(all2[i])
 		model["recent_events"] = recent2
 	else:
-		model["selected_actor"] = null
-		model["recent_events"] = []
+		if island_sim == null: # island 分支已组装 selected_actor，不得被演示模式兜底覆盖
+			model["selected_actor"] = null
+			model["recent_events"] = []
 	hud.render(model)
 
 func _island_goal_text(a: Dictionary) -> String:
@@ -573,6 +602,133 @@ func _island_goal_text(a: Dictionary) -> String:
 	if intentions != null and intentions.has_intention():
 		return str(intentions.current_intention.get("desc", ""))
 	return "思考中..."
+
+## UI-R1：island 选中角色的结构化 ViewModel（presentation adapter 组装，HUD 只渲染）。
+## 字段定义见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.2）。
+const TRAIT_LABELS := {
+	"resilience": "韧性", "curiosity": "好奇", "action_bias": "行动", "caution": "谨慎",
+	"empathy": "共情", "sociability": "社交", "altruism": "利他", "expressiveness": "表达",
+	"conflict_avoidance": "避冲突", "pragmatism": "务实",
+}
+
+func _build_island_selected(a: Dictionary) -> Dictionary:
+	var p: PersonalityProfile = a["personality"]
+	var trace: Dictionary = a.get("last_decision_trace", {})
+	var needs: Dictionary = a["needs"]
+	var intentions: IntentionManager = a.get("intentions", null)
+	var intention: Dictionary = intentions.current_intention if intentions != null and intentions.has_intention() else {}
+	var sel := {
+		"id": selected_actor_id,
+		"display_name": a["display_name"],
+		"status_text": str(a["activity"]),
+		"activity_text": str(a["activity"]),
+		"goal_text": _island_goal_text(a),
+		"location_text": "(%d, %d)" % [a["tile"].x, a["tile"].y],
+		"inventory_text": _inv_text(a["inventory"]),
+		"needs_text": "饿%d/渴%d/累%d/孤独%d" % [
+			int(needs.get("hunger", 0)), int(needs.get("thirst", 0)),
+			1000 - int(needs.get("energy", 1000)), int(needs.get("social", 0)),
+		],
+	}
+	var inv_items: Array = []
+	for item in a["inventory"]:
+		var n: int = int(a["inventory"][item])
+		if n > 0:
+			inv_items.append({"id": str(item), "count": n})
+	sel["inventory_items"] = inv_items
+	var reason := str(trace.get("reason", ""))
+	sel["decision_text"] = reason
+	sel["decision"] = {
+		"plan": str(intention.get("desc", _island_goal_text(a))),
+		"step": str(a["activity"]),
+		"reason": reason if reason != "" else "—",
+		"blocker": str(trace.get("blocker", "无")),
+	}
+	var memory_items: Array = []
+	for m in a.get("memories", []):
+		memory_items.append({
+			"day": int(m.get("day", 0)), "tick": int(m.get("tick", 0)),
+			"text": str(m.get("text", "")), "type": str(m.get("type", "")),
+			"counterpart": str(m.get("counterpart_id", "")),
+			"importance": float(m.get("appraisal_goal_congruence", 0.0)),
+		})
+	sel["memory_items"] = memory_items
+	var traits: Array = []
+	for key in TRAIT_LABELS:
+		traits.append({"key": key, "label": TRAIT_LABELS[key], "value": float(p.traits.get(key, 0.5))})
+	var emotions: Array = []
+	for key in ["joy", "fear", "anger", "sadness", "guilt"]:
+		var v: float = p.emotions.get(key, 0.0)
+		if absf(v) > 0.05:
+			emotions.append({"key": key, "value": v})
+	var beliefs: Array = []
+	for text in p.beliefs:
+		beliefs.append({"text": str(text), "weight": float(p.beliefs[text]["weight"])})
+	sel["personality"] = {"traits": traits, "emotions": emotions, "beliefs": beliefs}
+	var rel_rows: Array = []
+	var tom: TheoryOfMind = a.get("tom", null)
+	for oid in island_sim.actors:
+		if oid == selected_actor_id:
+			continue
+		var row := {
+			"other_id": oid,
+			"other_name": str(island_sim.actors[oid]["display_name"]),
+			"trust": int(island_sim.relationships.get_trust(selected_actor_id, oid)),
+		}
+		if tom != null:
+			var m: Dictionary = tom.model_of(oid)
+			row["tom"] = {
+				"has_food": float(m.get("has_food", 0.0)),
+				"generous": float(m.get("generous", 0.0)),
+				"reliable": float(m.get("reliable", 0.0)),
+			}
+		rel_rows.append(row)
+	sel["relationship_rows"] = rel_rows
+	var plan_rows: Array = []
+	if intention.has("action"):
+		plan_rows.append({"detail": "当前意图：%s（承诺度 %.0f%%）" % [
+			str(intention.get("action", "?")), float(intention.get("commitment", 0.0)) * 100.0]})
+	if intention.has("target") and typeof(intention["target"]) == TYPE_VECTOR2I:
+		plan_rows.append({"detail": "目标格：(%d, %d)" % [intention["target"].x, intention["target"].y]})
+	if trace.has("active_goal"):
+		plan_rows.append({"detail": "活跃目标：%s（优先级 %.2f）" % [
+			str(trace.get("goal_desc", trace["active_goal"])), float(trace.get("goal_priority", 0.0))]})
+	sel["plan_rows"] = plan_rows
+	var hist: Array = []
+	for i in range(island_sim.events.size() - 1, -1, -1):
+		var e: Dictionary = island_sim.events[i]
+		if str(e.get("actor_id", "")) == selected_actor_id or selected_actor_id in (e.get("actor_ids", []) as Array):
+			hist.append({"day": int(e.get("day", 0)), "seq": int(e.get("seq", 0)), "text": str(e.get("text", ""))})
+			if hist.size() >= 12:
+				break
+	sel["history_rows"] = hist
+	return sel
+
+## 由最近事件的 cause_seq 派生因果链视图（只读展示派生，不改模拟事件）。
+func _build_causal_chains(events: Array) -> Array:
+	var by_seq := {}
+	for e in events:
+		by_seq[int(e.get("seq", 0))] = e
+	var chains: Array = []
+	var used := {}
+	for e in events:
+		var seq := int(e.get("seq", 0))
+		var cause := int(e.get("cause_seq", 0))
+		if cause <= 0 or used.has(seq) or not by_seq.has(cause):
+			continue
+		var steps: Array = []
+		var cur: Dictionary = e
+		var guard := 0
+		while not cur.is_empty() and guard < 5:
+			steps.push_front("E%d %s" % [int(cur.get("seq", 0)), str(cur.get("text", ""))])
+			used[int(cur.get("seq", 0))] = true
+			var next_cause := int(cur.get("cause_seq", 0))
+			cur = by_seq.get(next_cause, {}) if next_cause > 0 else {}
+			guard += 1
+		chains.append({"title": "E%d 事件链" % seq, "steps": steps})
+		if chains.size() >= 4:
+			break
+	return chains
 
 func _inv_text(inv: Dictionary) -> String:
 	var parts: Array = []
