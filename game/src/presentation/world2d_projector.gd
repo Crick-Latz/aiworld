@@ -1,9 +1,11 @@
 class_name World2DProjector
 extends RefCounted
-## UI-R1 v2：2D 像素世界投影器（presentation only）。
+## UI-R1 v3：2D 像素世界投影器（presentation only）。
 ## 只读 MapController 窄接口（get_obstacle / is_walkable_tile / get_poi_tiles /
 ## get_spawn_tile / map_size），把逻辑地图投影成暖色像素地形 + 占位物件 + 六分区布景
-## （海滩/草地/树林为地图生成自然呈现；营地/农地/工坊为出生点邻域的确定性布景）。
+## 布景纪律（v3）：具有阻挡语义的物件只允许出现在模拟已判不可行走的格子；
+## 可行走格只放花/杂草/贝壳/漂木/幼苗/小作物等"踩过也合理"的轻装饰。
+## POI 用轻量木牌标记（可穿过），不再用帐篷/木屋等阻挡感物件。
 ## 沙滩/林地边缘等视觉分类是纯表现层派生，不携带任何模拟真值语义；
 ## 装饰与布景用稳定哈希（无 RNG 流，不参与确定性回放诊断）。
 
@@ -43,9 +45,9 @@ const PROP_TEXTURES := {
 
 ## POI id → 占位物件名（正式美术到位后换资源即可）
 const POI_PROP := {
-	"post_house": "cabin",
-	"tide_market": "market_stall",
-	"old_lighthouse": "lighthouse",
+	"post_house": "poi_flag",
+	"tide_market": "poi_flag",
+	"old_lighthouse": "poi_flag",
 }
 
 ## 一次性把整张地图投影进 ground_layer（TileMapLayer）与 props_root（Node2D）。
@@ -136,30 +138,17 @@ static func _classify(map_controller, x: int, z: int, size: Vector2i) -> Diction
 	# 不可行走且无障碍物：生成器语义里是抬升地形，画成悬崖沿
 	return {"tile": "cliff_edge"}
 
-## 出生点邻域确定性布景：营地（小木屋/箱/桶/柜/井/围栏/篝火）→ 农地（耕地+两档作物）
-## → 工坊（工作台/锯木台/木堆/石堆）。物件纯视觉（无碰撞），NPC 可穿过（原型已知限制）。
+## 出生点邻域确定性布景（v3 阻挡纪律版）：
+## - 阻挡语义物件（木屋/井/工作台/机器/围栏/箱柜/木石堆/营火/帐篷/市集/灯塔）
+##   一律不落在可行走格；当前地图生成器没有合法 non-walkable footprint 可分配，
+##   因此全部取消（宁缺毋假——不为画面丰富制造"可穿过的木屋"）。
+## - 农地：耕地 tile + 小作物（轻装饰，踩过合理）。
+## - 营地点缀：少量花/幼苗。
 static func _dress_zones(map_controller, ground_layer: TileMapLayer, props_root: Node2D, occupied: Dictionary) -> Dictionary:
 	var spawn: Vector3i = map_controller.get_spawn_tile()
-	var free := _free_ring(map_controller, Vector2i(spawn.x, spawn.z), occupied, 9)
+	var free := _free_ring(map_controller, Vector2i(spawn.x, spawn.z), occupied, 7)
 	var stats := {"camp": 0, "farm": 0, "workshop": 0, "props": 0}
-	if free.is_empty():
-		return stats
-	_spawn_prop(props_root, "campfire", Vector2i(spawn.x, spawn.z))
-	occupied[Vector2i(spawn.x, spawn.z)] = true
-	stats["camp"] += 1
 	var cursor := 0
-	# 营地
-	var camp_layout := ["cabin", "crate", "barrel", "chest", "well", "fence_h", "fence_h", "fence_v", "fence_v"]
-	for prop_name in camp_layout:
-		if cursor >= free.size():
-			break
-		var tile: Vector2i = free[cursor]
-		_spawn_prop(props_root, prop_name, tile)
-		occupied[tile] = true
-		cursor += 1
-		stats["camp"] += 1
-		stats["props"] += 1
-	# 农地：6 格空闲草地 → 耕地底 + 两档作物
 	var farm_count := 0
 	while cursor < free.size() and farm_count < 6:
 		var t: Vector2i = free[cursor]
@@ -170,17 +159,17 @@ static func _dress_zones(map_controller, ground_layer: TileMapLayer, props_root:
 		farm_count += 1
 		stats["farm"] += 1
 		stats["props"] += 1
-	# 工坊
-	var shop_layout := ["workbench", "machine", "log_pile", "stone_pile", "crate"]
-	for prop_name in shop_layout:
+	var deco := ["flower", "sapling", "flower", "weed", "flower"]
+	for prop_name in deco:
 		if cursor >= free.size():
 			break
-		var tile: Vector2i = free[cursor]
-		_spawn_prop(props_root, prop_name, tile)
-		occupied[tile] = true
+		var t: Vector2i = free[cursor]
+		_spawn_prop(props_root, prop_name, t)
+		occupied[t] = true
 		cursor += 1
-		stats["workshop"] += 1
+		stats["camp"] += 1
 		stats["props"] += 1
+	stats["workshop"] = 0 # 阻挡性工坊物件待合法 non-walkable footprint（见头注释）
 	return stats
 
 ## 出生点邻域的可行走空闲格，按（切比雪夫距离, x, y）稳定排序。
