@@ -225,6 +225,21 @@
       "name": "p7_2_runtime_chain",
       "script": "res://test/p7_2_runtime_chain.gd",
       "expected": 56
+    },
+    {
+      "name": "p7_2b_holder_evidence",
+      "script": "res://test/p7_2b_holder_evidence.gd",
+      "expected": 27
+    },
+    {
+      "name": "p7_2b_holder_evidence_hardening",
+      "script": "res://test/p7_2b_holder_evidence_hardening.gd",
+      "expected": 19
+    },
+    {
+      "name": "p7_2b_runtime_chain",
+      "script": "res://test/p7_2b_runtime_chain.gd",
+      "expected": 26
     }
   ]
 }
