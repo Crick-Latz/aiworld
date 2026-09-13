@@ -87,6 +87,64 @@ func belief_about(other_id: String, key: String) -> float:
 		return 0.0
 	return float(e["value"]) * clampf(conf, 0.3, 1.0)
 
+# ── P7.2B：持有谓词统一 + 报告证据（claim provenance + 防重复放大） ──
+
+## 全工程唯一的持有谓词（P7.1 与信息系统共用，禁止再造 owns/holder/possesses 变体）。
+static func possession_predicate(item_id: String) -> String:
+	return "has_item:" + item_id
+
+## 报告式证据：保留"事实多旧（observed_tick）"与"我何时听说（received_tick）"两个时间，
+## last_evidence_tick() 因此返回 observed_tick（防 stale laundering），
+## _models.last_updated 使用 received_tick。同一 event_seq 只计一次（防重复放大）。
+func add_reported_evidence(other_id: String, key: String, direction: float, weight: float,
+		event_seq: int, observed_tick: int, received_tick: int, reporter_id: String) -> bool:
+	var e := _entry(other_id, key)
+	if event_seq >= 0:
+		for collection in [e["evidence_pos"], e["evidence_neg"]]:
+			for evidence in collection:
+				if typeof(evidence) == TYPE_DICTIONARY \
+						and int(evidence.get("event_id", -2)) == event_seq:
+					return false  # 重复报告——不增计数、不抬置信度
+	var w := clampf(weight, 0.0, 1.0)
+	var d := 1.0 if direction >= 0.0 else -1.0
+	e["value"] = clampf(float(e["value"]) + d * w * (1.0 - absf(float(e["value"])) * 0.5), -1.0, 1.0)
+	var evidence := {"event_id": event_seq, "tick": observed_tick, "kind": "claim",
+		"reporter_id": reporter_id, "received_tick": received_tick}
+	if d > 0.0:
+		e["evidence_pos"].append(evidence)
+		if e["evidence_pos"].size() > EVIDENCE_CAP:
+			e["evidence_pos"].pop_front()
+	else:
+		e["evidence_neg"].append(evidence)
+		if e["evidence_neg"].size() > EVIDENCE_CAP:
+			e["evidence_neg"].pop_front()
+	_models[other_id]["last_updated"] = received_tick
+	return true
+
+## 只读查询：我自己 ToM 里对某谓词持有证据的全部主体（不含全局 actor 扫描）。
+func subjects_with_evidence(key: String) -> Array:
+	var out: Array = []
+	for other_id in _models:
+		var e: Dictionary = _models[other_id].get(key, {})
+		if e.is_empty():
+			continue
+		var n := (e["evidence_pos"] as Array).size() + (e["evidence_neg"] as Array).size()
+		if n == 0:
+			continue
+		out.append({
+			"actor_id": str(other_id),
+			"belief": belief_about(str(other_id), key),
+			"confidence": confidence_of(str(other_id), key),
+			"last_evidence_tick": last_evidence_tick(str(other_id), key),
+		})
+	out.sort_custom(func(a, b):
+		var as_ := absf(float(a["belief"])) * float(a["confidence"])
+		var bs := absf(float(b["belief"])) * float(b["confidence"])
+		if not is_equal_approx(as_, bs):
+			return as_ > bs
+		return str(a["actor_id"]) < str(b["actor_id"]))
+	return out
+
 ## 原始值（不折算置信度）——供解释系统判断"我以为他粮多还是粮少"
 func raw_belief(other_id: String, key: String) -> float:
 	if not _models.has(other_id):

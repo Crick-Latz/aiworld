@@ -10,6 +10,8 @@ static func build(actor: Dictionary, goal: Dictionary, at_tick: int) -> Array:
 	var out: Array = []
 	if goal.is_empty() or str(goal.get("state", "")) != InformationSubgoalTracker.STATE_ACTIVE:
 		return out
+	if str(goal.get("query_kind", "SOURCE")) == "HOLDER":
+		return _build_holder_asks(actor, goal)
 	var source_kinds: Array = goal.get("source_kinds", [])
 	if source_kinds.is_empty():
 		return out
@@ -152,3 +154,54 @@ static func _direction_quadrant(origin: Vector2i, tile: Vector2i, rotation: int)
 	else:
 		base = 2 if delta.y >= 0 else 3
 	return (base - rotation) % 4
+
+## P7.2B：开放式持有询问。"我不知道谁有 X"本身就是向身边人打听的理由——
+## 不要求预先相信对方"知道答案"；候选=当前可见、非自己、本轮未问过、未被本次
+## material request 拒绝过。排序只用 A 自己的信任/ToM/人格/距离，不读任何真值。
+static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
+	var out: Array = []
+	var p: PersonalityProfile = actor.get("personality", null)
+	var tom: TheoryOfMind = actor.get("tom", null)
+	if p == null or tom == null:
+		return out
+	var item_id := str(goal.get("item_id", ""))
+	if item_id == "":
+		return out
+	var asked: Array = goal.get("asked_actor_ids", [])
+	var excluded: Array = goal.get("excluded_target_ids", [])
+	var pressure := _pressure(actor.get("needs", {}), str(goal.get("root_goal", "")))
+	var urgency := clampf(float(goal.get("request_urgency", 0.5)), 0.0, 1.0)
+	var peers: Array = (actor.get("others_visible", []) as Array).duplicate(true)
+	peers.sort_custom(func(a, b): return str(a.get("id", "")) < str(b.get("id", "")))
+	for peer in peers:
+		var peer_id := str(peer.get("id", ""))
+		if peer_id == "" or peer_id == str(actor.get("id", "")) or asked.has(peer_id) or excluded.has(peer_id):
+			continue
+		var trust_raw := float(actor.get("trust_of", {}).get(peer_id, 0.0))
+		var trust_norm := clampf((trust_raw + 1000.0) / 2000.0, 0.0, 1.0)
+		var reliable := clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+		var sociability := p.effective_trait("sociability", actor.get("needs", {}))
+		var conflict := p.effective_trait("conflict_avoidance", actor.get("needs", {}))
+		var peer_tile: Vector2i = peer.get("tile", actor.get("tile", Vector2i.ZERO))
+		var actor_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
+		var distance := absi(peer_tile.x - actor_tile.x) + absi(peer_tile.y - actor_tile.y)
+		var utility := clampf(0.18 + maxf(pressure, urgency) * 0.32 + trust_norm * 0.14
+			+ reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.92)
+		out.append({
+			"action": "ask_item_holder",
+			"target": peer_tile,
+			"target_actor": peer_id,
+			"utility": utility,
+			"duration": maxi(1, distance - 8),
+			"desc": "向%s打听谁有%s" % [peer_id, item_id],
+			"information_goal_id": str(goal.get("goal_id", "")),
+			"information_action": true,
+			"information_kind": "ASK_HOLDER",
+			"query_kind": "HOLDER",
+			"parent_plan_id": str(goal.get("parent_plan_id", "")),
+			"item_id": item_id,
+			"holder_predicate": TheoryOfMind.possession_predicate(item_id),
+			"source_request_id": str(goal.get("source_request_id", "")),
+			"peer_reliability_belief": reliable,
+		})
+	return out

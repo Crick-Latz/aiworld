@@ -63,6 +63,81 @@ static func assess_willingness(responder: Dictionary, asker_id: String,
 static func knowledge_predicate(source_kind: String) -> String:
 	return "knows_source:" + source_kind
 
+# ── P7.2B：持有询问（FIND_HOLDER）应答 ──
+# 回答方只有两类合法信息源：自己的库存自知（第一人称权威）与自己 ToM 中的
+# 第三方持有证据。不读全局库存、不读他人 ToM、不读地图真值。
+
+const HOLDER_SHARE := "HOLDER_SHARE"
+const HOLDER_REFUSE := "HOLDER_REFUSE"
+const HOLDER_UNKNOWN := "HOLDER_UNKNOWN"
+const HOLDER_STALE := "HOLDER_STALE"
+const HOLDER_SELF_ABSENT := "HOLDER_SELF_ABSENT"
+
+static func evaluate_holder_query(responder: Dictionary, asker_id: String, item_id: String,
+		trust_toward_asker: int, at_tick: int, rng: RandomNumberGenerator) -> Dictionary:
+	var responder_id := str(responder.get("id", ""))
+	var self_count := int(responder.get("inventory", {}).get(item_id, 0))
+	if self_count > 0:
+		# 自己持有——第一人称权威；是否告知仍受意愿支配。
+		var assessment := assess_willingness(responder, asker_id, trust_toward_asker)
+		if rng == null or rng.randf() > float(assessment.get("share_probability", 0.0)):
+			return _holder_result(HOLDER_REFUSE, "UNWILLING_TO_SHARE", responder_id, responder_id,
+				at_tick, at_tick, 0.0, "SELF_REPORT", assessment)
+		return _holder_result(HOLDER_SHARE, "SELF_REPORT", responder_id, responder_id,
+			at_tick, at_tick, 1.0, "SELF_REPORT", assessment)
+	# 第三方：只从自己的 ToM 找（subjective only）。
+	var tom: TheoryOfMind = responder.get("tom", null)
+	if tom != null:
+		var candidates: Array = tom.subjects_with_evidence(TheoryOfMind.possession_predicate(item_id))
+		var best: Dictionary = {}
+		var stale_best: Dictionary = {}
+		for row in candidates:
+			var holder_id := str(row.get("actor_id", ""))
+			if holder_id == "" or holder_id == asker_id or holder_id == responder_id:
+				continue
+			if float(row.get("belief", 0.0)) <= 0.0:
+				continue
+			var observed := int(row.get("last_evidence_tick", -1))
+			if observed >= 0 and at_tick - observed <= MAX_REPORT_AGE_TICKS:
+				if best.is_empty():
+					best = row
+			elif stale_best.is_empty():
+				stale_best = row
+		if not best.is_empty():
+			var assessment2 := assess_willingness(responder, asker_id, trust_toward_asker)
+			var holder_id2 := str(best.get("actor_id", ""))
+			if rng == null or rng.randf() > float(assessment2.get("share_probability", 0.0)):
+				return _holder_result(HOLDER_REFUSE, "UNWILLING_TO_SHARE", responder_id, holder_id2,
+					int(best.get("last_evidence_tick", -1)), at_tick, 0.0, "TOM_REPORT", assessment2)
+			return _holder_result(HOLDER_SHARE, "FRESH_TOM_REPORT", responder_id, holder_id2,
+				int(best.get("last_evidence_tick", -1)), at_tick,
+				clampf(float(best.get("confidence", 0.0)), 0.0, 1.0), "TOM_REPORT", assessment2)
+		if not stale_best.is_empty():
+			return _holder_result(HOLDER_STALE, "REPORT_TOO_OLD", responder_id,
+				str(stale_best.get("actor_id", "")),
+				int(stale_best.get("last_evidence_tick", -1)), at_tick,
+				clampf(float(stale_best.get("confidence", 0.0)), 0.0, 1.0), "TOM_REPORT", {})
+	# 自知不持有，且无可分享的第三方知识。
+	return _holder_result(HOLDER_SELF_ABSENT, "SELF_NOT_HOLDER", responder_id, responder_id,
+		at_tick, at_tick, 1.0, "SELF_REPORT", {})
+
+static func _holder_result(response: String, reason: String, reporter_id: String,
+		reported_holder_id: String, observed_tick: int, received_tick: int,
+		confidence: float, evidence_kind: String, assessment: Dictionary) -> Dictionary:
+	var out := {
+		"response": response,
+		"reason_code": reason,
+		"reporter_id": reporter_id,
+		"reported_holder_id": reported_holder_id,
+		"observed_tick": observed_tick,
+		"received_tick": received_tick,
+		"confidence": confidence,
+		"evidence_kind": evidence_kind,
+	}
+	for key in assessment:
+		out[key] = assessment[key]
+	return out
+
 static func source_kind_for_event(event_type: String) -> String:
 	return {
 		"foraged": "berry",
