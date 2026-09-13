@@ -400,12 +400,15 @@ func _trace(goal: Dictionary, event_name: String, at_tick: int, extra: Dictionar
 		"item_id": str(goal.get("item_id", "")),
 		"state": str(goal.get("state", "")),
 		"attempts": int(goal.get("attempts", 0)),
-		# P7.2B-R1： HOLDER/SOURCE 可按字段直接归属（goal_id 前缀是稳定后备）。
-		"query_kind": str(goal.get("query_kind", "SOURCE")),
-		"source_request_id": str(goal.get("source_request_id", "")),
-		"parent_run_id": str(goal.get("parent_run_id", "")),
-		"blocker_step_id": str(goal.get("blocker_step_id", "")),
 	}
+	# P7.2B-R1：HOLDER 行附身份字段（query_kind/source_request_id/parent_run_id/
+	# blocker_step_id），可按字段归属（goal_id 前缀为稳定后备）。SOURCE 行保持
+	# 旧形状逐字节不变——旧 profile 的 information trace 哈希不受影响。
+	if str(goal.get("query_kind", "SOURCE")) == "HOLDER":
+		row["query_kind"] = "HOLDER"
+		row["source_request_id"] = str(goal.get("source_request_id", ""))
+		row["parent_run_id"] = str(goal.get("parent_run_id", ""))
+		row["blocker_step_id"] = str(goal.get("blocker_step_id", ""))
 	for key in extra:
 		row[key] = extra[key]
 	traces.append(row)
