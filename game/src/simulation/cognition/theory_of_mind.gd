@@ -122,6 +122,8 @@ func add_reported_evidence(other_id: String, key: String, direction: float, weig
 	return true
 
 ## 只读查询：我自己 ToM 里对某谓词持有证据的全部主体（不含全局 actor 扫描）。
+## P7.2B-R1：行内附 positive/negative 支持证据的最新 tick——正判断的新鲜度读
+## 正证据、负判断读负证据，防止"新鲜反证刷新旧正证"的极性洗白。
 func subjects_with_evidence(key: String) -> Array:
 	var out: Array = []
 	for other_id in _models:
@@ -136,6 +138,8 @@ func subjects_with_evidence(key: String) -> Array:
 			"belief": belief_about(str(other_id), key),
 			"confidence": confidence_of(str(other_id), key),
 			"last_evidence_tick": last_evidence_tick(str(other_id), key),
+			"positive_evidence_tick": latest_supporting_tick(str(other_id), key, 1.0),
+			"negative_evidence_tick": latest_supporting_tick(str(other_id), key, -1.0),
 		})
 	out.sort_custom(func(a, b):
 		var as_ := absf(float(a["belief"])) * float(a["confidence"])
@@ -144,6 +148,22 @@ func subjects_with_evidence(key: String) -> Array:
 			return as_ > bs
 		return str(a["actor_id"]) < str(b["actor_id"]))
 	return out
+
+## P7.2B-R1：极性感知新鲜度——指定方向支持证据的最新 tick。
+## last_evidence_tick() 保持混合双方向最大值语义（旧调用方不变）；
+## 持有判断（belief>0）的新鲜度必须走本函数 direction=+1。
+func latest_supporting_tick(other_id: String, key: String, direction: float) -> int:
+	if not _models.has(other_id):
+		return -1
+	var e: Dictionary = _models[other_id].get(key, {})
+	if e.is_empty():
+		return -1
+	var collection: Array = e["evidence_pos"] if direction >= 0.0 else e["evidence_neg"]
+	var newest := -1
+	for evidence in collection:
+		if typeof(evidence) == TYPE_DICTIONARY:
+			newest = maxi(newest, int(evidence.get("tick", -1)))
+	return newest
 
 ## 原始值（不折算置信度）——供解释系统判断"我以为他粮多还是粮少"
 func raw_belief(other_id: String, key: String) -> float:

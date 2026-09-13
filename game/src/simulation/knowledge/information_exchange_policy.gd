@@ -86,6 +86,10 @@ static func evaluate_holder_query(responder: Dictionary, asker_id: String, item_
 		return _holder_result(HOLDER_SHARE, "SELF_REPORT", responder_id, responder_id,
 			at_tick, at_tick, 1.0, "SELF_REPORT", assessment)
 	# 第三方：只从自己的 ToM 找（subjective only）。
+	# P7.2B-R1：极性感知新鲜度——正持有判断读 positive 支持证据的 tick，
+	# 新鲜负证据不得把旧正证据"洗白"成新事实。HOLDER_UNKNOWN 为协议预留态：
+	# 当前模型下回答者对自己的库存完全自知，无第三方可报时必然 SELF_ABSENT，
+	# UNKNOWN 保留给未来"部分自知库存"模型，不为凑状态制造分支。
 	var tom: TheoryOfMind = responder.get("tom", null)
 	if tom != null:
 		var candidates: Array = tom.subjects_with_evidence(TheoryOfMind.possession_predicate(item_id))
@@ -97,7 +101,8 @@ static func evaluate_holder_query(responder: Dictionary, asker_id: String, item_
 				continue
 			if float(row.get("belief", 0.0)) <= 0.0:
 				continue
-			var observed := int(row.get("last_evidence_tick", -1))
+			var observed := int(row.get("positive_evidence_tick",
+				row.get("last_evidence_tick", -1)))
 			if observed >= 0 and at_tick - observed <= MAX_REPORT_AGE_TICKS:
 				if best.is_empty():
 					best = row
@@ -108,14 +113,14 @@ static func evaluate_holder_query(responder: Dictionary, asker_id: String, item_
 			var holder_id2 := str(best.get("actor_id", ""))
 			if rng == null or rng.randf() > float(assessment2.get("share_probability", 0.0)):
 				return _holder_result(HOLDER_REFUSE, "UNWILLING_TO_SHARE", responder_id, holder_id2,
-					int(best.get("last_evidence_tick", -1)), at_tick, 0.0, "TOM_REPORT", assessment2)
+					int(best.get("positive_evidence_tick", -1)), at_tick, 0.0, "TOM_REPORT", assessment2)
 			return _holder_result(HOLDER_SHARE, "FRESH_TOM_REPORT", responder_id, holder_id2,
-				int(best.get("last_evidence_tick", -1)), at_tick,
+				int(best.get("positive_evidence_tick", -1)), at_tick,
 				clampf(float(best.get("confidence", 0.0)), 0.0, 1.0), "TOM_REPORT", assessment2)
 		if not stale_best.is_empty():
 			return _holder_result(HOLDER_STALE, "REPORT_TOO_OLD", responder_id,
 				str(stale_best.get("actor_id", "")),
-				int(stale_best.get("last_evidence_tick", -1)), at_tick,
+				int(stale_best.get("positive_evidence_tick", -1)), at_tick,
 				clampf(float(stale_best.get("confidence", 0.0)), 0.0, 1.0), "TOM_REPORT", {})
 	# 自知不持有，且无可分享的第三方知识。
 	return _holder_result(HOLDER_SELF_ABSENT, "SELF_NOT_HOLDER", responder_id, responder_id,
