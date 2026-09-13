@@ -159,7 +159,10 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 		for ref in refs:
 			_add_unique(goal["evidence_refs"], ref)
 		_resolve(goal, at_tick, result, goal["evidence_refs"])
-	elif int(goal.get("attempts", 0)) >= MAX_ATTEMPTS:
+	elif str(goal.get("query_kind", "SOURCE")) != "HOLDER" and int(goal.get("attempts", 0)) >= MAX_ATTEMPTS:
+		# P7.2B-R1.1：HOLDER 不因通用 MAX_ATTEMPTS 进 FAILED——终止权唯一归
+		# request/run/step/gap contract；问尽当前对象后保持 ACTIVE 等待环境变化。
+		# SOURCE 的 ATTEMPT_LIMIT 冷却语义逐位不变。
 		_transition(goal, STATE_FAILED, at_tick, "ATTEMPT_LIMIT")
 		goal["retry_after_tick"] = at_tick + RETRY_COOLDOWN_TICKS
 	else:
