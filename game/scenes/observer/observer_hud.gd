@@ -1,6 +1,8 @@
 extends CanvasLayer
 ## UI-R1 观察 HUD（2D 像素版）：只暴露 render(ViewModel) 与意图信号。
-## 布局：顶部状态栏 / 右侧 NPC Inspector（7 页）/ 底部时间线（事件·故事·对话·因果链）。
+## 布局（v3 游戏式 HUD）：顶部紧凑状态栏（左世界名/日期时间，右 倍速/暂停/菜单）；
+## 右侧 NPC Inspector（6 页，未选中时收起）；底部时间线（事件·故事·对话·因果链，
+## 默认收起为 tab 条，点击展开、再点当前 tab 收回）。世界画面是视觉主体。
 ## 内部节点路径不外泄；不读写 Simulation 内部状态；缺字段一律显示占位文案。
 ## 契约（observer_sim.gd 依赖）：render(model)、tick_label 含 "N×"、sel_name 含角色名、
 ## events_label 解析文本含事件文本；信号 pause/speed/save/scenario 不变。
@@ -19,6 +21,7 @@ const MAX_MEMORIES := 8
 var _inspector_tab := "overview"
 var _timeline_tab := "events"
 var _timeline_autopicked := false
+var _timeline_expanded := false
 
 @onready var world_label: Label = $Root/TopBar/TopMargin/TopHBox/WorldLabel
 @onready var tick_label: Label = $Root/TopBar/TopMargin/TopHBox/TickLabel
@@ -28,9 +31,9 @@ var _timeline_autopicked := false
 @onready var x1_btn: Button = $Root/TopBar/TopMargin/TopHBox/X1Btn
 @onready var x2_btn: Button = $Root/TopBar/TopMargin/TopHBox/X2Btn
 @onready var x4_btn: Button = $Root/TopBar/TopMargin/TopHBox/X4Btn
-@onready var save_btn: Button = $Root/TopBar/TopMargin/TopHBox/SaveBtn
-@onready var baseline_btn: Button = $Root/TopBar/TopMargin/TopHBox/BaselineBtn
-@onready var control_btn: Button = $Root/TopBar/TopMargin/TopHBox/ControlBtn
+@onready var menu_btn: Button = $Root/TopBar/TopMargin/TopHBox/MenuBtn
+@onready var inspector_panel: PanelContainer = $Root/InspectorPanel
+@onready var bottom_pages: Control = $Root/BottomPanel/BotMargin/BotVBox/PagesH
 @onready var sel_name: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/SelName
 @onready var sel_status: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/StatusLabel
 @onready var goal_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/GoalLabel
@@ -50,9 +53,13 @@ func _ready() -> void:
 	x1_btn.pressed.connect(func(): speed_requested.emit(1))
 	x2_btn.pressed.connect(func(): speed_requested.emit(2))
 	x4_btn.pressed.connect(func(): speed_requested.emit(4))
-	save_btn.pressed.connect(func(): save_requested.emit())
-	baseline_btn.pressed.connect(func(): scenario_requested.emit("baseline"))
-	control_btn.pressed.connect(func(): scenario_requested.emit("control"))
+	_menu = PopupMenu.new()
+	add_child(_menu) # 必须入树，否则成为孤儿节点在退出时泄漏 RID
+	_menu.add_item("存档", 0)
+	_menu.add_item("基准场景", 1)
+	_menu.add_item("对照场景", 2)
+	_menu.id_pressed.connect(_on_menu_id)
+	menu_btn.pressed.connect(func(): _menu.popup(Rect2i(Vector2i(menu_btn.global_position), Vector2i(120, 72))))
 	var grid: GridContainer = $Root/InspectorPanel/InsMargin/InsVBox/TabGrid
 	for tab_name in INSPECTOR_TABS:
 		var btn: Button = grid.get_node(NodePath(String(tab_name).capitalize()))
@@ -61,20 +68,44 @@ func _ready() -> void:
 	var tab_row: HBoxContainer = $Root/BottomPanel/BotMargin/BotVBox/TabRow
 	for tab_name in TIMELINE_TABS:
 		var btn: Button = tab_row.get_node(NodePath(String(tab_name).capitalize()))
-		btn.pressed.connect(func(): _set_timeline_tab(tab_name))
+		btn.pressed.connect(func(): _on_timeline_tab_pressed(tab_name))
 		timeline_buttons[tab_name] = btn
 	for tab_name in INSPECTOR_TABS:
 		pages[tab_name] = $Root/InspectorPanel/InsMargin/InsVBox/PagesV.get_node(NodePath(String(tab_name).capitalize() + "Page")) as Control
 	for tab_name in TIMELINE_TABS:
 		timeline_pages[tab_name] = $Root/BottomPanel/BotMargin/BotVBox/PagesH.get_node(NodePath(String(tab_name).capitalize() + "Label")) as Control
+	inspector_panel.visible = false # 未选中即收起（v3）
+	bottom_pages.visible = false # 时间线默认收起
 	_set_inspector_tab(_inspector_tab)
 	_set_timeline_tab(_timeline_tab)
+
+var _menu: PopupMenu
+
+func _on_menu_id(id: int) -> void:
+	if id == 0:
+		save_requested.emit()
+	elif id == 1:
+		scenario_requested.emit("baseline")
+	elif id == 2:
+		scenario_requested.emit("control")
+
+## 点击 tab：未展开或切换页 → 展开；再次点击当前页 → 收回
+func _on_timeline_tab_pressed(tab_name: String) -> void:
+	if _timeline_expanded and _timeline_tab == tab_name:
+		_timeline_expanded = false
+		bottom_pages.visible = false
+	else:
+		_timeline_expanded = true
+		bottom_pages.visible = true
+		_set_timeline_tab(tab_name)
 
 ## 预览/截图工具入口
 func set_inspector_tab(tab_name: String) -> void:
 	_set_inspector_tab(tab_name)
 
 func set_timeline_tab(tab_name: String) -> void:
+	_timeline_expanded = true
+	bottom_pages.visible = true
 	_set_timeline_tab(tab_name)
 
 func _set_inspector_tab(tab_name: String) -> void:
@@ -118,6 +149,7 @@ func render(model: Dictionary) -> void:
 		hint_label.text = hint
 
 func _render_selection(sel) -> void:
+	inspector_panel.visible = sel != null and typeof(sel) == TYPE_DICTIONARY
 	if sel != null and typeof(sel) == TYPE_DICTIONARY:
 		sel_name.text = str(sel.get("display_name", "-"))
 		sel_status.text = str(sel.get("status_text", sel.get("activity_text", "-")))
@@ -251,17 +283,40 @@ func _relations_bbcode(sel: Dictionary) -> String:
 	var rows: Array = sel.get("relationship_rows", [])
 	if rows.is_empty():
 		return "[color=#8899aa]暂无关系数据[/color]"
-	var out := ""
+	var out := "[color=#e8c170]── 关系（真实有向边）──[/color]
+"
 	for r in rows:
-		var trust := int(r.get("trust", 0))
-		out += "[color=#c0d8e8]%s[/color] 信任%s%d" % [str(r.get("other_name", "?")), "+" if trust >= 0 else "", trust]
-		var tom: Dictionary = r.get("tom", {})
-		var benevolence := float(r.get("benevolence", tom.get("generous", 0.0)))
-		var reliability := float(r.get("reliability", tom.get("reliable", 0.0)))
-		out += " [color=#8899aa]善意%+.1f 可靠性%+.1f[/color]" % [benevolence, reliability]
+		var name := str(r.get("other_name", "?"))
+		out += "[color=#c0d8e8]%s[/color]
+" % name
+		out += "  综合信任%s 善意%s 可靠性%s
+" % [
+			_sign(int(r.get("trust", 0))),
+			_sign(int(r.get("benevolence", 0))),
+			_sign(int(r.get("reliability", 0)))]
+		out += "  亏欠%s 畏惧%s
+" % [
+			_sign(int(r.get("obligation", 0))),
+			_sign(int(r.get("fear", 0)))]
 		var change := str(r.get("change", ""))
-		out += "\n  [color=#8899aa]关系变化：[/color]%s\n" % (change if change != "" else "—（暂无轨迹数据）")
+		out += "  [color=#8899aa]关系变化：%s[/color]
+" % (change if change != "" else "—（暂无轨迹数据）")
+	out += "
+[color=#e8c170]── 我对他的判断（Theory of Mind）──[/color]
+"
+	for r in rows:
+		var tom: Dictionary = r.get("tom", {})
+		if tom.is_empty():
+			continue
+		out += "[color=#c0d8e8]%s[/color] [color=#8899aa]有食%+.1f 慷慨%+.1f 可靠%+.1f[/color]
+" % [
+			str(r.get("other_name", "?")),
+			float(tom.get("has_food", 0.0)), float(tom.get("generous", 0.0)), float(tom.get("reliable", 0.0))]
 	return out
+
+## 关系维度展示格式化（正数带 +，负数自带 -）
+func _sign(v: int) -> String:
+	return ("+" if v > 0 else "") + str(v)
 
 func _history_bbcode(sel: Dictionary) -> String:
 	var rows: Array = sel.get("history_rows", [])

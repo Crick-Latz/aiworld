@@ -57,9 +57,9 @@ var _hud_refresh_acc := 0.0
 const ISLAND_SCENARIO := "res://data/scenarios/deserted_island.json"
 var island_sim: IslandSimulation = null
 
-# UI-R1 小地图原型：观察模式 island 世界收窄为 48x36（六分区舞台）。
-# 只覆盖本次 build 的尺寸参数——game/config 与地图生成器/模拟代码零改动；
-# AIW_UI_MAP=full 可退回 64x64 全图。巡航/故事演示模式不受影响。
+# UI-R1 小地图：observer-only 48x36 小世界配置（覆盖本次 build 传入 MapController 的
+# 尺寸——observer 会话的地图输入因此与 headless/default 64x64 世界不同，不逐状态等价）。
+# game/config 与地图生成器/模拟代码零改动；AIW_UI_MAP=full 退回 64x64。
 const UI_MAP_SMALL := Vector2i(48, 36)
 
 func _ready() -> void:
@@ -682,10 +682,17 @@ func _build_island_selected(a: Dictionary) -> Dictionary:
 	for oid in island_sim.actors:
 		if oid == selected_actor_id:
 			continue
+		# 两层分离（v3）：真实有向关系边（RelationshipStore 四维 + 综合信任）
+		# 与主观心智模型（TheoryOfMind 信念）不得混用
 		var row := {
 			"other_id": oid,
 			"other_name": str(island_sim.actors[oid]["display_name"]),
 			"trust": int(island_sim.relationships.get_trust(selected_actor_id, oid)),
+			"benevolence": int(island_sim.relationships.get_dim(selected_actor_id, oid, "benevolence")),
+			"reliability": int(island_sim.relationships.get_dim(selected_actor_id, oid, "reliability")),
+			"obligation": int(island_sim.relationships.get_dim(selected_actor_id, oid, "obligation")),
+			"fear": int(island_sim.relationships.get_dim(selected_actor_id, oid, "fear")),
+			"change": "",
 		}
 		if tom != null:
 			var m: Dictionary = tom.model_of(oid)
@@ -694,8 +701,6 @@ func _build_island_selected(a: Dictionary) -> Dictionary:
 				"generous": float(m.get("generous", 0.0)),
 				"reliable": float(m.get("reliable", 0.0)),
 			}
-			row["benevolence"] = float(m.get("generous", 0.0))
-			row["reliability"] = float(m.get("reliable", 0.0))
 		rel_rows.append(row)
 	sel["relationship_rows"] = rel_rows
 	var hist: Array = []

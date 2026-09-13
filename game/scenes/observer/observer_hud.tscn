@@ -79,19 +79,12 @@ text = "2×"
 layout_mode = 2
 text = "4×"
 
-[node name="SaveBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+[node name="MenuBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
 layout_mode = 2
-text = "存档"
-
-[node name="BaselineBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
-layout_mode = 2
-text = "基准"
-
-[node name="ControlBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
-layout_mode = 2
-text = "对照"
+text = "⋯"
 
 [node name="InspectorPanel" type="PanelContainer" parent="Root"]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -297,6 +290,7 @@ button_group = SubResource("timeline_tab_group")
 text = "因果链"
 
 [node name="PagesH" type="HBoxContainer" parent="Root/BottomPanel/BotMargin/BotVBox"]
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 2
