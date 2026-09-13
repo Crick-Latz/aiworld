@@ -1,0 +1,70 @@
+# UI-R1 2D 像素观察原型 —— 本地验证记录
+
+- 分支：`work/ui-r1-2d-pixel-observer`（基线 main `d693a2f`）
+- 日期：2026-09-13
+- 引擎：Godot 4.7.2（`tools/Godot_v4.7.2-stable_win64_console.exe`，Windows）
+- 范围：presentation / scene / assets-prep / inspector；不触碰 simulation / runtime / config / scripts
+
+## 单元与集成检查（全部通过）
+
+| 检查 | 命令要点 | 结果 |
+|---|---|---|
+| 脚本语法 | `--check-only --script` × 8 个新增/改动 .gd | 0 错误 |
+| HUD 预览夹具 ×9 | `AIW_PREVIEW_FIXTURE=<名> --headless ui_preview.tscn` | 全部 exit 0、无 SCRIPT ERROR |
+| island 观察运行 | `--headless --quit-after 300 observer_main.tscn`（离线：临时改名 ai.local.json） | exit 0、无 SCRIPT ERROR |
+| wander 3D 演示 | `AIW_MODE=wander` 同上 | exit 0、无 SCRIPT ERROR |
+| observer_sim（HUD 契约/选中/暂停/确定性） | strict 同款命令 | 13/13 PASS |
+| island_sim / execution_receipt / p0_cognition / p1_social / camera_rotation | 同上 | 8+6+9+33+10 PASS，0 FAIL |
+| 完整严格回归 | `run-strict-regression.py --timeout 600 --evidence .tmp/ui-r1-strict-evidence` | **PASS：42 套件 / 1269 断言 / 18 python 测试**（首轮曾抓到 hud_layout_in_view 与 module_boundaries 两处集成问题，修复后复跑全绿；证据 `.tmp/ui-r1-strict-evidence/`） |
+
+## 截图（1920×1080 ×4 + 1366×768 ×1）
+
+`ui_capture.tscn` 窗口模式导出（离线模板叙事；证据存 `.tmp/ui-r1/screenshots/`，
+随复审包 ZIP 提供）：
+
+- `1920x1080-default.png`（默认观察，无选中）
+- `1920x1080-selected.png`（选中薇拉，概览页，可见选中环与完整字段）
+- `1920x1080-events.png`（底部事件页激活）
+- `1920x1080-inspector-memory.png`（Inspector 记忆页：最近/重要/社会记忆分节）
+- `1366x768-selected.png`（小窗布局完整性）
+
+视觉走查结论：顶栏/Inspector/时间线字段完整、无文字截断（修复过 StatusLabel 溢出）、
+7 tab 与 4 tab 网格完整、地形水/沙/草/林区分清晰、NPC 三色可辨。
+
+## 过程中发现并修复的问题
+
+1. **island 模式 HUD 选中失效（main 已存在的缺陷暴露）**：`_refresh_hud()` 末尾
+   story/sim/else 链在 island 模式走 `else`，把 island 分支组装好的
+   `model["selected_actor"]` 覆盖为 null。原版 island 选中为死代码所以从未显现。
+   修复：else 兜底仅在 `island_sim == null` 时执行。演示模式行为不变（有专项回归）。
+2. `p.beliefs[text]` 是 `{weight, source_event}` 字典，`float()` 直接转换会抛
+   "Nonexistent 'float' constructor" 中断整个 `_refresh_hud` 协程。修复为取 `["weight"]`。
+3. Camera2D 无 `clear_current()`（4.7 API），改为仅 `enabled=false`。
+4. `:=` 从未类型化数组元素推断失败（`nx/nz`）——显式类型标注；`get_node` 需要
+   NodePath 而非 StringName。
+5. **首轮 strict regression 抓到两处集成问题（已修复后复跑）**：
+   a. `run_all::hud_layout_in_view` 依赖工程视口 1280×720（遗留 main.tscn 玩家 HUD 布局），
+      全局改视口会连累它——改为 observer/ui_preview 运行时设置 `content_scale_size=480×270`，
+      工程视口还原 1280×720。
+   b. `module_boundaries`：`scenes/ui/ui_capture.gd` 不得引用 `observer_main.tscn`（m15_ui
+      无该依赖且会成环）——ui_capture 移入 `scenes/observer/` 并在
+      `game/docs/architecture/modules.json` 登记为 m01 入口装配；全部新表现层文件
+      （m13_presentation/m16_camera_input）同步登记。`node scripts/check-module-boundaries.mjs`
+      复验 BOUNDARY_OK。
+
+## 与模拟线的并行安全
+
+- `game/src/simulation/**`、`game/src/runtime/**`、`game/config/**`、`scripts/**`、
+  `.github/**`：0 文件改动。
+- 共享文件改动仅 2 个：`game/project.godot`（display 渲染分辨率 480×270 / 窗口
+  1920×1080 / nearest 过滤——headless 回归不受影响）与
+  `game/scenes/observer/observer_main.gd`（谨慎允许范围：ViewModel 组装/2D 接线/选中）。
+- `game/test/**` 0 改动：observer_sim 等 6 套件原样通过。
+
+## 产品缺口（与单元测试成功分开陈述）
+
+- 底部"故事/对话"页在真实运行早期常为占位（事件量随 tick 增长后填充）；因果链页依赖
+  事件携带 `cause_seq`，当前 island 事件多数不带，链数少。
+- Inspector 计划/历史页在 tick 早期数据稀疏（意图/记忆需要模拟推进）。
+- items/ 图标管线已建但无 UI 消费点；世界物件会延伸到面板下方（已知限制见
+  ui-architecture.md）。

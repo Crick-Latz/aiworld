@@ -10,6 +10,8 @@ inspector，不改模拟机制。
 
 - **tile size：16×16 逻辑像素**
 - **内部渲染分辨率：480×270**（16:9；320×180 过挤，Inspector 7 页 + 中文文本放不下）
+- **实现方式：运行时 `root.content_scale_size = 480×270`**（observer/ui_preview 场景自设；
+  工程默认视口保持 1280×720——遗留 main.tscn 玩家原型与其 hud_layout 测试不受影响）
 - **窗口：1920×1080 默认**（`window_width/height_override`），`--resolution 1366x768` 验证小窗
 - **拉伸：canvas_items + keep**，全局面板纹理过滤 = Nearest
   （`rendering/textures/canvas_textures/default_texture_filter=0`）→ 1080p 下整数 4× 像素完美
