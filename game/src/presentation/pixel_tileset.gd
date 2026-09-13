@@ -22,7 +22,7 @@ const TILES := {
 	"deep_a": Vector2i(2, 1), "deep_b": Vector2i(3, 1),
 	"rock_ground_a": Vector2i(4, 1), "rock_ground_b": Vector2i(5, 1),
 	"cliff_edge": Vector2i(6, 1), "gravel": Vector2i(7, 1),
-	"foam_edge": Vector2i(0, 2), "sand_grass_edge": Vector2i(1, 2),
+	"foam_edge": Vector2i(0, 2), "sand_grass_edge": Vector2i(1, 2), "farmland": Vector2i(2, 2),
 }
 
 static func build() -> TileSet:

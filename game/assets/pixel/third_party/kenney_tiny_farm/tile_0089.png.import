@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cosod5vnq8d1o"
-path="res://.godot/imported/tree.png-ac2648127e5570c4dd3db1a54425d333.ctex"
+uid="uid://dfqw07qjqtrxx"
+path="res://.godot/imported/tile_0089.png-0d0699390e76beb5e7ad9ea03b8d2d0f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/pixel/props/tree.png"
-dest_files=["res://.godot/imported/tree.png-ac2648127e5570c4dd3db1a54425d333.ctex"]
+source_file="res://assets/pixel/third_party/kenney_tiny_farm/tile_0089.png"
+dest_files=["res://.godot/imported/tile_0089.png-0d0699390e76beb5e7ad9ea03b8d2d0f.ctex"]
 
 [params]
 

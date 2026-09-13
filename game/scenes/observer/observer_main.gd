@@ -57,6 +57,11 @@ var _hud_refresh_acc := 0.0
 const ISLAND_SCENARIO := "res://data/scenarios/deserted_island.json"
 var island_sim: IslandSimulation = null
 
+# UI-R1 小地图原型：观察模式 island 世界收窄为 48x36（六分区舞台）。
+# 只覆盖本次 build 的尺寸参数——game/config 与地图生成器/模拟代码零改动；
+# AIW_UI_MAP=full 可退回 64x64 全图。巡航/故事演示模式不受影响。
+const UI_MAP_SMALL := Vector2i(48, 36)
+
 func _ready() -> void:
 	# UI-R1：观察线内部渲染 480x270（16px tile 的 16:9 像素画布），窗口整倍放大。
 	# 工程默认视口保持 1280x720 不变——遗留 main.tscn 玩家原型与其布局测试不受影响。
@@ -151,7 +156,10 @@ func _boot_island() -> void:
 	var app_config := get_node_or_null("/root/AppConfig")
 	var map_config: Dictionary = {}
 	if app_config and typeof(app_config.raw) == TYPE_DICTIONARY and typeof(app_config.raw.get("map")) == TYPE_DICTIONARY:
-		map_config = app_config.raw.get("map")
+		map_config = (app_config.raw.get("map") as Dictionary).duplicate()
+	if OS.get_environment("AIW_UI_MAP") != "full":
+		map_config["width_tiles"] = UI_MAP_SMALL.x
+		map_config["depth_tiles"] = UI_MAP_SMALL.y
 	var build: Dictionary = map_controller.build(spec, map_config)
 	if not build.ok:
 		_apply_error(str(build.code), str(build.message))
@@ -646,6 +654,7 @@ func _build_island_selected(a: Dictionary) -> Dictionary:
 		"step": str(a["activity"]),
 		"reason": reason if reason != "" else "—",
 		"blocker": str(trace.get("blocker", "无")),
+		"next_step": str(intention.get("desc", "—")) if not intention.is_empty() else "—",
 	}
 	var memory_items: Array = []
 	for m in a.get("memories", []):
@@ -685,27 +694,56 @@ func _build_island_selected(a: Dictionary) -> Dictionary:
 				"generous": float(m.get("generous", 0.0)),
 				"reliable": float(m.get("reliable", 0.0)),
 			}
+			row["benevolence"] = float(m.get("generous", 0.0))
+			row["reliability"] = float(m.get("reliable", 0.0))
 		rel_rows.append(row)
 	sel["relationship_rows"] = rel_rows
-	var plan_rows: Array = []
-	if intention.has("action"):
-		plan_rows.append({"detail": "当前意图：%s（承诺度 %.0f%%）" % [
-			str(intention.get("action", "?")), float(intention.get("commitment", 0.0)) * 100.0]})
-	if intention.has("target") and typeof(intention["target"]) == TYPE_VECTOR2I:
-		plan_rows.append({"detail": "目标格：(%d, %d)" % [intention["target"].x, intention["target"].y]})
-	if trace.has("active_goal"):
-		plan_rows.append({"detail": "活跃目标：%s（优先级 %.2f）" % [
-			str(trace.get("goal_desc", trace["active_goal"])), float(trace.get("goal_priority", 0.0))]})
-	sel["plan_rows"] = plan_rows
 	var hist: Array = []
+	var hist_by_seq := {}
 	for i in range(island_sim.events.size() - 1, -1, -1):
 		var e: Dictionary = island_sim.events[i]
 		if str(e.get("actor_id", "")) == selected_actor_id or selected_actor_id in (e.get("actor_ids", []) as Array):
 			hist.append({"day": int(e.get("day", 0)), "seq": int(e.get("seq", 0)), "text": str(e.get("text", ""))})
+			hist_by_seq[int(e.get("seq", 0))] = e
 			if hist.size() >= 12:
 				break
 	sel["history_rows"] = hist
+	var display_name := str(a["display_name"])
+	var hist_dialogue: Array = []
+	for dl in _last_dialogue(6):
+		if str(dl.get("speaker", "")) == display_name:
+			hist_dialogue.append(dl)
+	sel["history_dialogue_rows"] = hist_dialogue
+	sel["history_chain_rows"] = _actor_chain_rows(hist_by_seq)
 	return sel
+
+## History 页第三段：该角色自身带 cause_seq 事件的因果步（无则空，占位由 HUD 显示）。
+func _actor_chain_rows(hist_by_seq: Dictionary) -> Array:
+	var steps: Array = []
+	for seq in hist_by_seq:
+		var e: Dictionary = hist_by_seq[seq]
+		var cause := int(e.get("cause_seq", 0))
+		if cause <= 0 or not hist_by_seq.has(cause):
+			continue
+		var ce: Dictionary = hist_by_seq[cause]
+		steps.append("E%d %s → E%d %s" % [cause, str(ce.get("text", "")), seq, str(e.get("text", ""))])
+	return steps
+
+## 最近 N 条对话转录（与底部对话页同源的轻量复取，不新建状态）。
+func _last_dialogue(n: int) -> Array:
+	var out: Array = []
+	var recent_dlg: Array = island_sim.events.slice(maxi(0, island_sim.events.size() - 30), island_sim.events.size())
+	for e in recent_dlg:
+		var speaker_id := str(e.get("actor_id", ""))
+		if speaker_id == "" or not island_sim.actors.has(speaker_id):
+			continue
+		var sa := SpeechAct.from_event(e, island_sim.actors[speaker_id])
+		if sa.is_empty():
+			continue
+		var utter: Dictionary = TemplateDialogueRenderer.render(sa, str(island_sim.actors[speaker_id]["display_name"]))
+		if bool(utter.get("ok", false)):
+			out.append({"day": int(e.get("day", 1)), "speaker": str(island_sim.actors[speaker_id]["display_name"]), "text": str(utter.get("text", "")), "act": str(sa.get("act_type", "")), "seq": int(e.get("seq", 0))})
+	return out.slice(maxi(0, out.size() - n), out.size())
 
 ## 由最近事件的 cause_seq 派生因果链视图（只读展示派生，不改模拟事件）。
 func _build_causal_chains(events: Array) -> Array:
