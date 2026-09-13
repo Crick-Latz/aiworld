@@ -24,6 +24,12 @@ func prepare(actor_id: String, proposals: Array, ctx: Dictionary,
 		self_state: Dictionary, at_tick: int, items: ItemCatalog) -> Dictionary:
 	var current: Dictionary = goals.get(actor_id, {})
 	if not current.is_empty() and str(current.get("state", "")) == STATE_ACTIVE:
+		# P7.2B-R1：query-kind 分发。HOLDER 目标的生命周期只由 source material
+		# request 驱动（resolve_holder_goal / cancel_holder_goal / _holder_goals_sync_all），
+		# 普通 SOURCE prepare 不得用 _candidate_still_present（UNKNOWN_SOURCE 语义）
+		# 取消它——那曾把 507/556 个 HOLDER goal 以 PARENT_BLOCKER_REMOVED 误杀。
+		if str(current.get("query_kind", "SOURCE")) == "HOLDER":
+			return current.duplicate(true)
 		if _context_has_source(ctx, current.get("source_kinds", [])):
 			_resolve(current, at_tick, "SOURCE_BELIEF_AVAILABLE", _belief_refs(ctx, current.get("source_kinds", [])))
 			goals[actor_id] = current
@@ -87,7 +93,7 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 	if str(action.get("information_goal_id", "")) != str(goal.get("goal_id", "")):
 		return goal.duplicate(true)
 	var action_name := str(action.get("action", ""))
-	if action_name not in ["search_resource_source", "ask_resource_source"]:
+	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder"]:
 		return goal.duplicate(true)
 
 	goal["attempts"] = int(goal.get("attempts", 0)) + 1
@@ -130,6 +136,20 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 			"source_information_missed": result = "TARGET_MISSED"
 			"action_target_unreachable": result = "TARGET_UNREACHABLE"
 			"action_target_missed": result = "TARGET_MISSED"
+			# P7.2B-R1：HOLDER 询问结果落账（attempts/asks/asked_actor_ids 走通用路径，
+			# 此处补结果分类与各类计数）。
+			"holder_information_shared": result = "HOLDER_REPORT_SHARED"
+			"holder_information_refused":
+				result = "HOLDER_REPORT_REFUSED"
+				goal["refusals"] = int(goal.get("refusals", 0)) + 1
+			"holder_information_stale":
+				result = "HOLDER_REPORT_STALE"
+				goal["stale_reports"] = int(goal.get("stale_reports", 0)) + 1
+			"holder_information_unknown":
+				result = "HOLDER_REPORT_UNKNOWN"
+				goal["unknown_responses"] = int(goal.get("unknown_responses", 0)) + 1
+			"holder_information_self_absent": result = "HOLDER_SELF_ABSENT"
+			"holder_information_missed": result = "TARGET_MISSED"
 	for ref in evidence_refs:
 		_add_unique(goal["evidence_refs"], ref)
 	goal["last_result"] = result
@@ -380,6 +400,11 @@ func _trace(goal: Dictionary, event_name: String, at_tick: int, extra: Dictionar
 		"item_id": str(goal.get("item_id", "")),
 		"state": str(goal.get("state", "")),
 		"attempts": int(goal.get("attempts", 0)),
+		# P7.2B-R1： HOLDER/SOURCE 可按字段直接归属（goal_id 前缀是稳定后备）。
+		"query_kind": str(goal.get("query_kind", "SOURCE")),
+		"source_request_id": str(goal.get("source_request_id", "")),
+		"parent_run_id": str(goal.get("parent_run_id", "")),
+		"blocker_step_id": str(goal.get("blocker_step_id", "")),
 	}
 	for key in extra:
 		row[key] = extra[key]
