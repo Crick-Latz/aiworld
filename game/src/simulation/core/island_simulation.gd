@@ -55,6 +55,9 @@ var _commitment_runtime: CommitmentRuntimeBridge = null
 # P7.2B：NO_SUBJECTIVE_TARGET → FIND_HOLDER 信息目标 → 开放式询问 → 来源化持有证据
 # → 同一 material request 重新选目标。默认 false；旧 profile 行为不变。
 var agency_holder_evidence_reachability_enabled := false
+# P7.2B-R1.1：opportunity funnel 诊断计数——纯加性、只写不读、不参与任何行为/
+# RNG/排序决策；不进入 state 编码（audit 排除），仅随 summary 输出供分析器消费。
+var _holder_funnel_diag := {}
 # 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
 var _information_rngs := {}
 var _adoption_rngs := {}
@@ -424,6 +427,9 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_extra.has("information_goal"):
 		actor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
+	if agency_holder_evidence_reachability_enabled \
+			and str(decision.get("action", "")) == "ask_item_holder":
+		_holder_diag_inc("holder_ask_actions_selected")
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["action_travel_stall_ticks"] = 0
@@ -499,6 +505,33 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			{"needs": a["needs"].duplicate(true)}, tick, _item_catalog_if_any())
 		if not information_goal.is_empty():
 			out["information_goal"] = information_goal
+		# P7.2B-R1.1：opportunity funnel（只计数，不改变任何决策输入）。
+		if agency_holder_evidence_reachability_enabled \
+				and str(information_goal.get("query_kind", "SOURCE")) == "HOLDER" \
+				and str(information_goal.get("state", "")) == "ACTIVE":
+			_holder_diag_inc("holder_decision_ticks")
+			var diag_view := _build_actor_view(id, a)
+			var asked_ids: Array = information_goal.get("asked_actor_ids", [])
+			var excluded_ids: Array = information_goal.get("excluded_target_ids", [])
+			var visible_count := 0
+			var eligible_count := 0
+			for peer in (diag_view.get("others_visible", []) as Array):
+				visible_count += 1
+				var peer_id := str((peer as Dictionary).get("id", ""))
+				if asked_ids.has(peer_id):
+					_holder_diag_inc("holder_peer_excluded_already_asked")
+				elif excluded_ids.has(peer_id):
+					_holder_diag_inc("holder_peer_excluded_request_refused")
+				else:
+					eligible_count += 1
+			if visible_count > 0:
+				_holder_diag_inc("holder_ticks_with_visible_peers")
+			if eligible_count > 0:
+				_holder_diag_inc("holder_ticks_with_eligible_peers")
+			else:
+				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
+			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
+			_holder_diag_inc("holder_ask_candidates_emitted", diag_candidates.size())
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -1050,6 +1083,12 @@ func _material_request_event_text(event_type: String, request: Dictionary) -> St
 
 # ── P7.2：条件承诺（权威台账 = obligations，单台账） ──
 
+func _holder_diag_inc(key: String, n: int = 1) -> void:
+	_holder_funnel_diag[key] = int(_holder_funnel_diag.get(key, 0)) + n
+
+func agency_holder_funnel_diagnostics() -> Dictionary:
+	return _holder_funnel_diag.duplicate(true)
+
 func _commitment_runtime_bridge() -> CommitmentRuntimeBridge:
 	if _commitment_runtime == null:
 		_commitment_runtime = CommitmentRuntimeBridge.new()
@@ -1419,6 +1458,7 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 		"ask_resource_source":
 			_do_ask_resource_source(id, a, action, new_events)
 		"ask_item_holder":
+			_holder_diag_inc("holder_ask_actions_completed")
 			_do_ask_item_holder(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
@@ -2144,12 +2184,37 @@ func _do_ask_item_holder(id: String, a: Dictionary, action: Dictionary, ev: Arra
 	var goal_id := str(action.get("information_goal_id", ""))
 	var item_id := str(action.get("item_id", ""))
 	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		_holder_diag_inc("holder_ask_target_missed")
 		_emit("holder_information_missed", id, "%s 没能找到想打听的人" % a["display_name"], {
 			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
 			"item_id": item_id, "target_id": target_id,
 		})
 		return
 	var target: Dictionary = actors[target_id]
+	_holder_diag_inc("holder_ask_actions_started")
+	_holder_diag_inc("holder_queries_received")
+	if int(target.get("inventory", {}).get(item_id, 0)) > 0:
+		_holder_diag_inc("holder_responder_self_holder_at_query")
+	var responder_tom: TheoryOfMind = target.get("tom", null)
+	if responder_tom != null:
+		var _rows := responder_tom.subjects_with_evidence(TheoryOfMind.possession_predicate(item_id))
+		var _fresh := false
+		var _stale := false
+		for _row in _rows:
+			var _pid := str((_row as Dictionary).get("actor_id", ""))
+			if _pid == "" or _pid == id or _pid == target_id:
+				continue
+			if float((_row as Dictionary).get("belief", 0.0)) <= 0.0:
+				continue
+			var _pt := int((_row as Dictionary).get("positive_evidence_tick", -1))
+			if _pt >= 0 and tick - _pt <= InformationExchangePolicy.MAX_REPORT_AGE_TICKS:
+				_fresh = true
+			else:
+				_stale = true
+		if _fresh:
+			_holder_diag_inc("holder_responder_fresh_third_party_available")
+		elif _stale:
+			_holder_diag_inc("holder_responder_stale_third_party_available")
 	_emit("holder_information_requested", id,
 		"%s 向 %s 打听：你或你知道的人有%s吗？" % [a["display_name"], target["display_name"], item_id], {
 			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
@@ -2176,6 +2241,7 @@ func _do_ask_item_holder(id: String, a: Dictionary, action: Dictionary, ev: Arra
 		"reason_code": str(response.get("reason_code", "")),
 		"holder_predicate": str(action.get("holder_predicate", "")),
 	}
+	_holder_diag_inc("holder_response_" + kind)
 	var event_type: String = {
 		InformationExchangePolicy.HOLDER_SHARE: "holder_information_shared",
 		InformationExchangePolicy.HOLDER_REFUSE: "holder_information_refused",
@@ -2242,6 +2308,7 @@ func _holder_goals_sync_all() -> void:
 		var gap := 0
 		if mismatch == "" and actors.has(requester_id):
 			gap = _material_request_current_gap(requester_id, actors[requester_id], request)
+		_holder_diag_inc("holder_active_ticks")
 		var invalid_reason := tracker.holder_goal_still_valid(requester_id, mismatch, gap)
 		if invalid_reason != "":
 			tracker.cancel_holder_goal(requester_id, invalid_reason, tick)
