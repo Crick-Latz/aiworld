@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_audit_sensitivity()
 	_test_no_duplicate_peer_in_round()
 	_test_funnel_diagnostics_appear_and_stay_out_of_state()
+	_test_c0_arbitration_and_objective_audit()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -327,3 +328,80 @@ func _test_funnel_diagnostics_appear_and_stay_out_of_state() -> void:
 func _holder_diag_helper(sim: IslandSimulation) -> void:
 	# 仅追加诊断计数，不应改变 state hash。
 	sim._holder_diag_inc("holder_test_probe", 1)
+
+# ── P7.2C C-0：仲裁诊断 + 客观材料审计 + fingerprint 不变 ──
+
+func _test_c0_arbitration_and_objective_audit() -> void:
+	var pair := _pair(76801)
+	var sim: IslandSimulation = pair["sim"]
+	# flag off（holder_evidence profile）：新诊断不激活、fingerprint 与 holder_evidence 基线一致路径。
+	_check("c0_flag_defaults_off", not sim.agency_holder_reachability_enabled)
+	# 打开 flag（等价 holder_reachability profile 行为）。
+	sim.agency_holder_reachability_enabled = true
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("c0_fixture_holder_goal", false, "no holder goal")
+		return
+	_check("c0_fixture_holder_goal", true)
+	# 决策 tick：候选存在 → 探针记录 + 客观审计采样（giver 持有 shells=2 → any_holder）。
+	var prepare: Dictionary = sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	var diag := sim.agency_holder_funnel_diagnostics()
+	_check("c0_ask_candidate_ticks_counted", int(diag.get("holder_ask_candidate_ticks", 0)) >= 1)
+	var obj := sim.agency_objective_material_audit()
+	_check("c0_objective_audit_ticks", int(obj.get("objective_audit_ticks", 0)) >= 1)
+	_check("c0_objective_any_holder_detected",
+		int(obj.get("objective_any_holder_ticks", 0)) >= 1
+		and int(obj.get("objective_holder_count", 0)) >= 1
+		and int(obj.get("objective_nearest_holder_count", 0)) >= 1,
+		str(obj))
+	_check("c0_objective_audit_in_summary",
+		(SimulationAudit.summary(sim).get("objective_material_audit", {}) as Dictionary).size() > 0)
+	# write-only：fingerprint 在诊断追加前后不变。
+	var fp1 := SimulationAudit.fingerprint(sim)
+	sim._holder_diag_inc("c0_probe", 1)
+	sim._obj_inc("c0_probe", 1)
+	var fp2 := SimulationAudit.fingerprint(sim)
+	_check("c0_diagnostics_excluded_from_state_hash",
+		str(fp1["state_sha256"]) == str(fp2["state_sha256"]))
+	# 仲裁分类：ask 胜 → won；非 ask 胜 → lost + 类别。直接驱动记录函数（决策引擎已有真实路径）。
+	sim._holder_arbitration_probe = {"actor_id": str(pair["requester_id"]),
+		"goal_id": str(goal.get("goal_id", "")), "item_id": "shells",
+		"best_utility": 0.5, "target_actor": str(pair["giver_id"])}
+	sim._record_inquiry_arbitration_win({"action": "ask_item_holder", "utility": 0.55})
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("c0_arbitration_win_recorded", int(diag.get("ask_candidate_won", 0)) == 1)
+	sim._holder_arbitration_probe = {"actor_id": str(pair["requester_id"]),
+		"goal_id": str(goal.get("goal_id", "")), "item_id": "shells",
+		"best_utility": 0.5, "target_actor": str(pair["giver_id"])}
+	sim._record_inquiry_arbitration_loss({}, {"action": "explore", "utility": 0.9})
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("c0_arbitration_loss_to_exploration",
+		int(diag.get("ask_candidate_lost", 0)) == 1
+		and int(diag.get("ask_lost_to_EXPLORATION", 0)) == 1)
+	# 驻留审计：acquire/consume 计数与携带 tick。
+	sim._record_material_residence(str(pair["giver_id"]), "shells", "acquired")
+	sim._record_material_carriage_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("c0_residence_events_counted",
+		int(obj.get("material_event_acquired_shells", 0)) >= 1
+		and int(obj.get("carriage_shells_actor_ticks", 0)) >= 1)
+	# bootstrap：holder_reachability profile 全开 + 依赖 fail-closed。
+	var hr := SimulationBootstrap.create(76802, "holder_reachability")
+	_check("c0_holder_reachability_profile",
+		bool(hr.get("ok", false))
+		and (hr["sim"] as IslandSimulation).agency_holder_reachability_enabled
+		and (hr["sim"] as IslandSimulation).agency_holder_evidence_reachability_enabled)
+	var he := SimulationBootstrap.create(76802, "holder_evidence")
+	_check("c0_holder_evidence_profile_unchanged",
+		(he["sim"] as IslandSimulation).agency_holder_evidence_reachability_enabled
+		and not (he["sim"] as IslandSimulation).agency_holder_reachability_enabled)
+	# flag off → 驻留/仲裁诊断不激活。
+	var plain := SimulationBootstrap.create(76803, "framework")
+	var plain_sim: IslandSimulation = plain["sim"]
+	var fp3 := SimulationAudit.fingerprint(plain_sim)
+	plain_sim._holder_diag_inc("noop", 1)
+	plain_sim._obj_inc("noop", 1)
+	_check("c0_legacy_flag_off_fingerprint_stable",
+		str(fp3["state_sha256"]) == str(SimulationAudit.fingerprint(plain_sim)["state_sha256"]))

@@ -17,6 +17,8 @@ func _run() -> void:
 	_test_three_role_report_chain()
 	_test_self_absent_and_unknown()
 	_test_refusal_then_second_round()
+	_test_c1_seek_holder_person()
+	_test_c2_inquiry_utility_semantics()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -264,3 +266,138 @@ func _test_refusal_then_second_round() -> void:
 	_check("refusal_round_never_reoffers_refused",
 		str(after.get("status", "")) != "WAITING_RESPONSE",
 		str(after.get("status", "")) + "/target=" + str(after.get("target_id", "")))
+
+# ── P7.2C C1：主观找人——last_seen 驱动、允许扑空、到场后询问自然发生 ──
+func _test_c1_seek_holder_person() -> void:
+	var created := SimulationBootstrap.create(78001, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(40, 40)  # 远处——不可见
+	giver["inventory"] = {"shells": 2}
+	giver["personality"] = PersonalityProfile.new(
+		{"altruism": 0.9, "empathy": 0.9, "caution": 0.1, "sociability": 0.9}, {})
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	# 请求者记得 giver 的位置（last_seen=旧位置）。
+	(requester["tom"] as TheoryOfMind).see_at(giver_id, Vector2i(38, 38), 1)
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 500)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 500)
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("c1_holder_goal_created", str(goal.get("query_kind", "")) == "HOLDER")
+	# 无可见合格同伴 + flag 开 → seek 候选（目标=last_seen 位置，不读真实坐标）。
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var candidates: Array = InformationActionPolicy.build(view, goal, sim.tick)
+	var seeks: Array = []
+	for c in candidates:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seeks.append(c)
+	_check("c1_seek_candidate_emitted", seeks.size() == 1,
+		str(seeks.size()))
+	if seeks.is_empty():
+		return
+	var seek: Dictionary = seeks[0]
+	_check("c1_seek_targets_last_seen_not_truth",
+		str(seek.get("target_actor", "")) == giver_id
+		and (seek.get("target", Vector2i.ZERO) as Vector2i) == Vector2i(38, 38),
+		str(seek.get("target", "")))
+	# 扑空：giver 真实位置与 last_seen 不同 → 执行后 found 不产生。
+	requester["current_action"] = seek
+	sim._complete_action(requester_id, requester, [])
+	_check("c1_stale_last_seen_misses", _count(sim, "holder_seek_person_not_found") >= 1
+		or _count(sim, "holder_seek_found_person") == 0)
+	# 到场：giver 在 last_seen 位置，请求者真实抵达（travel 由决策流逐 tick 完成，
+	# 此处模拟抵达后的完成回调——与 _tick_actor 到达后触发 _complete_action 同构）。
+	giver["tile"] = Vector2i(38, 38)
+	requester["tile"] = Vector2i(37, 38)
+	requester["current_action"] = seek
+	var ev_before := sim.events.size()
+	sim._complete_action(requester_id, requester, [])
+	var found := false
+	for e in sim.events.slice(ev_before):
+		if str((e as Dictionary).get("type", "")) == "holder_seek_found_person":
+			found = true
+	_check("c1_seek_finds_when_present", found)
+	# flag 关 → 无 seek 候选（旧 holder_evidence 行为不变）。
+	goal["holder_reachability_enabled"] = false
+	var view2 := sim._build_actor_view(requester_id, requester)
+	view2["now_tick"] = sim.tick
+	var candidates2: Array = InformationActionPolicy.build(view2, goal, sim.tick)
+	var seeks2 := 0
+	for c in candidates2:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seeks2 += 1
+	_check("c1_flag_off_no_seek", seeks2 == 0)
+
+# ── P7.2C C2：询问效用语义（blockedness 单调；信任/回避方向；生存仍可压过）──
+func _test_c2_inquiry_utility_semantics() -> void:
+	var created := SimulationBootstrap.create(78002, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {}
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("c2_fixture_goal", str(goal.get("query_kind", "")) == "HOLDER")
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var _utility_of := func(g: Dictionary) -> float:
+		var cands: Array = InformationActionPolicy.build(view, g, sim.tick)
+		for c in cands:
+			if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+					and str((c as Dictionary).get("target_actor", "")) == giver_id:
+				return float((c as Dictionary).get("utility", 0.0))
+		return -1.0
+	# 1) blockedness 单调不降。
+	goal["parent_blockedness"] = 0.2
+	var low_blocked: float = _utility_of.call(goal)
+	goal["parent_blockedness"] = 0.9
+	var high_blocked: float = _utility_of.call(goal)
+	_check("c2_blockedness_monotone", high_blocked >= low_blocked and low_blocked > 0.0,
+		"low=%.3f high=%.3f" % [low_blocked, high_blocked])
+	# 2) urgency 单调不降。
+	goal["parent_blockedness"] = 0.5
+	goal["request_urgency"] = 0.1
+	var low_urg: float = _utility_of.call(goal)
+	goal["request_urgency"] = 0.95
+	var high_urg: float = _utility_of.call(goal)
+	_check("c2_urgency_monotone", high_urg >= low_urg,
+		"low=%.3f high=%.3f" % [low_urg, high_urg])
+	# 3) 信任方向：高信任 ≥ 低信任。
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 900)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 900)
+	view = sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	var high_trust: float = _utility_of.call(goal)
+	_check("c2_high_trust_not_lower", high_trust >= low_urg - 0.001,
+		"trust=%.3f" % high_trust)
+	# 4) 生存压制语义：中等竞争行动下 blockedness=1 的 ask 应有现实竞争力
+	#    （utility 落在可竞争区间），但不锁死——用区间断言而非固定选择率。
+	goal["parent_blockedness"] = 1.0
+	goal["request_urgency"] = 0.9
+	var competitive: float = _utility_of.call(goal)
+	_check("c2_blocked_ask_competitive", competitive >= 0.5,
+		"u=%.3f" % competitive)
+	_check("c2_ask_not_locked_over_survival", competitive <= 0.95,
+		"u=%.3f（不应硬锁压过一切）" % competitive)
