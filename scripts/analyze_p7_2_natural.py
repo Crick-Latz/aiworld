@@ -60,6 +60,25 @@ def stats(data: dict) -> dict:
                 if v:
                     actors.add(v)
     out["unique_actors_touched"] = len(actors)
+    # P7.2A：按请求逐条归因——到达持有者选择的数量、无主观目标数、选择前终局原因。
+    reached_selection = set()
+    no_subjective = set()
+    before_selection_reasons = Counter()
+    for row in data.get("material_request_trace", []):
+        rid = str(row.get("request_id", ""))
+        ev = str(row.get("event", ""))
+        if ev in ("MATERIAL_REQUEST_OFFERED", "MATERIAL_REQUEST_NO_SUBJECTIVE_TARGET"):
+            reached_selection.add(rid)
+        if ev == "MATERIAL_REQUEST_NO_SUBJECTIVE_TARGET":
+            no_subjective.add(rid)
+    for e in data.get("events", []):
+        if str(e.get("type", "")) == "MATERIAL_REQUEST_FAILED":
+            rid = str(e.get("request_id", ""))
+            if rid and rid not in reached_selection:
+                before_selection_reasons[str(e.get("reason", "?"))] += 1
+    out["reaching_holder_selection"] = len(reached_selection)
+    out["no_subjective_target"] = len(no_subjective)
+    out["terminal_before_selection"] = dict(before_selection_reasons)
     return out
 
 
@@ -69,7 +88,8 @@ def main() -> int:
             "created", "activated", "fulfilled", "violated", "cancelled",
             "terms_mismatch", "transfer_completed",
             "transfers", "revalidations", "crafted", "fished",
-            "gathered_wood", "gathered_shells", "unique_actors_touched"]
+            "gathered_wood", "gathered_shells", "unique_actors_touched",
+            "reaching_holder_selection", "no_subjective_target", "terminal_before_selection"]
     totals = {"material_request": Counter(), "commitment": Counter()}
     print("seed | profile | " + " ".join(keys))
     for seed in SEEDS:
@@ -82,6 +102,9 @@ def main() -> int:
             for k in keys:
                 if isinstance(s.get(k), (int, float)):
                     totals[profile][k] += s[k]
+                elif k == "terminal_before_selection" and s.get(k):
+                    for reason, n in s[k].items():
+                        totals[profile]["pre_select_" + reason] += n
             print(f"{seed} {profile} " + " ".join(str(s.get(k, "")) for k in keys))
     print()
     for profile, total in totals.items():

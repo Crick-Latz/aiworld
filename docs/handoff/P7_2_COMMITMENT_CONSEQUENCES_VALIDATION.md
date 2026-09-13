@@ -89,7 +89,7 @@ information      seed 61003 : replay PASS  state_sha256 与 baseline 完全一�
 material_request seed 61004 : replay PASS  state_sha256 与 baseline 完全一致
 ```
 
-比对键：state_sha256 / events_sha256 / execution_sha256 / adoption_sha256（BIT_COMPATIBLE）。未做 Windows↔Linux 跨平台哈希比较（RUNTIME-R1 已登记事项）。
+比对键：state_sha256 / events_sha256 / execution_sha256 / adoption_sha256（LEGACY_BEHAVIOR_HASH_COMPATIBLE（行为哈希逐位一致；完整 JSON 字节因新增 commitment trace/fingerprint 字段并非逐位相同））。未做 Windows↔Linux 跨平台哈希比较（RUNTIME-R1 已登记事项）。
 
 ## 10. P7.2 Deterministic Replay
 
@@ -119,7 +119,7 @@ crafted（两 profile 一致） 4    fished 1    gathered_wood 423    gathered_s
 ALL_REPLAY_VERIFIED=true（20/20）
 ```
 
-**归因**：§十六修复生效——commitment profile 下材料请求从 0 → 79（CRAFT/SUBGOAL blocker 进入请求层），但全部止步于 `MATERIAL_REQUEST_NO_SUBJECTIVE_TARGET`（79/79）：请求者从未持有任何持有者的 ToM 证据。持有证据来自目击 gather/craft/transfer 事件（P7.1B possession observations），而自然运行中请求时刻请求者与持有者在感知范围内共现的频率为零。这是 P7.0 已登记产品缺口（"提高社会知识证据在自然运行中的可达性"）的同一堵墙，属上游信息环流问题，不是 P7.2 生命周期缺陷；按任务书 §二十一 不以放宽交互距离/信念阈值/资源的方式制造故事。两组 crafted/fished/gathered 完全一致，交叉验证了 commitment 层对非社会路径的零扰动。
+**归因**：§十六修复生效——commitment profile 下材料请求从 0 → 79（CRAFT/SUBGOAL blocker 进入请求层）。精确分解（P7.2A 复核后由分析脚本机械产出）：**79 created；78 到达持有者选择且全部 NO_SUBJECTIVE_TARGET；1 条（seed 61002，material:npc_weila:5:shells）在选目标前因 PARENT_RUN_CHANGED 终止；offers 保持 0**。请求者从未持有任何持有者的 ToM 证据。持有证据来自目击 gather/craft/transfer 事件（P7.1B possession observations），而自然运行中请求时刻请求者与持有者在感知范围内共现的频率为零。这是 P7.0 已登记产品缺口（"提高社会知识证据在自然运行中的可达性"）的同一堵墙，属上游信息环流问题，不是 P7.2 生命周期缺陷；按任务书 §二十一 不以放宽交互距离/信念阈值/资源的方式制造故事。两组 crafted/fished/gathered 完全一致，交叉验证了 commitment 层对非社会路径的零扰动。
 
 **最终判定**：`MECHANISM_CORRECT` / `PRODUCT_ACCEPTANCE_NOT_YET_MET`——机制正确性由 87 断言 + 确定性重放 + 逐位兼容证明；自然 3-role 链为 0 的原因已定位到"持有证据环流"这一独立上游缺口。
 
@@ -144,3 +144,21 @@ tracked .gd 缺配对 .uid = 0
 ## 14. 结论
 
 P7.2 本地开发完成：单台账承诺生命周期、可行动义务、可解 blocker 准入、认知后果与决策环回传全部由可失败测试锁定；全量回归与三条兼容 replay 通过；自然实验如实记录零社会链与根因。等待 GPT 复审。
+
+---
+
+# P7.2A Code Review Fix（返修记录）
+
+GPT 代码级复审判定 `P7_2_CODE_REVIEW_NEEDS_FIX`，六个阻断项 + 加固要求全部修复（详见新增提交）。要点：
+
+1. **自主履约最后一公里**：ActionRegistry._repay_debt 对承诺型 obligation 按 authoritative status==ACTIVE + 真实 quantity 判定候选；旧 obligation 的 give_min+1 语义逐字未动。新增真实集成测试：registry 候选 → adapter 同承诺匹配 → 决策身份（chosen_key+candidate_key 双字段）→ _complete_action → COMMITMENT_TRANSFER_COMPLETED/FULFILLED → run COMPLETED；库存不足不产候选。
+2. **PENDING 债务泄漏**：_is_outstanding_obligation 唯一判断 helper（承诺按 status、旧记录按 repaid）；_obligations_of/_owed_to 使用之；_refresh_obligation_views 在 CREATED/ACTIVATED/FULFILLED/VIOLATED/CANCELLED/CREDITOR_GONE 全部转移点同步双方视图。PENDING 不入 my_obligations/owed_to_me、不产 repay 候选、不计 load（测试锁定）。
+3. **远距离债权人违约认知**：_emit 为 COMMITMENT_* 事件增设 direct-recipient 通道——债权人（to_id）无需目击即处理事件（到期未收款是其直接证据），但非空间目击者不经 see_at 获得债务人位置；第三方仍只走空间感知；重复 check_due 不重复处理。远债权人 reliability/trust 下降、memory 记录、无位置泄漏、无关第三方零变化、P_violated<P_baseline 全部由 runtime 自证（删除了旧测试的手工 CognitiveTransition 补刀）。
+4. **激活证据加固**：type==ITEM_TRANSFER_COMPLETED、event_id 非空、evidence_kind==WORLD_MUTATION、from==creditor、to==debtor、request/item 一致、quantity>=accepted_quantity（accepted>0 时）；七类伪造/缺项证据逐一测试拒绝且状态保持 PENDING、零副作用。
+5. **履约身份绑定**：bridge.settle 显式接收行动 debtor/creditor/object 并 fail-closed；tracker.fulfill 对证据做 type/event_id/kind/commitment_id/双方/物品/数量全检。错误目标 C 的行动不能结算欠 B 的债（测试锁定）。
+6. **terms mismatch 审计一致**：offered_terms.due_tick = A 的真实期限估计（可长于要求）；terms_match 单一真源 Contract.terms_match；条款对象优先 counter.terms.promise_object。事件 payload 与判断一致（测试锁定 offered>demanded 且 terms_match==false 且不成债）。
+7. **审计身份链**：commitment 事件与 trace 补 blocker_step_id/terminal_reason/source_transfer_event_id；audit 敏感性测试锁定 obligations 变动→state_sha256 变、仅追加诊断 trace→commitment_sha256 变且 state 不变。
+8. **自然实验计数纠正**：79 created / 78 NO_SUBJECTIVE_TARGET / 1 PARENT_RUN_CHANGED（分析脚本新增 reaching_holder_selection、no_subjective_target、terminal_before_selection 三指标机械产出）。
+9. **兼容表述更名**：BIT_COMPATIBLE → LEGACY_BEHAVIOR_HASH_COMPATIBLE。
+
+P7.2A 后断言数：p7_2_commitment 43 / hardening 25 / runtime_chain 56（合计 124，+37）。
