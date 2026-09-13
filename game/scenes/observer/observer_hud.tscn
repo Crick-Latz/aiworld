@@ -172,13 +172,6 @@ toggle_mode = true
 button_group = SubResource("inspector_tab_group")
 text = "关系"
 
-[node name="Plans" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-toggle_mode = true
-button_group = SubResource("inspector_tab_group")
-text = "计划"
-
 [node name="History" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
@@ -244,12 +237,6 @@ size_flags_vertical = 3
 bbcode_enabled = true
 
 [node name="RelationsPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
-visible = false
-layout_mode = 2
-size_flags_vertical = 3
-bbcode_enabled = true
-
-[node name="PlansPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3

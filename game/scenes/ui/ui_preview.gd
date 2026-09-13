@@ -66,20 +66,15 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 				"step": "前往林地砍伐木头",
 				"reason": "夜里会下雨，露宿会消耗体力并提高生病风险",
 				"blocker": "纤维×1（还差 1）",
+				"next_step": "收集纤维×2 → 返回营地 → 建造",
 			}
-			model["selected_actor"]["plan_rows"] = [
-				{"detail": "当前意图：chop_wood（承诺度 82%）"},
-				{"detail": "目标格：(21, 34)"},
-				{"detail": "活跃目标：build_shelter（优先级 0.78）"},
-				{"detail": "后续步骤：收集纤维×2 → 返回营地 → 建造"},
-			]
 		"RELATIONS_FILLED":
 			_fill_rich_selection(model)
 			model["selected_actor"]["relationship_rows"] = [
-				{"other_id": "npc_kadga", "other_name": "卡德加", "trust": 12,
-					"tom": {"has_food": 0.3, "generous": 0.1, "reliable": 0.2}},
-				{"other_id": "npc_oun", "other_name": "缄默者欧恩", "trust": -5,
-					"tom": {"has_food": 0.6, "generous": -0.2, "reliable": 0.0}},
+				{"other_id": "npc_kadga", "other_name": "卡德加", "trust": 12, "benevolence": 0.1, "reliability": 0.2,
+					"change": "D1 分鱼后 +3", "tom": {"has_food": 0.3, "generous": 0.1, "reliable": 0.2}},
+				{"other_id": "npc_oun", "other_name": "缄默者欧恩", "trust": -5, "benevolence": -0.2, "reliability": 0.0,
+					"change": "D2 拒绝供水后 -5", "tom": {"has_food": 0.6, "generous": -0.2, "reliable": 0.0}},
 			]
 	return model
 
@@ -159,18 +154,23 @@ static func _fill_rich_selection(model: Dictionary) -> void:
 			"step": "在林地砍伐第 3 根木头",
 			"reason": "夜里会下雨，露宿会消耗体力",
 			"blocker": "无",
+			"next_step": "砍满 3 木头后返回营地",
 		},
 		"relationship_rows": [
-			{"other_id": "npc_kadga", "other_name": "卡德加", "trust": 8, "tom": {"has_food": 0.1, "generous": 0.0, "reliable": 0.1}},
-			{"other_id": "npc_oun", "other_name": "缄默者欧恩", "trust": 0, "tom": {"has_food": 0.0, "generous": 0.0, "reliable": 0.0}},
-		],
-		"plan_rows": [
-			{"detail": "当前意图：chop_wood（承诺度 82%）"},
-			{"detail": "目标格：(21, 34)"},
+			{"other_id": "npc_kadga", "other_name": "卡德加", "trust": 8, "benevolence": 0.2, "reliability": 0.1,
+				"change": "D1 分鱼后 +3", "tom": {"has_food": 0.1, "generous": 0.2, "reliable": 0.1}},
+			{"other_id": "npc_oun", "other_name": "缄默者欧恩", "trust": 0, "benevolence": 0.0, "reliability": 0.0,
+				"change": "", "tom": {"has_food": 0.0, "generous": 0.0, "reliable": 0.0}},
 		],
 		"history_rows": [
 			{"day": 2, "seq": 42, "text": "薇拉 前往 旧灯塔"},
 			{"day": 2, "seq": 47, "text": "薇拉 开始砍伐树木"},
+		],
+		"history_dialogue_rows": [
+			{"day": 2, "speaker": "薇拉", "text": "灯塔的灯还能亮，说明有人维护过。", "act": "ASSERT", "seq": 44},
+		],
+		"history_chain_rows": [
+			"E41 卡德加 提出 木材请求 → E46 薇拉 接受请求",
 		],
 	}
 

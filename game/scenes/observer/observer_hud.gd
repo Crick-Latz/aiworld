@@ -10,7 +10,7 @@ signal speed_requested(multiplier: int)
 signal save_requested
 signal scenario_requested(scenario_name: String)
 
-const INSPECTOR_TABS := ["overview", "memory", "personality", "decision", "relations", "plans", "history"]
+const INSPECTOR_TABS := ["overview", "memory", "personality", "decision", "relations", "history"]
 const TIMELINE_TABS := ["events", "stories", "dialogue", "causal"]
 const EMOTION_LABELS := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤", "guilt": "内疚"}
 const MAX_EVENT_LINES := 14
@@ -131,7 +131,6 @@ func _render_selection(sel) -> void:
 		_set_rtl_bbcode(pages["personality"], _personality_bbcode(sel))
 		_set_rtl_bbcode(pages["decision"], _decision_bbcode(sel))
 		_set_rtl_bbcode(pages["relations"], _relations_bbcode(sel))
-		_set_rtl_bbcode(pages["plans"], _plans_bbcode(sel))
 		_set_rtl_bbcode(pages["history"], _history_bbcode(sel))
 	else:
 		sel_name.text = "未选中"
@@ -141,7 +140,7 @@ func _render_selection(sel) -> void:
 		location_label.text = "位置：—"
 		needs_label.text = "需求：—"
 		inventory_label.text = "物资：—"
-		for key in ["memory", "personality", "decision", "relations", "plans", "history"]:
+		for key in ["memory", "personality", "decision", "relations", "history"]:
 			_set_rtl_bbcode(pages[key], "[color=#8899aa]暂无数据（未选中角色）[/color]")
 
 func _render_timeline(model: Dictionary) -> void:
@@ -236,15 +235,79 @@ func _memory_bbcode(sel: Dictionary) -> String:
 	out += "\n".join(social) if not social.is_empty() else "[color=#8899aa]无[/color]"
 	return out
 
+func _decision_bbcode(sel: Dictionary) -> String:
+	var decision: Dictionary = sel.get("decision", {})
+	if decision.is_empty():
+		return "[color=#8899aa]暂无决策数据[/color]"
+	var out := ""
+	out += "[color=#e8c170]当前计划[/color]：%s\n" % str(decision.get("plan", "—"))
+	out += "[color=#e8c170]当前步骤[/color]：%s\n" % str(decision.get("step", "—"))
+	out += "[color=#e8c170]理由[/color]：%s\n" % str(decision.get("reason", "—"))
+	out += "[color=#e8c170]阻塞[/color]：%s\n" % str(decision.get("blocker", "无"))
+	out += "[color=#e8c170]下一步意图[/color]：%s" % str(decision.get("next_step", "—"))
+	return out
+
+func _relations_bbcode(sel: Dictionary) -> String:
+	var rows: Array = sel.get("relationship_rows", [])
+	if rows.is_empty():
+		return "[color=#8899aa]暂无关系数据[/color]"
+	var out := ""
+	for r in rows:
+		var trust := int(r.get("trust", 0))
+		out += "[color=#c0d8e8]%s[/color] 信任%s%d" % [str(r.get("other_name", "?")), "+" if trust >= 0 else "", trust]
+		var tom: Dictionary = r.get("tom", {})
+		var benevolence := float(r.get("benevolence", tom.get("generous", 0.0)))
+		var reliability := float(r.get("reliability", tom.get("reliable", 0.0)))
+		out += " [color=#8899aa]善意%+.1f 可靠性%+.1f[/color]" % [benevolence, reliability]
+		var change := str(r.get("change", ""))
+		out += "\n  [color=#8899aa]关系变化：[/color]%s\n" % (change if change != "" else "—（暂无轨迹数据）")
+	return out
+
+func _history_bbcode(sel: Dictionary) -> String:
+	var rows: Array = sel.get("history_rows", [])
+	var dialogue: Array = sel.get("history_dialogue_rows", [])
+	var chains: Array = sel.get("history_chain_rows", [])
+	if rows.is_empty() and dialogue.is_empty() and chains.is_empty():
+		return "[color=#8899aa]暂无历史数据[/color]"
+	var out := "[color=#e8c170]── 最近事件 ──[/color]\n"
+	if rows.is_empty():
+		out += "[color=#8899aa]无[/color]\n"
+	for r in rows:
+		out += "[color=#aabbcc]D%d E%d[/color] %s\n" % [int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))]
+	out += "\n[color=#e8c170]── 最近对话 ──[/color]\n"
+	if dialogue.is_empty():
+		out += "[color=#8899aa]无[/color]\n"
+	for dl in dialogue:
+		out += "[color=#c0d8e8]D%d %s：[/color]%s\n" % [int(dl.get("day", 0)), str(dl.get("speaker", "")), str(dl.get("text", ""))]
+	out += "\n[color=#e8c170]── 承诺 / 请求 / 行动链 ──[/color]\n"
+	if chains.is_empty():
+		out += "[color=#8899aa]无（等待 cause_seq 链数据）[/color]"
+	for step in chains:
+		out += "%s\n" % str(step)
+	return out
+
 func _personality_bbcode(sel: Dictionary) -> String:
 	var personality: Dictionary = sel.get("personality", {})
 	var traits: Array = personality.get("traits", [])
-	var out := "[color=#e8c170]── 特质 ──[/color]\n"
+	var by_key := {}
+	for t in traits:
+		by_key[str(t.get("key", ""))] = t
+	var out := ""
 	if traits.is_empty():
-		out += "[color=#8899aa]暂无数据[/color]"
-	else:
-		for t in traits:
-			out += "%s %s %.2f\n" % [str(t.get("label", t.get("key", "?"))), _bar(float(t.get("value", 0.0))), float(t.get("value", 0.0))]
+		out += "[color=#8899aa]暂无特质数据\n[/color]"
+	var groups := [
+		["基础特质", ["resilience", "curiosity", "pragmatism"]],
+		["气质与风险偏好", ["action_bias", "caution", "expressiveness", "conflict_avoidance"]],
+		["社交倾向", ["empathy", "sociability", "altruism"]],
+	]
+	for group in groups:
+		out += "[color=#e8c170]── %s ──[/color]\n" % str(group[0])
+		for key in group[1]:
+			if by_key.has(key):
+				var t: Dictionary = by_key[key]
+				out += "%s %s %.2f\n" % [str(t.get("label", key)), _bar(float(t.get("value", 0.0))), float(t.get("value", 0.0))]
+		out += "\n"
+	out = out.substr(0, out.length() - 1)
 	var emotions: Array = personality.get("emotions", [])
 	out += "\n[color=#e8c170]── 情绪 ──[/color]\n"
 	if emotions.is_empty():
@@ -262,50 +325,6 @@ func _personality_bbcode(sel: Dictionary) -> String:
 	else:
 		for b in beliefs:
 			out += "%s（%.1f）\n" % [str(b.get("text", "")), float(b.get("weight", 0.0))]
-	return out
-
-func _decision_bbcode(sel: Dictionary) -> String:
-	var decision: Dictionary = sel.get("decision", {})
-	if decision.is_empty():
-		return "[color=#8899aa]暂无决策数据[/color]"
-	var out := ""
-	out += "[color=#e8c170]当前计划[/color]：%s\n" % str(decision.get("plan", "—"))
-	out += "[color=#e8c170]当前步骤[/color]：%s\n" % str(decision.get("step", "—"))
-	out += "[color=#e8c170]理由[/color]：%s\n" % str(decision.get("reason", "—"))
-	out += "[color=#e8c170]阻塞[/color]：%s" % str(decision.get("blocker", "无"))
-	return out
-
-func _relations_bbcode(sel: Dictionary) -> String:
-	var rows: Array = sel.get("relationship_rows", [])
-	if rows.is_empty():
-		return "[color=#8899aa]暂无关系数据[/color]"
-	var out := ""
-	for r in rows:
-		var trust := int(r.get("trust", 0))
-		out += "[color=#c0d8e8]%s[/color] 信任%s%d" % [str(r.get("other_name", "?")), "+" if trust >= 0 else "", trust]
-		var tom: Dictionary = r.get("tom", {})
-		if not tom.is_empty():
-			out += " [color=#8899aa]食%+.1f 慨%+.1f 靠%+.1f[/color]" % [
-				float(tom.get("has_food", 0.0)), float(tom.get("generous", 0.0)), float(tom.get("reliable", 0.0))]
-		out += "\n"
-	return out
-
-func _plans_bbcode(sel: Dictionary) -> String:
-	var rows: Array = sel.get("plan_rows", [])
-	if rows.is_empty():
-		return "[color=#8899aa]暂无计划数据[/color]"
-	var out := ""
-	for r in rows:
-		out += "[color=#e8c170]▸[/color] %s\n" % str(r.get("detail", r))
-	return out
-
-func _history_bbcode(sel: Dictionary) -> String:
-	var rows: Array = sel.get("history_rows", [])
-	if rows.is_empty():
-		return "[color=#8899aa]暂无历史数据[/color]"
-	var out := ""
-	for r in rows:
-		out += "[color=#aabbcc]D%d E%d[/color] %s\n" % [int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))]
 	return out
 
 func _bar(value: float) -> String:
