@@ -350,6 +350,8 @@ static func _request(p: PersonalityProfile, needs: Dictionary, actor: Dictionary
 	return out
 
 ## P1.6 还债：兑现承诺——这是互惠弧的闭环（help→promise→repay→reliability）
+## P7.2A：承诺型 obligation（带 commitment_id）按 authoritative status + 真实 quantity
+## 判定可还性；旧 obligation 保持 give_min + 1 语义完全不变。
 static func _repay_debt(p: PersonalityProfile, actor: Dictionary, world: Dictionary):
 	var obligations: Array = actor.get("my_obligations", [])
 	if obligations.is_empty():
@@ -357,6 +359,16 @@ static func _repay_debt(p: PersonalityProfile, actor: Dictionary, world: Diction
 	var inv: Dictionary = actor.get("inventory", {})
 	for ob in obligations:
 		var obj := str(ob.get("object", "food"))
+		if str(ob.get("commitment_id", "")) != "":
+			# P7.2A：只有 ACTIVE 承诺且库存足量时才产生候选——PENDING/终态一律不还。
+			if str(ob.get("status", "")) != "ACTIVE":
+				continue
+			if int(inv.get(obj, 0)) < maxi(1, int(ob.get("quantity", 1))):
+				continue
+			return {"action": "repay_debt", "target": null, "target_actor": str(ob.get("creditor", "")),
+				"object": obj, "obligation": ob,
+				"utility": 0.3 + float(actor.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)) * 0.25,
+				"desc": "兑现承诺", "duration": 1}
 		var spec: Dictionary = ResourceSpec.spec(obj)
 		if int(inv.get(obj, 0)) >= int(spec["give_min"]) + 1:
 			return {"action": "repay_debt", "target": null, "target_actor": str(ob.get("creditor", "")),

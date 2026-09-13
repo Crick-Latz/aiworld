@@ -26,29 +26,31 @@ func requester_exchange_decision(
 ) -> Dictionary:
 	var item_id := str(request.get("item_id", ""))
 	var terms: Dictionary = counter.get("terms", {})
+	# P7.2A：条款对象优先读 B 的 promise_object（协议真源），缺省才回退请求物品。
+	var promise_object := str(terms.get("promise_object", ""))
+	if promise_object == "":
+		promise_object = item_id
 	var promise_quantity := maxi(1, int(terms.get("promise_quantity",
 		counter.get("quantity", int(request.get("requested_quantity", 1))))))
 	var evaluation: Dictionary = Policy.evaluate_requester_acceptance(requester_context)
 	var demanded_due := now_tick + int(terms.get("due_ticks", Contract.DEFAULT_DUE_TICKS))
 	var demanded := {
-		"object": item_id,
+		"object": promise_object,
 		"quantity": promise_quantity,
 		"due_tick": demanded_due,
 	}
-	# 条款分歧只发生在"A 愿意成交、但自己的期限估计确实超出对方要求"时——
-	# 如实报出更长条款；不愿成交走 EXCHANGE_DECLINED，不冒充误解。
+	# P7.2A：报价条款即 A 的真实估计（可能长于 B 的要求）——审计 payload 与
+	# terms_match 单一真源（Contract.terms_match），不再维护两套口径。
+	# 不愿成交时报价回声对方条款，走 EXCHANGE_DECLINED，不冒充误解。
 	var offered_due := demanded_due
-	var terms_match := true
 	if bool(evaluation.get("accept", false)):
-		var estimate_due := now_tick + int(evaluation.get("offered_due_ticks", Contract.DEFAULT_DUE_TICKS))
-		if estimate_due > demanded_due:
-			offered_due = estimate_due
-			terms_match = false
+		offered_due = now_tick + int(evaluation.get("offered_due_ticks", Contract.DEFAULT_DUE_TICKS))
 	var offered := {
-		"object": item_id,
+		"object": promise_object,
 		"quantity": promise_quantity,
-		"due_tick": mini(offered_due, demanded_due),
+		"due_tick": offered_due,
 	}
+	var terms_match := Contract.terms_match(demanded, offered)
 	return {
 		"accept": bool(evaluation.get("accept", false)) and terms_match,
 		"reason": evaluation.get("reason", ""),
@@ -115,8 +117,9 @@ func activate_from_transfer(obligations: Array, request: Dictionary, transfer_ev
 		[Contract.STATUS_PENDING_ACTIVATION])
 	if pending.is_empty():
 		return {"ok": false, "reason": "NO_PENDING_COMMITMENT"}
+	var required := maxi(0, int(request.get("accepted_quantity", 0)))
 	var result: Dictionary = tracker.activate(obligations, str(pending[0].get("commitment_id", "")),
-		transfer_event, now_tick)
+		transfer_event, now_tick, required)
 	if bool(result.get("ok", false)):
 		_trace(Contract.EVENT_COMMITMENT_ACTIVATED, result["commitment"], now_tick, "ACTIVATED",
 			str(transfer_event.get("event_id", "")))
@@ -165,12 +168,21 @@ func violate_due(obligations: Array, now_tick: int) -> Array:
 ## 真实履约：身份/数量/库存核验 → 唯一一次库存转移 → 证据 → FULFILLED。
 ## 重复执行、无关调用、库存不足一律拒绝且不改动库存。
 func settle(obligations: Array, commitment_id: String, debtor_inventory: Dictionary,
-		creditor_inventory: Dictionary, now_tick: int) -> Dictionary:
+		creditor_inventory: Dictionary, now_tick: int, action_debtor: String = "",
+		action_creditor: String = "", action_object: String = "") -> Dictionary:
 	var record := tracker.get_commitment(obligations, commitment_id)
 	if record.is_empty():
 		return {"ok": false, "reason": "COMMITMENT_NOT_FOUND", "mutated": false}
 	if str(record.get("status", "")) != Contract.STATUS_ACTIVE:
 		return {"ok": false, "reason": "NOT_ACTIVE", "mutated": false, "commitment": record}
+	# P7.2A：调用方行动身份 fail-closed 核对——错误的 debtor/creditor/object 不得结算
+	#（防止 commitment 欠 B 的债被指向 C 的行动了结）。
+	if action_debtor != "" and action_debtor != str(record.get("debtor_id", "")):
+		return {"ok": false, "reason": "ACTION_DEBTOR_MISMATCH", "mutated": false, "commitment": record}
+	if action_creditor != "" and action_creditor != str(record.get("creditor_id", "")):
+		return {"ok": false, "reason": "ACTION_CREDITOR_MISMATCH", "mutated": false, "commitment": record}
+	if action_object != "" and action_object != str(record.get("object_id", "")):
+		return {"ok": false, "reason": "ACTION_OBJECT_MISMATCH", "mutated": false, "commitment": record}
 	var quantity := int(record.get("quantity", 0))
 	var object_id := str(record.get("object_id", ""))
 	if int(debtor_inventory.get(object_id, 0)) < quantity:
@@ -229,5 +241,7 @@ func _trace(event_name: String, record: Dictionary, now_tick: int, reason: Strin
 		"source_transfer_event_id": str(record.get("source_transfer_event_id", "")),
 		"parent_plan_id": str(record.get("parent_plan_id", "")),
 		"parent_run_id": str(record.get("parent_run_id", "")),
+		"blocker_step_id": str(record.get("blocker_step_id", "")),
+		"terminal_reason": str(record.get("terminal_reason", "")),
 		"evidence_event_id": evidence_event_id,
 	})

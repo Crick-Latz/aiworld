@@ -1056,7 +1056,9 @@ func _commitments_check_due() -> void:
 	for record in bridge.cancel_orphaned(obligations, actors.keys(), tick):
 		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CANCELLED, record,
 			{"reason": CommitmentContract.CANCEL_CREDITOR_GONE})
+		_refresh_obligation_views(str(record.get("debtor_id", "")), "")
 	for record in bridge.violate_due(obligations, tick):
+		_refresh_obligation_views(str(record.get("debtor_id", "")), str(record.get("creditor_id", "")))
 		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_VIOLATED, record, {
 			"reason": "OVERDUE",
 			"due_tick": int(record.get("due_tick", 0)),
@@ -1112,7 +1114,7 @@ func _commitments_handle_exchange_counter(
 		obligations, request, decision.get("offered_terms", {}), tick)
 	if not bool(created.get("ok", false)):
 		return true
-	a["my_obligations"] = _obligations_of(requester_id)
+	_refresh_obligation_views(requester_id, creditor_id)  # P7.2A: PENDING 不入视图——刷新后仍不可见
 	_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CREATED, created["commitment"], {})
 	var accepted: Dictionary = request_bridge.accept_counter(request_id, tick)
 	if bool(accepted.get("ok", false)):
@@ -1191,6 +1193,7 @@ func _commitments_on_transfer_success(requester_id: String, request: Dictionary,
 	var result: Dictionary = _commitment_runtime_bridge().activate_from_transfer(
 		obligations, request, transfer_event, tick)
 	if bool(result.get("ok", false)):
+		_refresh_obligation_views(requester_id, str((result["commitment"] as Dictionary).get("creditor_id", "")))
 		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_ACTIVATED,
 			result["commitment"], {"transfer_event_id": str(transfer_event.get("event_id", ""))})
 
@@ -1203,9 +1206,7 @@ func _commitments_on_request_terminal(request: Dictionary, cancel_reason: String
 	for record in cancelled:
 		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CANCELLED, record,
 			{"reason": cancel_reason, "detail": detail})
-		var debtor_id := str(record.get("debtor_id", ""))
-		if actors.has(debtor_id):
-			actors[debtor_id]["my_obligations"] = _obligations_of(debtor_id)
+		_refresh_obligation_views(str(record.get("debtor_id", "")), str(record.get("creditor_id", "")))
 
 func _emit_commitment_event(event_type: String, record: Dictionary, extra: Dictionary = {}) -> void:
 	var payload := {
@@ -1218,6 +1219,9 @@ func _emit_commitment_event(event_type: String, record: Dictionary, extra: Dicti
 		"source_request_id": str(record.get("source_request_id", "")),
 		"parent_plan_id": str(record.get("parent_plan_id", "")),
 		"parent_run_id": str(record.get("parent_run_id", "")),
+		"blocker_step_id": str(record.get("blocker_step_id", "")),
+		"terminal_reason": str(record.get("terminal_reason", "")),
+		"source_transfer_event_id": str(record.get("source_transfer_event_id", "")),
 	}
 	for key in extra:
 		payload[key] = extra[key]
@@ -1764,19 +1768,35 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 				goals_left.append(g9)
 		a["institutional_goals"] = goals_left
 ## 债务辅助（视图供给）
+## P7.2A：唯一判断 helper——承诺型记录按 authoritative status（PENDING 不入视图），
+## 旧记录保持 repaid 语义。禁止在别处复制此判断。
+func _is_outstanding_obligation(record: Dictionary) -> bool:
+	if record.has("commitment_id"):
+		return CommitmentContract.is_active_debt(record)
+	return not bool(record.get("repaid", false))
+
 func _obligations_of(debtor: String) -> Array:
 	var out: Array = []
 	for ob in obligations:
-		if str(ob["debtor"]) == debtor and not bool(ob["repaid"]):
+		if typeof(ob) == TYPE_DICTIONARY and str(ob["debtor"]) == debtor \
+				and _is_outstanding_obligation(ob):
 			out.append(ob)
 	return out
 
 func _owed_to(creditor: String) -> Array:
 	var out: Array = []
 	for ob in obligations:
-		if str(ob["creditor"]) == creditor and not bool(ob["repaid"]):
+		if typeof(ob) == TYPE_DICTIONARY and str(ob["creditor"]) == creditor \
+				and _is_outstanding_obligation(ob):
 			out.append(ob)
 	return out
+
+## P7.2A：状态转移后同步双方派生视图（ACTIVATED/FULFILLED/VIOLATED/CANCELLED/CREDITOR_GONE）。
+func _refresh_obligation_views(debtor_id: String, creditor_id: String) -> void:
+	if actors.has(debtor_id):
+		actors[debtor_id]["my_obligations"] = _obligations_of(debtor_id)
+	if creditor_id != "" and actors.has(creditor_id):
+		actors[creditor_id]["owed_to_me"] = _owed_to(creditor_id)
 
 ## P1.6 还债执行：履约 → 可靠性上升（经 transition 的 PROMISE/FULFILLED 语义）
 func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
@@ -1789,7 +1809,7 @@ func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void
 		var obligation: Dictionary = action.get("obligation", {})
 		var commitment_id := str(obligation.get("commitment_id", ""))
 		if commitment_id != "":
-			_commitments_settle_repay(id, a, commitment_id, creditor)
+			_commitments_settle_repay(id, a, commitment_id, creditor, object_id)
 			return
 	if not actors.has(creditor) or int(a["inventory"].get(object_id, 0)) < 2:
 		return
@@ -1810,15 +1830,17 @@ func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void
 			"source_event_ids": [promise_event_seq] if promise_event_seq >= 0 else []})
 
 ## 承诺型履约结算（§十）：bridge 核验身份/状态/数量并执行唯一一次转移。
-func _commitments_settle_repay(debtor_id: String, a: Dictionary, commitment_id: String, creditor_id: String) -> void:
+func _commitments_settle_repay(debtor_id: String, a: Dictionary, commitment_id: String, creditor_id: String,
+		object_id: String = "") -> void:
 	if not actors.has(creditor_id) or not _is_nearby(a["tile"], actors[creditor_id]["tile"]):
 		return  # 债主不在场——履约计划继续保留
+	# P7.2A：结算绑定行动身份（debtor/creditor/object），错向 fail closed。
 	var result: Dictionary = _commitment_runtime_bridge().settle(
-		obligations, commitment_id, a["inventory"], actors[creditor_id]["inventory"], tick)
+		obligations, commitment_id, a["inventory"], actors[creditor_id]["inventory"], tick,
+		debtor_id, creditor_id, object_id)
 	if not bool(result.get("ok", false)):
 		return
-	a["my_obligations"] = _obligations_of(debtor_id)
-	actors[creditor_id]["owed_to_me"] = _owed_to(creditor_id)
+	_refresh_obligation_views(debtor_id, creditor_id)
 	var evidence: Dictionary = result.get("event", {})
 	var record: Dictionary = result.get("commitment", {})
 	_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_TRANSFER_COMPLETED, record,
@@ -2516,21 +2538,27 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		# P5（SN-F 修复）：目击 = 看得见（视野/LOS）或贴得很近（≤3 格听得见动静）
 		var ev_actor_tile: Vector2i = actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO
 		var close_enough := absi(ev_actor_tile.x - a["tile"].x) + absi(ev_actor_tile.y - a["tile"].y) <= 3
-		var is_witness: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
+		var spatial: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
 				int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
+		# P7.2A：承诺直接当事方通道——债权人（to_id）无需目击即可得知自己的承诺结局
+		#（到期未收款本身就是债权人的直接证据）；但非空间目击时不得经 see_at 获得
+		# 债务人当前位置，第三方仍只走空间感知。仅 COMMITMENT_* 事件，旧类型零改动。
+		var direct_recipient: bool = type.begins_with("COMMITMENT_") \
+				and id != actor_id and id == str(e.get("to_id", ""))
+		var is_witness: bool = spatial or direct_recipient
 		if is_witness:
 			var salience := 0.5
 			if id == actor_id or str(e.get("proposer_id", "")) == id or str(e.get("to_id", "")) == id or str(e.get("target_id", "")) == id:
 				salience = 1.0  # 事件涉及我
 			elif ["explored_hurt", "weather_storm"].has(str(e.get("type", ""))):
 				salience = 0.9  # 危险
-			witnesses.append({"id": id, "a": a, "salience": salience})
+			witnesses.append({"id": id, "a": a, "salience": salience, "spatial": spatial})
 	witnesses.sort_custom(func(x, y): return float(x["salience"]) > float(y["salience"]))
 	for w in witnesses.slice(0, 3):
 		var id = w["id"]
 		var a: Dictionary = w["a"]
-		if id != actor_id and actors.has(actor_id):
-			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
+		if id != actor_id and actors.has(actor_id) and bool(w.get("spatial", true)):
+			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪（直接当事方非目击者除外）
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
 		# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。
 		# 证据只写目击者 ToM；看不见的人不会凭空知道。

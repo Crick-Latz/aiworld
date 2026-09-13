@@ -44,7 +44,8 @@ func create(obligations: Array, record: Dictionary) -> Dictionary:
 	return {"ok": true, "commitment": record}
 
 ## 匹配的真实转移证据 → ACTIVE。身份不符/状态不符一律拒绝（fail closed）。
-func activate(obligations: Array, commitment_id: String, transfer_event: Dictionary, now_tick: int) -> Dictionary:
+func activate(obligations: Array, commitment_id: String, transfer_event: Dictionary, now_tick: int,
+		required_quantity: int = 0) -> Dictionary:
 	var record := get_commitment(obligations, commitment_id)
 	if record.is_empty():
 		return {"ok": false, "reason": "COMMITMENT_NOT_FOUND"}
@@ -53,8 +54,11 @@ func activate(obligations: Array, commitment_id: String, transfer_event: Diction
 	# 转移证据必须指向同一请求且物品一致——无关转移不得激活承诺。
 	if str(transfer_event.get("request_id", "")) != str(record.get("source_request_id", "")):
 		return {"ok": false, "reason": "TRANSFER_REQUEST_MISMATCH", "commitment": record}
-	if str(transfer_event.get("item_id", "")) != str(record.get("object_id", "")):
-		return {"ok": false, "reason": "TRANSFER_ITEM_MISMATCH", "commitment": record}
+	# P7.2A：激活只认真实 P7.1 材料转移证据——类型/证据号/世界变更标记/方向/物品/数量
+	# 全字段核验；任何伪造或缺项一律拒绝，状态保持 PENDING、零副作用。
+	var evidence_errors := _source_transfer_evidence_errors(record, transfer_event, required_quantity)
+	if not evidence_errors.is_empty():
+		return {"ok": false, "reason": evidence_errors[0], "errors": evidence_errors, "commitment": record}
 	record["status"] = Contract.STATUS_ACTIVE
 	record["activated_tick"] = now_tick
 	record["source_transfer_event_id"] = str(transfer_event.get("event_id", ""))
@@ -87,8 +91,10 @@ func fulfill(obligations: Array, commitment_id: String, transfer_event: Dictiona
 		return {"ok": false, "reason": "COMMITMENT_NOT_FOUND"}
 	if str(record.get("status", "")) != Contract.STATUS_ACTIVE:
 		return {"ok": false, "reason": "NOT_ACTIVE", "commitment": record}
-	if int(transfer_event.get("quantity", 0)) < int(record.get("quantity", 0)):
-		return {"ok": false, "reason": "TRANSFER_QUANTITY_INSUFFICIENT", "commitment": record}
+	# P7.2A：履约结算证据全字段身份核验（type/事件号/世界变更/双方/物品/数量/承诺号）。
+	var settle_errors := _settlement_evidence_errors(record, transfer_event)
+	if not settle_errors.is_empty():
+		return {"ok": false, "reason": settle_errors[0], "errors": settle_errors, "commitment": record}
 	record["status"] = Contract.STATUS_FULFILLED
 	record["terminal_tick"] = now_tick
 	record["terminal_reason"] = "FULFILLED"
@@ -151,6 +157,47 @@ func next_serial(obligations: Array, debtor_id: String) -> int:
 			continue
 		max_serial = maxi(max_serial, int(record.get("serial", 0)))
 	return max_serial + 1
+
+## P7.2A：来源转移证据校验——PENDING -> ACTIVE 只认真实世界 mutation。
+static func _source_transfer_evidence_errors(record: Dictionary, event: Dictionary,
+		required_quantity: int) -> Array:
+	var errors: Array = []
+	if str(event.get("type", "")) != "ITEM_TRANSFER_COMPLETED":
+		errors.append("EVIDENCE_WRONG_TYPE")
+	if str(event.get("event_id", "")) == "":
+		errors.append("EVIDENCE_MISSING_EVENT_ID")
+	if str(event.get("evidence_kind", "")) != "WORLD_MUTATION":
+		errors.append("EVIDENCE_NOT_WORLD_MUTATION")
+	if str(event.get("from_actor_id", "")) != str(record.get("creditor_id", "")):
+		errors.append("EVIDENCE_WRONG_GIVER")
+	if str(event.get("to_actor_id", "")) != str(record.get("debtor_id", "")):
+		errors.append("EVIDENCE_WRONG_RECEIVER")
+	if str(event.get("item_id", "")) != str(record.get("object_id", "")):
+		errors.append("TRANSFER_ITEM_MISMATCH")
+	if required_quantity > 0 and int(event.get("quantity", 0)) < required_quantity:
+		errors.append("EVIDENCE_QUANTITY_BELOW_ACCEPTED")
+	return errors
+
+## P7.2A：履约结算证据校验——错向/错物/错量/伪证据不得 FULFILLED。
+static func _settlement_evidence_errors(record: Dictionary, event: Dictionary) -> Array:
+	var errors: Array = []
+	if str(event.get("type", "")) != "COMMITMENT_TRANSFER_COMPLETED":
+		errors.append("EVIDENCE_WRONG_TYPE")
+	if str(event.get("event_id", "")) == "":
+		errors.append("EVIDENCE_MISSING_EVENT_ID")
+	if str(event.get("evidence_kind", "")) != "WORLD_MUTATION":
+		errors.append("EVIDENCE_NOT_WORLD_MUTATION")
+	if str(event.get("commitment_id", "")) != str(record.get("commitment_id", "")):
+		errors.append("EVIDENCE_WRONG_COMMITMENT")
+	if str(event.get("from_actor_id", "")) != str(record.get("debtor_id", "")):
+		errors.append("EVIDENCE_WRONG_GIVER")
+	if str(event.get("to_actor_id", "")) != str(record.get("creditor_id", "")):
+		errors.append("EVIDENCE_WRONG_RECEIVER")
+	if str(event.get("item_id", "")) != str(record.get("object_id", "")):
+		errors.append("EVIDENCE_WRONG_ITEM")
+	if int(event.get("quantity", 0)) < int(record.get("quantity", 0)):
+		errors.append("TRANSFER_QUANTITY_INSUFFICIENT")
+	return errors
 
 ## 兼容字段派生：repaid 只反映 authoritative status。
 func _sync_legacy(record: Dictionary) -> void:
