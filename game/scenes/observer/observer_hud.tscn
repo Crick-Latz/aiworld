@@ -1,93 +1,352 @@
-[gd_scene load_steps=2 format=3 uid="uid://bobs01hud00001"]
+[gd_scene load_steps=5 format=3 uid="uid://bobs01hud00001"]
 
 [ext_resource type="Script" path="res://scenes/observer/observer_hud.gd" id="1_hud"]
+[ext_resource type="Theme" path="res://assets/ui/observer_theme.tres" id="2_theme"]
+
+[sub_resource type="ButtonGroup" id="inspector_tab_group"]
+allow_unpress = false
+
+[sub_resource type="ButtonGroup" id="timeline_tab_group"]
+allow_unpress = false
 
 [node name="ObserverHud" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
-[node name="Panel" type="PanelContainer" parent="."]
-anchor_left = 1.0
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
-anchor_top = 0.0
 anchor_bottom = 1.0
-offset_left = -380.0
-offset_right = -8.0
-offset_top = 8.0
-offset_bottom = -8.0
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="TopBar" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 20.0
 mouse_filter = 0
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
+[node name="TopMargin" type="MarginContainer" parent="Root/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 1
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 1
 
-[node name="TitleLabel" type="Label" parent="Panel/VBox"]
-theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.9)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 20
+[node name="TopHBox" type="HBoxContainer" parent="Root/TopBar/TopMargin"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="WorldLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
 text = "灰雾港 · 观察模式"
 
-[node name="TickLabel" type="Label" parent="Panel/VBox"]
-theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.85)
-theme_override_constants/outline_size = 4
+[node name="TickLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
 text = "第 1 天 08:00 · 运行中 · 1×"
 
-[node name="SelPanel" type="PanelContainer" parent="Panel/VBox"]
+[node name="WarnLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
+visible = false
+modulate = Color(1, 0.55, 0.25, 1)
+layout_mode = 2
+text = "⚠"
 
-[node name="VBox" type="VBoxContainer" parent="Panel/VBox/SelPanel"]
+[node name="LagLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
+visible = false
+modulate = Color(1, 0.45, 0.35, 1)
+layout_mode = 2
+text = "滞后 0"
 
-[node name="SelName" type="Label" parent="Panel/VBox/SelPanel/VBox"]
-text = "姓名：—"
+[node name="Spacer" type="Control" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
 
-[node name="SelGoal" type="Label" parent="Panel/VBox/SelPanel/VBox"]
+[node name="PauseBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "暂停"
+
+[node name="X1Btn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "1×"
+
+[node name="X2Btn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "2×"
+
+[node name="X4Btn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "4×"
+
+[node name="SaveBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "存档"
+
+[node name="BaselineBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "基准"
+
+[node name="ControlBtn" type="Button" parent="Root/TopBar/TopMargin/TopHBox"]
+layout_mode = 2
+text = "对照"
+
+[node name="InspectorPanel" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 320.0
+offset_top = 20.0
+offset_bottom = -74.0
+mouse_filter = 0
+
+[node name="InsMargin" type="MarginContainer" parent="Root/InspectorPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 3
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 3
+theme_override_constants/margin_bottom = 2
+
+[node name="InsVBox" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="HeaderH" type="HBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox"]
+layout_mode = 2
+
+[node name="SelName" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/HeaderH"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 9
+text = "未选中"
+
+[node name="StatusLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/HeaderH"]
+modulate = Color(0.45, 0.35, 0.24, 1)
+layout_mode = 2
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 7
+text_overrun_behavior = 3
+clip_text = true
+text = "点击世界中的角色"
+
+[node name="TabGrid" type="GridContainer" parent="Root/InspectorPanel/InsMargin/InsVBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 4
+
+[node name="Overview" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("inspector_tab_group")
+text = "概览"
+
+[node name="Memory" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "记忆"
+
+[node name="Personality" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "性格"
+
+[node name="Decision" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "决策"
+
+[node name="Relations" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "关系"
+
+[node name="Plans" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "计划"
+
+[node name="History" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "历史"
+
+[node name="PagesV" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="OverviewPage" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="GoalLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+autowrap_mode = 3
 text = "目标：—"
 
-[node name="SelActivity" type="Label" parent="Panel/VBox/SelPanel/VBox"]
-text = "活动：—"
+[node name="DecisionLineLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+autowrap_mode = 3
+text = "决策：—"
 
-[node name="SelLocation" type="Label" parent="Panel/VBox/SelPanel/VBox"]
-text = "地点：—"
+[node name="LocationLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "位置：—"
 
-[node name="EventsPanel" type="PanelContainer" parent="Panel/VBox"]
+[node name="NeedsLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "需求：—"
+
+[node name="InventoryLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_font_sizes/font_size = 7
+autowrap_mode = 3
+text = "物资：—"
+
+[node name="MemoryPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
 size_flags_vertical = 3
+bbcode_enabled = true
 
-[node name="EventsLabel" type="RichTextLabel" parent="Panel/VBox/EventsPanel"]
+[node name="PersonalityPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="DecisionPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="RelationsPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="PlansPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="HistoryPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="BottomPanel" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -74.0
+mouse_filter = 0
+
+[node name="BotMargin" type="MarginContainer" parent="Root/BottomPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 3
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 3
+theme_override_constants/margin_bottom = 2
+
+[node name="BotVBox" type="VBoxContainer" parent="Root/BottomPanel/BotMargin"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="TabRow" type="HBoxContainer" parent="Root/BottomPanel/BotMargin/BotVBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Events" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("timeline_tab_group")
+text = "事件"
+
+[node name="Stories" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("timeline_tab_group")
+text = "故事"
+
+[node name="Dialogue" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("timeline_tab_group")
+text = "对话"
+
+[node name="Causal" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("timeline_tab_group")
+text = "因果链"
+
+[node name="PagesH" type="HBoxContainer" parent="Root/BottomPanel/BotMargin/BotVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="EventsLabel" type="RichTextLabel" parent="Root/BottomPanel/BotMargin/BotVBox/PagesH"]
+layout_mode = 2
+size_flags_horizontal = 3
 bbcode_enabled = true
 scroll_following = true
 
-[node name="LagLabel" type="Label" parent="Panel/VBox"]
+[node name="StoriesLabel" type="RichTextLabel" parent="Root/BottomPanel/BotMargin/BotVBox/PagesH"]
 visible = false
-modulate = Color(1, 0.8, 0.4, 1)
-text = "⚠ 模拟滞后"
+layout_mode = 2
+size_flags_horizontal = 3
+bbcode_enabled = true
 
-[node name="BottomBar" type="HBoxContainer" parent="Panel/VBox"]
+[node name="DialogueLabel" type="RichTextLabel" parent="Root/BottomPanel/BotMargin/BotVBox/PagesH"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+bbcode_enabled = true
+scroll_following = true
 
-[node name="PauseBtn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "暂停(Esc)"
+[node name="CausalLabel" type="RichTextLabel" parent="Root/BottomPanel/BotMargin/BotVBox/PagesH"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+bbcode_enabled = true
 
-[node name="X1Btn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "1×"
-
-[node name="X2Btn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "2×"
-
-[node name="X4Btn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "4×"
-
-[node name="SaveBtn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "保存"
-
-[node name="BaselineBtn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "基准"
-
-[node name="ControlBtn" type="Button" parent="Panel/VBox/BottomBar"]
-text = "对照"
-
-[node name="HintLabel" type="Label" parent="."]
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = -40.0
-offset_right = 900.0
-offset_bottom = -12.0
+[node name="HintLabel" type="Label" parent="Root"]
+modulate = Color(1, 1, 1, 0.72)
 mouse_filter = 2
-theme_override_colors/font_outline_color = Color(0.08, 0.08, 0.1, 0.85)
-theme_override_constants/outline_size = 6
-text = "右键拖动平移 · 滚轮缩放 · Q/R旋转 · 左键选人物 · Esc暂停模拟"
+offset_left = 2.0
+offset_top = 22.0
+offset_right = 300.0
+offset_bottom = 32.0
+theme_override_colors/font_outline_color = Color(0.14, 0.1, 0.06, 0.85)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 6
+text = "左键选人物 · WASD/方向键平移 · 滚轮缩放 · 右键拖拽 · Esc暂停"
