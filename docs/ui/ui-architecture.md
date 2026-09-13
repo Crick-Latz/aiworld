@@ -8,10 +8,12 @@ assets-prep / inspector，不改模拟机制。
 
 ## 小地图（48×36 六分区舞台）
 
-- island 观察模式的世界收窄为 **48×36 tiles**（`observer_main` 在 build 时覆盖
-  width/depth 参数；`game/config` 与地图生成器/模拟代码零改动；`AIW_UI_MAP=full`
-  退回 64×64）。巡航/故事演示模式与全部测试的地图语义不受影响（island 四套件在
-  48×36 下全绿）。
+- island 观察模式的世界为 **observer-only 48×36 小世界配置**：`observer_main` 在
+  build 时覆盖传入 MapController 的 width/depth（`game/config`、地图生成器与模拟
+  代码零改动；`AIW_UI_MAP=full` 退回 64×64）。**注意：这会改变 observer session
+  喂给 IslandSimulation 的地图输入**——observer 世界与 headless/default profile 的
+  64×64 世界不是同一张图、不逐状态等价；island 观察相关测试套件在 48×36 下全绿，
+  headless 回归路径不受影响。
 - 六分区：海滩/草地/树林由生成地图自然呈现；**营地**（小木屋/篝火/箱/桶/柜/井/围栏）、
   **农地**（耕地 + 两档作物）、**工坊**（工作台/锯木台/木堆/石堆）在出生点邻域
   确定性布景（`World2DProjector._dress_zones`，稳定排序不耗 RNG）。
@@ -20,7 +22,7 @@ assets-prep / inspector，不改模拟机制。
 ## 像素规格（明确选择）
 
 - **tile size：16×16 逻辑像素**
-- **内部渲染分辨率：480×270**（16:9；320×180 过挤，Inspector 7 页 + 中文文本放不下）
+- **内部渲染分辨率：480×270**（16:9；320×180 过挤，Inspector 6 页 + 中文文本放不下）
 - **实现方式：运行时 `root.content_scale_size = 480×270`**（observer/ui_preview 场景自设；
   工程默认视口保持 1280×720——遗留 main.tscn 玩家原型与其 hud_layout 测试不受影响）
 - **窗口：1920×1080 默认**（`window_width/height_override`），`--resolution 1366x768` 验证小窗
@@ -45,7 +47,7 @@ observer_main.tscn (Main, observer_main.gd)
 │   └── Camera2D (ObserverCamera2D: WASD/方向键平移·滚轮缩放·右键拖拽)
 └── ObserverHud (CanvasLayer → Root Control, observer_theme.tres)
     ├── TopBar（世界名/时间/状态/滞后/警告 + 暂停 1× 2× 4× 存档 基准 对照）
-    ├── InspectorPanel（名字+状态 / 7 tab 网格 / 7 页内容）
+    ├── InspectorPanel（名字+状态 / 6 tab 网格 / 6 页内容；未选中时整个收起）
     └── BottomPanel（事件 故事 对话 因果链 4 tab + 4 页）
 ```
 
@@ -63,19 +65,20 @@ island_sim (模拟真值)
 model: Dictionary（view_schema_version 0.2，见 OBSERVER_VIEW_MODEL.md）
    │  hud.render(model)
    ▼
-ObserverHud（纯渲染：顶栏 / Inspector 7 页 / 时间线 4 页；占位文案兜底）
+ObserverHud（纯渲染：紧凑顶栏 / Inspector 6 页（随选中显隐）/ 时间线 4 页（默认收起）；占位文案兜底）
 ```
 
 - HUD 组件不 import / get_node 任何模拟对象；缺字段渲染占位。
 - 离线迭代走 `scenes/ui/ui_preview.tscn`（9 套 fixture，与正式 HUD 同一场景）。
 - 截图工具 `scenes/observer/ui_capture.tscn`（preview/observer 两模式，`--` 后传参）。
 
-## 素材（v2：CC0 混合层）
+## 素材（v3：Kenney 混合层已撤回）
 
-地形图集为**混合图集**：11 种地面 tile 来自 Kenney Tiny Farm（CC0，像素统计+双盲视觉
-核对后采纳，半透明区按主色展平，原始文件 vendor 于 `assets/pixel/third_party/`），
-其余帧与全部物件/NPC/图标仍为自制占位。生成器单一入口
-`assets/pixel/tools/generate_placeholders.py` 可完整复现。详见 `ASSET_MANIFEST.md`。
+v2 曾把 11 种 Kenney Tiny Farm tile 混入地形图集，人工复审发现识别错误（把容器/水槽/
+石堆当成了地面/水）——**v3 全部撤回，地形图集恢复 100% 自制**。vendored 文件保留在
+`assets/pixel/third_party/kenney_tiny_farm/` 仅供后续**逐 tile 人工批准**（对照
+contact sheet，见 Review Package），生成器不读取也不联网。生成器单一入口
+`assets/pixel/tools/generate_placeholders.py` 可复现全部自制 PNG。
 
 ## 2D 地形派生（纯表现层）
 

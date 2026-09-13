@@ -85,3 +85,31 @@
 4. **整数倍放大**：`window/stretch/scale_mode=integer`；1366×768 下自动 letterbox。
 5. 新增物件 19 种（小木屋/箱/桶/柜/横竖围栏/井/工作台/锯木台/幼苗/花/杂草/大石/
    木堆/石堆/作物两档/橡树/松树）+ farmland 地形帧；tree.png 由 tree_oak/tree_pine 取代。
+
+
+## UI-R1 v3 返修记录（GPT 复审 UI_R1_VISUAL_REVIEW_NEEDS_FIX + DATA_PRESENTATION_NEEDS_FIX）
+
+1. **Kenney tile 误识别撤回（阻断级）**：人工复审确认 tile_0011/0012（容器/物件）、
+   tile_0100/0101（水槽/容器）、tile_0089（石堆）被误当地面/水。v3 撤回全部 11 帧
+   Kenney 混合，地形图集恢复 100% 自制（生成器已去除混合层且不读取 vendored 文件）。
+   全量 132 tile contact sheet（ID/原图/8×）随复审包提供，供后续逐 tile 人工批准。
+   教训：禁止用像素统计/视觉模型投票猜第三方素材语义。
+2. **关系页两层分离**：真实关系边（RelationshipStore：综合信任 + benevolence/
+   reliability/obligation/fear 四维 get_dim）与主观心智模型（TheoryOfMind：有食/慷慨/
+   可靠）分区展示，不再把 ToM 信念标成关系维度。
+3. **布景阻挡纪律**：木屋/井/工作台/机器/围栏/箱柜/木石堆/营火/帐篷/市集/灯塔等
+   阻挡语义物件一律不上可行走格——当前无可合法分配的 non-walkable footprint，
+   全部取消（宁缺毋假）；可行走格只留花/杂草/幼苗/小作物等轻装饰；POI 改轻量木牌。
+4. **游戏式 HUD**：未选中时 Inspector 收起；时间线默认收起为 tab 条（点 tab 展开、
+   再点当前 tab 收回）；顶栏压缩为左世界名/日期时间 + 右倍速/暂停/⋯菜单（存档/
+   基准/对照移入）。无选中状态世界占画面 ~89%（1920×1080 实测，目标 ≥80%）；
+   1366×768 同布局（整数缩放 letterbox 内同比例，目标 ≥75%）。
+5. **生成器入库**：generate_placeholders.py 之前被根 .gitignore 的 tools/ 模式
+   静默忽略（v1 提交信息声称已提交是错的）——v3 以 git add -f 正式入库并验证
+   确定性（连跑两次 md5 一致）；生成器不读取/不下载第三方素材。
+6. **PopupMenu RID 泄漏修复**：顶栏菜单 PopupMenu 之前 new 后未 add_child，成为
+   孤儿节点导致一轮 strict 回归以 "RID allocations leaked at exit" 判 FAIL——已入树。
+7. **v3 后完整回归：PASS 42 套件 / 1269 断言 / 18 python 测试**（含泄漏修复验证，
+   证据 .tmp/ui-r1-strict-evidence/）；9 fixtures、island/wander 启动、7 个定向
+   套件（observer_sim/island_sim/execution_receipt/p0_cognition/p1_social/
+   camera_rotation/run_all 共 278 断言）与 module_boundaries 全部复验通过。

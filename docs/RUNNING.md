@@ -124,8 +124,9 @@ python3 narrative-learning/compile_cases.py \
 ## 7. UI 观察模式（UI-R1 2D 像素原型）
 
 观察模式默认进入 2D 俯视像素小地图原型（48×36 六分区舞台；内部渲染 480×270、16×16
-图块、整数倍放大，窗口默认 1920×1080）。地形含 Kenney Tiny Farm CC0 混合层。
-`AIW_UI_MAP=full` 可让观察模式回到 64×64 全图。
+图块、整数倍放大，窗口默认 1920×1080；HUD 为游戏式覆盖——未选中时 Inspector 收起、
+时间线默认收起）。此 48×36 为 observer-only 小世界配置（改变 observer 会话的地图
+输入，不等于 headless/default 世界）。`AIW_UI_MAP=full` 可让观察模式回到 64×64 全图。
 
 ```bash
 # 正式观察（island 认知岛模拟 + 2D 像素世界 + Inspector/时间线）

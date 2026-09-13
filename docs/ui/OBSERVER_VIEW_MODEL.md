@@ -50,7 +50,7 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | `personality.emotions` | Array | CURRENT | 性格页·情绪：`{key, value}`（|v|>0.05 才出现） |
 | `personality.beliefs` | Array | CURRENT | 性格页·信念：`{text, weight}` |
 | `decision` | Dictionary | CURRENT | 决策页：`{plan, step, reason, blocker, next_step}` |
-| `relationship_rows` | Array | CURRENT | 关系页：`{other_id, other_name, trust, benevolence, reliability, change, tom}` |
+| `relationship_rows` | Array | CURRENT | 关系页（两层分离）：真实关系边 `{other_id, other_name, trust(综合), benevolence, reliability, obligation, fear, change}`（get_dim 四维）+ 主观判断 `tom:{has_food,generous,reliable}`——ToM 信念 ≠ 关系边，UI 分区展示 |
 | `history_rows` | Array | CURRENT | 历史页·最近事件：`{day, seq, text}`（该角色相关事件，倒序 ≤12） |
 | `history_dialogue_rows` | Array | CURRENT | 历史页·最近对话：该角色台词（≤6 条回溯） |
 | `history_chain_rows` | Array | CURRENT | 历史页·行动链：该角色自身 cause_seq 链步（无则空→占位） |

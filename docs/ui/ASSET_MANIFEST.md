@@ -2,26 +2,24 @@
 
 ## 素材策略（v2，项目确认非商用）
 
-- **第一梯队（已并入）**：Kenney Tiny Farm（CC0，公有领域）——11 种高置信度地面 tile
-  与自制帧混合进地形图集（grass_a/b、dirt、farmland、sand_a/b、shallow_a/b、foam_edge、
-  deep_a/b）。选择依据：像素统计 + 双盲视觉核对一致；半透明区按主色展平。
-  原始文件与许可 vendor 于 `game/assets/pixel/third_party/kenney_tiny_farm/`。
+- **第一梯队（v3 状态：已撤回待批）**：v2 曾把 Kenney Tiny Farm（CC0）11 种 tile
+  混入地形图集；人工复审发现识别错误（容器/水槽/石堆被当作地面/水），**v3 全部撤回，
+  地形恢复 100% 自制**。vendored 文件（`game/assets/pixel/third_party/kenney_tiny_farm/`
+  含 License.txt）仅供后续逐 tile 人工批准——对照全量 contact sheet
+  （132 tile：ID/原图/8×，见 Review Package `kenney-contact-sheet.png`）确认后方可
+  并入，生成器不读取 vendored 文件、不联网。
 - **第二梯队（自制占位）**：其余全部自制——Kenney 包缺失（沙滩细节/林地底/悬崖/泡沫）
   或识别置信度不足（树/围栏/树桩，视觉核对两次结果矛盾时保守不采用）的帧。
 - Sprout Lands / SunnyLand 未采用：本轮仅 Kenney 提供了可直接下载且许可为 CC0 的包；
   itch.io 系需浏览器会话下载，留待需要角色/高级物件素材时人工引入（引入前在本文件登记）。
 
-### Kenney Tiny Farm（CC0）逐条登记
+### Kenney Tiny Farm（CC0）登记（v3：全部撤回，待人工批准）
 
 | asset | source | license | author | modified | where used |
 |---|---|---|---|---|---|
-| tile_0094/0106 | kenney.nl/assets/tiny-farm | CC0 1.0 | Kenney | 展平+入图集 | grass_a / grass_b |
-| tile_0012/0011 | 同上 | CC0 1.0 | Kenney | 展平+入图集 | dirt / farmland |
-| tile_0112/0113 | 同上 | CC0 1.0 | Kenney | 展平+入图集 | sand_a / sand_b |
-| tile_0100/0101 | 同上 | CC0 1.0 | Kenney | 展平+入图集 | shallow_a/b、foam_edge |
-| tile_0089 | 同上 | CC0 1.0 | Kenney | 展平+入图集 | deep_a/b |
+| tile_0089/0011/0012/0094/0100/0101/0106/0112/0113 | kenney.nl/assets/tiny-farm | CC0 1.0 | Kenney | 未修改（vendor 原样） | **无**（v2 误用已移除；待 contact sheet 人工批准） |
 
-**其余全部为自制占位像素图。** 所有 PNG 由
+**当前游戏画面内全部为自制占位像素图。** 所有 PNG 由
 `game/assets/pixel/tools/generate_placeholders.py`（Python 3 + Pillow）确定性生成，
 可随时重新生成或 1:1 替换为正式美术。调色板为暖色荒岛系（草地/沙滩/暖水/木色），
 只借鉴"温暖清晰的农场/荒岛像素游戏"高层方向，不复刻任何现成游戏的素材与布局。
@@ -89,9 +87,12 @@ hoe / watering_can / fishing_rod / campfire`——均为 16×16 项目自制，
 
 ## 第三方素材
 
-无。若未来引入 Kenney / SunnyLand / OpenGameArt 等 CC0 或明确可商用资源，
-必须先在本文件登记（asset name / source url / license / author / modified / where used），
-授权不清晰的图片禁止混入仓库。
+- **vendor 中（未使用）**：Kenney Tiny Farm 原始 tile ×11 + License.txt
+  （`game/assets/pixel/third_party/kenney_tiny_farm/`）——全部待人工逐 tile 批准，
+  当前**没有任何一张进入游戏画面**。
+- 后续引入任何第三方资源（含 Sprout Lands / SunnyLand / OpenGameArt）必须先在本文件
+  登记（asset name / source url / license / author / modified / where used），
+  授权不清晰的图片禁止混入仓库。
 
 Sprout Lands 特别条款备忘：free 版非商用，premium 版可商用——引入前必须核验版本与用途。
 
