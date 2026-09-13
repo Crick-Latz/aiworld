@@ -173,10 +173,12 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 	var urgency := clampf(float(goal.get("request_urgency", 0.5)), 0.0, 1.0)
 	var peers: Array = (actor.get("others_visible", []) as Array).duplicate(true)
 	peers.sort_custom(func(a, b): return str(a.get("id", "")) < str(b.get("id", "")))
+	var eligible_peers: Array = []
 	for peer in peers:
 		var peer_id := str(peer.get("id", ""))
 		if peer_id == "" or peer_id == str(actor.get("id", "")) or asked.has(peer_id) or excluded.has(peer_id):
 			continue
+		eligible_peers.append(peer)
 		var trust_raw := float(actor.get("trust_of", {}).get(peer_id, 0.0))
 		var trust_norm := clampf((trust_raw + 1000.0) / 2000.0, 0.0, 1.0)
 		var reliable := clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
@@ -185,8 +187,11 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 		var peer_tile: Vector2i = peer.get("tile", actor.get("tile", Vector2i.ZERO))
 		var actor_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
 		var distance := absi(peer_tile.x - actor_tile.x) + absi(peer_tile.y - actor_tile.y)
-		var utility := clampf(0.18 + maxf(pressure, urgency) * 0.32 + trust_norm * 0.14
-			+ reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.92)
+		# P7.2C C2：parent blockedness 进入询问权重——父计划被材料 blocker 卡住
+		# 越久，询问作为解除 blocker 行为的竞争力越高（不硬锁；极端生存仍可压过）。
+		var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
+		var utility := clampf(0.14 + maxf(pressure, urgency) * 0.26 + blockedness * 0.22
+			+ trust_norm * 0.14 + reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.95)
 		out.append({
 			"action": "ask_item_holder",
 			"target": peer_tile,
@@ -204,4 +209,73 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 			"source_request_id": str(goal.get("source_request_id", "")),
 			"peer_reliability_belief": reliable,
 		})
+	# P7.2C C1：身边没有可问的人时，基于自己的主观信息去找一个可能知道答案的人。
+	# 合法信息源只有自己的 ToM last_seen / trust / reliability / 距离信念——
+	# 不读真实库存、不读真实坐标、无神谕追踪；扑空是真实结果（seek 既有语义）。
+	if not eligible_peers.is_empty() or not bool(goal.get("holder_reachability_enabled", false)):
+		return out
+	var seek := _build_seek_holder(actor, goal, pressure, urgency)
+	if not seek.is_empty():
+		out.append(seek)
 	return out
+
+## P7.2C C1：找人候选——目标从请求者自己的 ToM last_seen 记忆里选（主观），
+## 排序用 trust/reliability/sociability/last_seen 新鲜度/距离信念/请求紧迫度。
+## 允许扑空：last_seen 陈旧时世界执行层会真实扑空（seek_person 既有语义）。
+static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
+		pressure: float, urgency: float) -> Dictionary:
+	var tom: TheoryOfMind = actor.get("tom", null)
+	if tom == null:
+		return {}
+	var p: PersonalityProfile = actor.get("personality", null)
+	if p == null:
+		return {}
+	var origin: Vector2i = actor.get("tile", Vector2i.ZERO)
+	var asked: Array = goal.get("asked_actor_ids", [])
+	var excluded: Array = goal.get("excluded_target_ids", [])
+	var best_id := ""
+	var best_score := 0.0
+	var best_seen := {}
+	var now := int(actor.get("now_tick", 0))
+	for other_id in actor.get("trust_of", {}):
+		var peer_id := str(other_id)
+		if peer_id == "" or peer_id == str(actor.get("id", "")) \
+				or asked.has(peer_id) or excluded.has(peer_id):
+			continue
+		var seen := tom.last_seen_of(peer_id)
+		if seen.is_empty():
+			continue
+		var trust_norm := clampf((float(actor.get("trust_of", {}).get(peer_id, 0.0)) + 1000.0) / 2000.0, 0.0, 1.0)
+		var reliable := clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+		var sociability := p.effective_trait("sociability", actor.get("needs", {}))
+		var seen_tick := int(seen.get("tick", -1))
+		var freshness := clampf(1.0 / (1.0 + float(maxi(0, now - seen_tick)) / 120.0), 0.1, 1.0)
+		var tile: Vector2i = seen.get("tile", origin)
+		var distance := absi(tile.x - origin.x) + absi(tile.y - origin.y)
+		var distance_belief := clampf(1.0 / (1.0 + float(distance) / 30.0), 0.1, 1.0)
+		var score := trust_norm * 0.28 + reliable * 0.22 + sociability * 0.12 \
+			+ freshness * 0.18 + distance_belief * 0.10 + clampf(maxf(pressure, urgency), 0.0, 1.0) * 0.10
+		if score > best_score:
+			best_score = score
+			best_id = peer_id
+			best_seen = seen
+	if best_id == "":
+		return {}
+	var seek_tile: Vector2i = best_seen.get("tile", origin)
+	var utility := clampf(0.14 + maxf(pressure, urgency) * 0.30 + best_score * 0.42, 0.06, 0.92)
+	return {
+		"action": "seek_holder_person",
+		"target": seek_tile,
+		"target_actor": best_id,
+		"utility": utility,
+		"duration": maxi(1, absi(seek_tile.x - origin.x) + absi(seek_tile.y - origin.y) - 8),
+		"desc": "去找%s——也许他知道谁有%s" % [best_id, str(goal.get("item_id", ""))],
+		"information_goal_id": str(goal.get("goal_id", "")),
+		"information_action": true,
+		"information_kind": "SEEK_HOLDER",
+		"query_kind": "HOLDER",
+		"parent_plan_id": str(goal.get("parent_plan_id", "")),
+		"item_id": str(goal.get("item_id", "")),
+		"holder_predicate": TheoryOfMind.possession_predicate(str(goal.get("item_id", ""))),
+		"source_request_id": str(goal.get("source_request_id", "")),
+	}

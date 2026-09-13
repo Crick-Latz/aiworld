@@ -93,7 +93,8 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 	if str(action.get("information_goal_id", "")) != str(goal.get("goal_id", "")):
 		return goal.duplicate(true)
 	var action_name := str(action.get("action", ""))
-	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder"]:
+	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder",
+			"seek_holder_person"]:
 		return goal.duplicate(true)
 
 	goal["attempts"] = int(goal.get("attempts", 0)) + 1
@@ -150,6 +151,8 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 				goal["unknown_responses"] = int(goal.get("unknown_responses", 0)) + 1
 			"holder_information_self_absent": result = "HOLDER_SELF_ABSENT"
 			"holder_information_missed": result = "TARGET_MISSED"
+			"holder_seek_found_person": result = "SEEK_FOUND_PERSON"
+			"holder_seek_person_not_found": result = "SEEK_PERSON_MISSED"
 	for ref in evidence_refs:
 		_add_unique(goal["evidence_refs"], ref)
 	goal["last_result"] = result
@@ -185,6 +188,7 @@ func prepare_holder(actor_id: String, request: Dictionary, at_tick: int,
 				and str(current.get("source_request_id", "")) == str(request.get("request_id", "")):
 			current["excluded_target_ids"] = excluded_target_ids.duplicate()
 			current["request_urgency"] = clampf(request_urgency, 0.0, 1.0)
+			current["parent_blockedness"] = clampf(float(request.get("parent_blockedness", 0.5)), 0.0, 1.0)
 			current["updated_tick"] = at_tick
 			goals[actor_id] = current
 			return current.duplicate(true)
@@ -212,6 +216,7 @@ func prepare_holder(actor_id: String, request: Dictionary, at_tick: int,
 		"item_id": item_id,
 		"holder_predicate": TheoryOfMind.possession_predicate(item_id),
 		"request_urgency": clampf(request_urgency, 0.0, 1.0),
+		"parent_blockedness": clampf(float(request.get("parent_blockedness", 0.5)), 0.0, 1.0),
 		"created_tick": at_tick,
 		"updated_tick": at_tick,
 		"last_attempt_tick": -1,
