@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_excluded_targets_view()
 	_test_flag_off_compatibility()
 	_test_audit_sensitivity()
+	_test_no_duplicate_peer_in_round()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -266,3 +267,33 @@ func _test_audit_sensitivity() -> void:
 		str(fp1["state_sha256"]) != str(fp2["state_sha256"]))
 	var trace_size := (sim._information_tracker().trace_snapshot() as Array).size()
 	_check("holder_goal_in_information_trace", trace_size >= 1)
+
+func _test_no_duplicate_peer_in_round() -> void:
+	# D：同一 HOLDER goal 问过 B 后，B 不得再入本轮候选；仍有 C 时可选 C；
+	# 只剩 B 时不得重复问 B（空候选，目标保持 ACTIVE）。
+	var tracker := preload("res://src/simulation/knowledge/information_subgoal_tracker.gd").new()
+	var goal := tracker.prepare_holder("a",
+		{"request_id": "m20", "requester_id": "a", "item_id": "shells",
+			"parent_plan_id": "P", "parent_run_id": "r", "blocker_step_id": "s",
+			"root_goal": "HUNGER"}, 10)
+	var action := {"action": "ask_item_holder", "target_actor": "b",
+		"information_goal_id": goal.get("goal_id"), "item_id": "shells"}
+	tracker.on_action_complete("a", action, [{"type": "holder_information_self_absent",
+		"seq": 60, "information_goal_id": goal.get("goal_id")}], {}, 11)
+	var after := tracker.current_goal("a")
+	var two := {"id": "a", "tile": Vector2i(10, 10), "needs": {"hunger": 800},
+		"personality": PersonalityProfile.new({"sociability": 0.8, "conflict_avoidance": 0.2}, {}),
+		"tom": TheoryOfMind.new(),
+		"others_visible": [{"id": "b", "tile": Vector2i(11, 10)}, {"id": "c", "tile": Vector2i(12, 10)}]}
+	var with_c: Array = preload("res://src/simulation/knowledge/information_action_policy.gd").build(two, after, 12)
+	var targets := []
+	for c in with_c:
+		targets.append(str(c.get("target_actor", "")))
+	targets.sort()
+	_check("asked_peer_excluded_but_other_selectable", targets == ["c"], str(targets))
+	var only_b := two.duplicate(true)
+	only_b["others_visible"] = [{"id": "b", "tile": Vector2i(11, 10)}]
+	var none: Array = preload("res://src/simulation/knowledge/information_action_policy.gd").build(only_b, after, 13)
+	_check("sole_asked_peer_not_reasked", none.is_empty())
+	_check("goal_stays_active_without_candidates",
+		str(tracker.current_goal("a").get("state", "")) == "ACTIVE")

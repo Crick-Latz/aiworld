@@ -17,6 +17,11 @@ func _run() -> void:
 	_test_holder_goal_concurrency()
 	_test_holder_goal_lifecycle()
 	_test_report_weight_monotonicity()
+	_test_holder_survives_ordinary_prepare()
+	_test_ask_completion_bookkeeping()
+	_test_new_round_resets_asked()
+	_test_polarity_freshness()
+	_test_holder_unknown_reserved()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -200,3 +205,104 @@ func _test_report_weight_monotonicity() -> void:
 	_check("report_weight_monotone_in_credibility", high > low,
 		"low=%.3f high=%.3f" % [low, high])
 	_check("report_weight_bounded", low >= 0.0 and high <= 1.0)
+
+# ── P7.2B-R1 回归：生命周期存活 / 询问记账 / 新一轮重置 / 极性新鲜度 ──
+
+func _test_holder_survives_ordinary_prepare() -> void:
+	# A：普通 SOURCE prepare（含 blocker 已消失的提案集）不得取消 HOLDER goal。
+	var tracker := TrackerClass.new()
+	var goal := tracker.prepare_holder("a", _request("m10"), 10)
+	var after := tracker.prepare("a", [], {}, {"needs": {"hunger": 800}}, 11, null)
+	_check("holder_survives_ordinary_prepare",
+		str(after.get("state", "")) == "ACTIVE"
+		and str(after.get("goal_id", "")) == str(goal.get("goal_id", "")))
+	_check("holder_source_request_unchanged",
+		str(after.get("source_request_id", "")) == "m10")
+	var again := tracker.prepare("a", [{"plan_id": "OTHER", "root_goal": "HUNGER",
+		"blockers": [], "steps": [], "expected_benefit": 1.0, "estimated_cost": 1.0,
+		"estimated_risk": 0.1, "confidence": 0.7}], {}, {"needs": {"hunger": 800}}, 12, null)
+	_check("ordinary_prepare_not_cancel_condition",
+		str(again.get("goal_id", "")) == str(goal.get("goal_id", ""))
+		and str(again.get("state", "")) == "ACTIVE")
+
+func _test_ask_completion_bookkeeping() -> void:
+	# C：ask_item_holder 完成后 attempts/asks/asked_actor_ids/结果分类/evidence_refs 落账。
+	var tracker := TrackerClass.new()
+	var goal := tracker.prepare_holder("a", _request("m11"), 10)
+	var action := {"action": "ask_item_holder", "target_actor": "b",
+		"information_goal_id": goal.get("goal_id"), "item_id": "shells"}
+	var segment := [{"type": "holder_information_requested", "seq": 40,
+		"information_goal_id": goal.get("goal_id")},
+		{"type": "holder_information_shared", "seq": 41,
+		"information_goal_id": goal.get("goal_id"), "reported_holder_id": "b"}]
+	var done: Dictionary = tracker.on_action_complete("a", action, segment, {}, 11)
+	_check("ask_bookkeeping_counts",
+		int(done.get("attempts", 0)) == 1 and int(done.get("asks", 0)) == 1
+		and (done.get("asked_actor_ids", []) as Array).has("b"), str(done.get("asks", -1)))
+	_check("ask_bookkeeping_result_shared",
+		str(done.get("last_result", "")) == "HOLDER_REPORT_SHARED")
+	_check("ask_bookkeeping_evidence_refs",
+		(done.get("evidence_refs", []) as Array).has("event:41"))
+	var refused_segment := [{"type": "holder_information_refused", "seq": 42,
+		"information_goal_id": goal.get("goal_id")}]
+	var done2: Dictionary = tracker.on_action_complete("a", action, refused_segment, {}, 12)
+	_check("ask_bookkeeping_refusal_counted",
+		int(done2.get("refusals", 0)) == 1
+		and str(done2.get("last_result", "")) == "HOLDER_REPORT_REFUSED")
+	var stale_segment := [{"type": "holder_information_stale", "seq": 43,
+		"information_goal_id": goal.get("goal_id")}]
+	var done3: Dictionary = tracker.on_action_complete("a", action, stale_segment, {}, 13)
+	_check("ask_bookkeeping_stale_counted",
+		int(done3.get("stale_reports", 0)) == 1
+		and str(done3.get("last_result", "")) == "HOLDER_REPORT_STALE")
+
+func _test_new_round_resets_asked() -> void:
+	# E：终态后新一轮新 goal_id，asked_actor_ids 重新开始。
+	var tracker := TrackerClass.new()
+	var r1 := tracker.prepare_holder("a", _request("m12"), 10)
+	var action := {"action": "ask_item_holder", "target_actor": "b",
+		"information_goal_id": r1.get("goal_id"), "item_id": "shells"}
+	tracker.on_action_complete("a", action, [{"type": "holder_information_shared",
+		"seq": 50, "information_goal_id": r1.get("goal_id")}], {}, 11)
+	tracker.resolve_holder_goal("a", "m12", 12)
+	var r2 := tracker.prepare_holder("a", _request("m12"), 20)
+	_check("new_round_new_goal_and_fresh_asked",
+		str(r2.get("goal_id", "")) != str(r1.get("goal_id", ""))
+		and (r2.get("asked_actor_ids", []) as Array).is_empty())
+
+func _test_polarity_freshness() -> void:
+	# F：旧正证(t5) + 新负证(t100)——正判断新鲜度必须读正证 tick。
+	var tom := TheoryOfMind.new()
+	tom.add_evidence("c", "has_item:shells", 1.0, 0.9, 1, 5)
+	tom.add_evidence("c", "has_item:shells", -1.0, 0.2, 2, 100)
+	_check("positive_freshness_reads_positive_tick",
+		tom.latest_supporting_tick("c", "has_item:shells", 1.0) == 5)
+	_check("negative_freshness_reads_negative_tick",
+		tom.latest_supporting_tick("c", "has_item:shells", -1.0) == 100)
+	_check("mixed_last_evidence_tick_semantics_unchanged",
+		tom.last_evidence_tick("c", "has_item:shells") == 100)
+	# 评估层：净 belief 仍为正（负证弱）→ 旧正证不可被洗白为新鲜。
+	var responder: Dictionary = {"id": "b", "inventory": {}, "tom": tom,
+		"personality": PersonalityProfile.new(
+			{"altruism": 1.0, "empathy": 1.0, "sociability": 1.0, "conflict_avoidance": 0.0}, {}),
+		"needs": {}}
+	var answer := InformationExchangePolicy.evaluate_holder_query(responder, "a", "shells", 0, 110, null)
+	_check("fresh_negative_cannot_launder_stale_positive",
+		str(answer.get("response", "")) == InformationExchangePolicy.HOLDER_STALE
+		and int(answer.get("observed_tick", -1)) == 5, str(answer.get("response", "")))
+	# 对称：旧负证(t5) + 新正证(t100)、净 belief 为负 → 不进入正报路径（无 HOLDER_SHARE）。
+	var tom2 := TheoryOfMind.new()
+	tom2.add_evidence("c", "has_item:shells", -1.0, 0.9, 1, 5)
+	tom2.add_evidence("c", "has_item:shells", 1.0, 0.2, 2, 100)
+	_check("symmetric_negative_dominant_not_reported_positive",
+		tom2.belief_about("c", "has_item:shells") <= 0.0)
+
+func _test_holder_unknown_reserved() -> void:
+	# 决策 A：完整库存自知模型下 UNKNOWN 不可达——无自持+无第三方 → SELF_ABSENT。
+	var empty: Dictionary = {"id": "b", "inventory": {},
+		"personality": PersonalityProfile.new(
+			{"altruism": 1.0, "empathy": 1.0, "sociability": 1.0, "conflict_avoidance": 0.0}, {}),
+		"needs": {}, "tom": TheoryOfMind.new()}
+	var answer := InformationExchangePolicy.evaluate_holder_query(empty, "a", "shells", 0, 50, null)
+	_check("unknown_reserved_unreachable_with_full_self_knowledge",
+		str(answer.get("response", "")) == InformationExchangePolicy.HOLDER_SELF_ABSENT)
