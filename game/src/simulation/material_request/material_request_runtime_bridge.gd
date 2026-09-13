@@ -319,7 +319,10 @@ func material_gap(step: Dictionary, run: Dictionary, ctx: Dictionary, recipes: R
 		return {}
 	var possessed: Dictionary = ctx.get("possessed_items", {})
 	var kind := str(step.get("kind", ""))
-	if kind == "ACQUIRE":
+	# P7.2：SUBGOAL(find X) 与 ACQUIRE 同口径——"找到"的缺口就是持有缺口。
+	# 旧 profile 下 SUBGOAL 步骤从未作为 blocker 步骤进入本函数（触发白名单不含
+	# SUBGOAL_INERT），此分支对它们惰性。
+	if kind == "ACQUIRE" or kind == "SUBGOAL":
 		var item_id := str(step.get("item_id", ""))
 		var baseline := int((run.get("baseline_items", {}) as Dictionary).get(item_id, 0))
 		var required := baseline + int(step.get("quantity", 0))

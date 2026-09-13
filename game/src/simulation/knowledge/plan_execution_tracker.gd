@@ -225,6 +225,10 @@ func _complete_main(run: Dictionary, step: Dictionary, event_segment: Array,
 	for e in event_segment:
 		var ed: Dictionary = e
 		if str(ed.get("type", "")) == success and str(ed.get("actor_id", "")) == str(run.get("actor_id", "")):
+			# P7.2：绑定承诺的履约步只认同一 commitment 的终态事件（身份不漂移）。
+			var step_commitment := str(step.get("commitment_id", ""))
+			if step_commitment != "" and str(ed.get("commitment_id", "")) != step_commitment:
+				continue
 			_step_done(run, step, tick, refs)
 			run["completion_event_refs"] = (run.get("completion_event_refs", []) as Array) + refs
 			_transition(run, tick, "COMPLETED", "GOAL_ACTION_SUCCEEDED", str(step.get("step_id", "")), "")
@@ -307,14 +311,16 @@ func _valuation_context(run: Dictionary) -> Dictionary:
 func _select_new_run(actor_id: String, proposals: Array, ctx: Dictionary, tick: int,
 		prefer_goal: String = "", adopted_plan_id: String = "") -> Dictionary:
 	# §四 固定公开排序：先延续上一 root_goal（目标连续性），再 root_goal 升序 → plan_id 升序；
-	# 只选 READY（可执行）计划；冷却中的 plan_id（刚超时取消）跳过——避免无限忙等
+	# 只选 READY（可执行）计划；冷却中的 plan_id（刚超时取消）跳过——避免无限忙等。
+	# P7.2 例外：带 resolvable blocker 注解的 BLOCKED_PLAN 可入场——材料缺口本就要
+	# 靠 P7.0/P7.1 在执行期解决（注解只在 commitment profile 由模拟层附加，旧 profile 无）。
 	var eligible: Array = []
 	for p in proposals:
 		if typeof(p) != TYPE_DICTIONARY:
 			continue
 		if adopted_plan_id != "" and str(p.get("plan_id", "")) != adopted_plan_id:
 			continue
-		if str(p.get("status", "")) != "READY":
+		if str(p.get("status", "")) != "READY" and not _resolvably_blocked(p):
 			continue
 		if _in_cooldown(actor_id, str(p.get("plan_id", "")), tick):
 			continue
@@ -360,6 +366,14 @@ func _plan_still_proposed(run: Dictionary, proposals: Array) -> bool:
 			return true
 	return false
 
+## P7.2：BLOCKED_PLAN 是否带有"材料缺口可解"注解（由 commitment profile 的
+## 模拟层按角色主观证据附加）。注解缺位时恒 false——旧路径行为不变。
+func _resolvably_blocked(plan: Dictionary) -> bool:
+	if str(plan.get("status", "")) != "BLOCKED_PLAN":
+		return false
+	var resolution: Dictionary = plan.get("blocker_resolution", {})
+	return bool(resolution.get("resolvable", false))
+
 ## §六 决策前重查：USE（能力在场跳过）/ACQUIRE（库存达标跳过）逐个推进；
 ## 越过末步 → COMPLETED；CRAFT 前提失效由 adapter blocker 在 on_decision 裁决。
 func _advance_satisfied(run: Dictionary, ctx: Dictionary, tick: int) -> Dictionary:
@@ -390,6 +404,19 @@ func _advance_satisfied(run: Dictionary, ctx: Dictionary, tick: int) -> Dictiona
 					_step_done(run, step, tick, [])
 					_advance(run, tick)
 					continue
+				return step
+			"SUBGOAL":
+				# P7.2：SUBGOAL(find X) 的"找到"= 自己已持有足量 X——材料到位即越过，
+				# 不再永久 INERT。help 型 SUBGOAL（无 item_id）不受影响。
+				# 旧 profile 下 SUBGOAL 步骤从未进入 run（CRAFT 计划因 blocker 不被采纳），
+				# 此分支对它们惰性。
+				var sub_item := str(step.get("item_id", ""))
+				if sub_item != "":
+					var sub_required := int((run.get("baseline_items", {}) as Dictionary).get(sub_item, 0)) + int(step.get("quantity", 0))
+					if int(items.get(sub_item, 0)) >= sub_required:
+						_step_done(run, step, tick, [])
+						_advance(run, tick)
+						continue
 				return step
 			_:
 				return step

@@ -11,7 +11,11 @@ const ESTIMATES := ["expected_benefit", "estimated_cost", "estimated_risk", "con
 static func assess(plan: Dictionary, self_state: Dictionary, current_run: Dictionary = {}) -> Dictionary:
 	var row := {"plan_id": str(plan.get("plan_id", "")), "root_goal": str(plan.get("root_goal", "")),
 		"eligible": false, "reason": "", "value": 0.0, "probability": 0.0}
-	if row["plan_id"] == "" or str(plan.get("status", "")) != "READY":
+	# P7.2 §十六：带 resolvable 注解的 BLOCKED_PLAN 可参与估值——材料缺口由
+	# P7.0/P7.1 在执行期解决。注解只在 commitment profile 出现；旧路径不变。
+	var resolution: Dictionary = plan.get("blocker_resolution", {})
+	var resolvably_blocked := str(plan.get("status", "")) == "BLOCKED_PLAN" and bool(resolution.get("resolvable", false))
+	if row["plan_id"] == "" or (str(plan.get("status", "")) != "READY" and not resolvably_blocked):
 		row["reason"] = "PLAN_NOT_READY"
 		return row
 	var steps: Variant = plan.get("steps", null)
@@ -24,19 +28,28 @@ static func assess(plan: Dictionary, self_state: Dictionary, current_run: Dictio
 			row["reason"] = "INVALID_ESTIMATES"
 			return row
 	var root := str(row["root_goal"])
-	if not NEEDS.has(root):
+	# P7.2 §九：OBLIGATION 计划的问题身份是承诺本身（压力来自期限紧迫度，
+	# 由模拟层按承诺事实附加）——旧 NEEDS 路径数字完全不变。
+	if not NEEDS.has(root) and root != "OBLIGATION":
 		row["reason"] = "UNSUPPORTED_PROBLEM"
 		return row
-	var need := _finite(self_state.get("needs", {}).get(NEEDS[root], 0.0), 0.0)
-	if need < float(GATES[root]):
-		row["reason"] = "PROBLEM_RESOLVED"
-		return row
+	var pressure := 0.0
+	if root == "OBLIGATION":
+		pressure = clampf(_finite(plan.get("obligation_pressure", 0.5), 0.5), 0.0, 1.0)
+	else:
+		var need := _finite(self_state.get("needs", {}).get(NEEDS[root], 0.0), 0.0)
+		if need < float(GATES[root]):
+			row["reason"] = "PROBLEM_RESOLVED"
+			return row
+		pressure = clampf(need / 1000.0, 0.0, 1.0)
 	var traits: Dictionary = self_state.get("traits", {})
 	var caution := clampf(_finite(traits.get("caution", 0.5), 0.5), 0.0, 1.0)
 	var pragmatism := clampf(_finite(traits.get("pragmatism", 0.5), 0.5), 0.0, 1.0)
-	var pressure := clampf(need / 1000.0, 0.0, 1.0)
 	var benefit := clampf(float(plan["expected_benefit"]), 0.0, 1.0)
 	var confidence := clampf(float(plan["confidence"]), 0.0, 1.0)
+	if resolvably_blocked:
+		# §十六：可解缺口按角色自己的证据折减信心——不白给，也不永久排除。
+		confidence = clampf(confidence * float(resolution.get("confidence_factor", 1.0)), 0.0, 1.0)
 	if confidence <= 0.0 or benefit <= 0.0:
 		row["reason"] = "NO_EXPECTED_BENEFIT"
 		return row
@@ -49,6 +62,8 @@ static func assess(plan: Dictionary, self_state: Dictionary, current_run: Dictio
 				break
 	# Remaining effort can shrink after progress. Already spent effort earns no bonus.
 	var remaining_cost := float(plan["estimated_cost"]) * remaining_fraction
+	if resolvably_blocked:
+		remaining_cost += float(resolution.get("extra_cost", 0.0))
 	var cost_weight := 0.5 + pragmatism
 	var risk_weight := 0.5 + 2.0 * caution
 	var value := pressure * benefit * pow(confidence, 1.0 + caution) \
@@ -58,6 +73,8 @@ static func assess(plan: Dictionary, self_state: Dictionary, current_run: Dictio
 		"remaining_fraction": remaining_fraction, "remaining_cost": remaining_cost,
 		"estimated_risk": float(plan["estimated_risk"]), "cost_weight": cost_weight,
 		"risk_weight": risk_weight}, true)
+	if resolvably_blocked:
+		row["blocker_resolution"] = true
 	return row
 
 static func deliberate(self_state: Dictionary, proposals: Array, current_run: Dictionary,

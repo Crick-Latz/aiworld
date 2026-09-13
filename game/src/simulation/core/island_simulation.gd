@@ -5,6 +5,8 @@ const FIXED_LOCATION_ACTIONS := ["forage_berries", "drink_water", "fish", "gathe
 	"search_ruins", "gather_wood", "search_resource_source"]
 const TRAVEL_STALL_LIMIT := 8
 const Contract = preload("res://src/simulation/material_request/material_request_contract.gd")
+const CommitmentContract = preload("res://src/simulation/commitment/commitment_contract.gd")
+const CommitmentPolicy = preload("res://src/simulation/commitment/commitment_offer_policy.gd")
 const MATERIAL_REQUEST_RETRYABLE_REASONS := [
 	"REQUEST_EXPIRED",
 	"TARGET_MISSING",
@@ -46,6 +48,10 @@ var _information_tracker_state: InformationSubgoalTracker = null
 # 默认 false，framework / information 的既有轨迹不变。
 var agency_material_requests_enabled := false
 var _material_request_runtime: MaterialRequestRuntimeBridge = null
+# P7.2：条件承诺（交换 counter -> PENDING -> 转移激活 -> 履约/违约 -> 认知后果）。
+# 默认 false，既有 profile 行为不变；权威台账仍是 obligations（单台账）。
+var agency_commitment_consequences_enabled := false
+var _commitment_runtime: CommitmentRuntimeBridge = null
 # 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
 var _information_rngs := {}
 var _adoption_rngs := {}
@@ -272,6 +278,8 @@ func step() -> Array:
 	var new_events: Array = []
 	if agency_material_requests_enabled:
 		new_events.append_array(_material_requests_expire_due())
+	if agency_commitment_consequences_enabled:
+		_commitments_check_due()
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
 	for id in actors:
@@ -471,6 +479,14 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 				"plan_id": str(revalidated.get("plan_id", "")),
 				"transfer_event_id": str(revalidated.get("transfer_event_id", "")),
 			})
+	# P7.2：可解材料 blocker 进入主观估值（§十六修复——证据仅来自角色自己的认知）；
+	# ACTIVE 承诺成为可竞争的履约计划。两者都只在 commitment profile 出现。
+	if agency_commitment_consequences_enabled and str(agency_mode) == "LIVE_BRIDGE":
+		out["commitment_consequences_enabled"] = true
+		_annotate_blocker_resolution(id, proposals, ctx)
+		var obligation_plans := _commitment_obligation_plans(id, a)
+		if not obligation_plans.is_empty():
+			proposals.append_array(obligation_plans)
 	# P7.0：从结构化 UNKNOWN_SOURCE blocker 形成一个当前信息子目标。
 	# tracker 只拿主观 ctx、proposals 和自身 needs，不接触地图真值。
 	if agency_information_subgoals_enabled and str(agency_mode) == "LIVE_BRIDGE":
@@ -576,9 +592,12 @@ func _plan_execution_on_decision(id: String, a: Dictionary, decision: Dictionary
 		return
 	var ident: Dictionary = _execution_tracker().on_decision(id, decision, ex, tick)
 	a["_plan_exec_inflight"] = ident
-	if agency_material_requests_enabled and str(ex.get("blocker_reason", "")) in [
-			"MATERIALS_MISSING", "NO_KNOWN_SOURCE", "NO_REGISTRY_CANDIDATE"
-	]:
+	var blocker_triggers := ["MATERIALS_MISSING", "NO_KNOWN_SOURCE", "NO_REGISTRY_CANDIDATE"]
+	if agency_commitment_consequences_enabled:
+		# P7.2 §十六：未知来源材料在计划里是 SUBGOAL(find X) 步骤——只在新
+		# profile 把它的 INERT 也视作"材料可解缺口"（旧 profile 行为冻结）。
+		blocker_triggers.append("SUBGOAL_INERT")
+	if agency_material_requests_enabled and str(ex.get("blocker_reason", "")) in blocker_triggers:
 		_material_requests_on_blocker(id, a, ex, agency_extra)
 
 ## P6.3B-1 §六 + R1 §四：行动完成回调——事件段 + 实际库存 + 行动身份；
@@ -644,6 +663,7 @@ func _material_requests_on_blocker(id: String, a: Dictionary, execution: Diction
 func _material_requests_expire_due() -> Array:
 	var out: Array = []
 	for request in _material_request_runtime_bridge().expire_due(tick):
+		_commitments_on_request_terminal(request, "SOURCE_REQUEST_FAILED", "REQUEST_EXPIRED")
 		_emit_material_request_event("MATERIAL_REQUEST_EXPIRED", str(request.get("requester_id", "")), request)
 		out.append(events[events.size() - 1])
 	return out
@@ -656,6 +676,7 @@ func _material_requests_process_actor(id: String, a: Dictionary, new_events: Arr
 		var stale_reason := _material_request_run_mismatch_reason(str(request.get("requester_id", "")), request)
 		if stale_reason != "":
 			bridge.fail_request(str(request.get("request_id", "")), tick, stale_reason)
+			_commitments_on_request_terminal(request, "SOURCE_REQUEST_FAILED", stale_reason)
 			_emit_material_request_event("MATERIAL_REQUEST_FAILED", str(request.get("requester_id", "")), request, {
 				"reason": stale_reason,
 			})
@@ -693,11 +714,15 @@ func _material_requests_process_requester(
 						"reason": "NO_LONGER_NEEDED",
 					})
 			elif bool(counter.get("requires_exchange", false)):
-				var rejected_condition := bridge.reject_counter(
-					str(request.get("request_id", "")), tick, "COUNTER_CONDITION_UNSUPPORTED")
-				if bool(rejected_condition.get("ok", false)):
-					_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
-						rejected_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
+				var handled := false
+				if agency_commitment_consequences_enabled and not (counter.get("terms", {}) as Dictionary).is_empty():
+					handled = _commitments_handle_exchange_counter(requester_id, a, request, new_events)
+				if not handled:
+					var rejected_condition := bridge.reject_counter(
+						str(request.get("request_id", "")), tick, "COUNTER_CONDITION_UNSUPPORTED")
+					if bool(rejected_condition.get("ok", false)):
+						_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+							rejected_condition.get("request", {}), {"reason": "COUNTER_CONDITION_UNSUPPORTED"})
 			elif int(request.get("accepted_quantity", 0)) > current_gap:
 				var cancelled_stale := bridge.cancel_request(
 					str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE")
@@ -751,6 +776,7 @@ func _material_requests_try_transfer(
 	var target_id := str(request.get("target_id", ""))
 	if not actors.has(target_id):
 		_material_request_runtime_bridge().fail_request(str(request.get("request_id", "")), tick, "TARGET_MISSING")
+		_commitments_on_request_terminal(request, "SOURCE_REQUEST_FAILED", "TARGET_MISSING")
 		_emit_material_request_event("MATERIAL_REQUEST_FAILED", requester_id, request, {"reason": "TARGET_MISSING"})
 		return
 	if not _is_nearby(requester["tile"], actors[target_id]["tile"]):
@@ -758,12 +784,14 @@ func _material_requests_try_transfer(
 	var current_gap := _material_request_current_gap(requester_id, requester, request)
 	if current_gap <= 0:
 		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "NO_LONGER_NEEDED"):
+			_commitments_on_request_terminal(request, "SOURCE_REQUEST_FAILED", "NO_LONGER_NEEDED")
 			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
 				"reason": "NO_LONGER_NEEDED",
 			})
 		return
 	if int(request.get("accepted_quantity", 0)) > current_gap:
 		if _material_request_runtime_bridge().cancel_request(str(request.get("request_id", "")), tick, "REQUEST_QUANTITY_STALE"):
+			_commitments_on_request_terminal(request, "SOURCE_REQUEST_FAILED", "REQUEST_QUANTITY_STALE")
 			_emit_material_request_event("MATERIAL_REQUEST_CANCELLED", requester_id, request, {
 				"reason": "REQUEST_QUANTITY_STALE",
 			})
@@ -780,8 +808,11 @@ func _material_requests_try_transfer(
 		_emit_material_request_event("MATERIAL_REQUEST_RESOLVED", requester_id, result.get("request", {}), {
 			"transfer_event_id": str(transfer_event.get("event_id", "")),
 		})
+		_commitments_on_transfer_success(requester_id, result.get("request", {}), transfer_event)
 		_material_requests_handle_revalidation(result)
 	else:
+		_commitments_on_request_terminal(request, "SOURCE_TRANSFER_FAILED",
+			str(result.get("reason", "TRANSFER_FAILED")))
 		_emit_material_request_event("MATERIAL_TRANSFER_FAILED", requester_id, result.get("request", request), {
 			"reason": str(result.get("reason", "TRANSFER_FAILED")),
 		})
@@ -907,7 +938,7 @@ func _material_recipient_context(responder_id: String, requester_id: String, ite
 	var trust_value := MaterialRequestRuntimeBridge.trust_probability(trust)
 	var need_pressure := _material_need_pressure(responder, item_id)
 	var obligations_count := (responder.get("my_obligations", []) as Array).size()
-	return {
+	var context := {
 		"inventory_quantity": int(responder["inventory"].get(item_id, 0)),
 		"reserve_quantity": 0,
 		"relationship": relationship_value,
@@ -918,6 +949,35 @@ func _material_recipient_context(responder_id: String, requester_id: String, ite
 		"commitment_load": clampf(float(obligations_count) / 3.0, 0.0, 1.0),
 		"exchange_offer_value": 0.0,
 	}
+	if agency_commitment_consequences_enabled:
+		# §十四：负担来自权威台账（ACTIVE 承诺 + 旧未偿 obligations）。
+		context["commitment_load"] = CommitmentPolicy.commitment_load(
+			_commitment_runtime_bridge().tracker.active_count_for_load(obligations, responder_id))
+		# §七：承诺估值只来自 B 自己的认知——ToM reliable 信念、关系、互惠规范、
+		# 以及 B 直接知道的"欠我的债"（不读 A 的真实未来或其他人的库存）。
+		var tom: TheoryOfMind = responder.get("tom", null)
+		var reliability_belief := 0.5
+		if tom != null:
+			reliability_belief = clampf((tom.belief_about(requester_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+		var owed_to_me := 0
+		for record in obligations:
+			if typeof(record) == TYPE_DICTIONARY \
+					and str(record.get("debtor_id", record.get("debtor", ""))) == requester_id \
+					and str(record.get("creditor_id", record.get("creditor", ""))) == responder_id \
+					and CommitmentContract.counts_toward_load(record):
+				owed_to_me += 1
+		context["exchange_offer_value"] = CommitmentPolicy.estimate_promise_value({
+			"debtor_reliability_belief": reliability_belief,
+			"relationship": relationship_value,
+			"own_reciprocity_norm": clampf(float(responder.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)), 0.0, 1.0),
+			"debtor_visible_commitment_load": clampf(float(owed_to_me) / 3.0, 0.0, 1.0),
+		})
+		context["exchange_terms_enabled"] = true
+		# 谨慎的债权人要求更快回款（条款窗口随 risk_aversion 收紧）——
+		# 与 A 的主观期限估计共同构成条款分歧的自然来源。
+		context["exchange_due_ticks"] = maxi(96, int(float(CommitmentContract.DEFAULT_DUE_TICKS)
+			* (1.3 - 0.5 * float(context["risk_aversion"]))))
+	return context
 
 func _material_need_pressure(actor: Dictionary, item_id: String) -> float:
 	var tags: Array = _item_catalog_if_any().tags_of(item_id)
@@ -973,6 +1033,317 @@ func _emit_material_transfer_event(giver_id: String, transfer_event: Dictionary)
 
 func _material_request_event_text(event_type: String, request: Dictionary) -> String:
 	return "%s %s %s" % [event_type, str(request.get("requester_id", "")), str(request.get("item_id", ""))]
+
+# ── P7.2：条件承诺（权威台账 = obligations，单台账） ──
+
+func _commitment_runtime_bridge() -> CommitmentRuntimeBridge:
+	if _commitment_runtime == null:
+		_commitment_runtime = CommitmentRuntimeBridge.new()
+	return _commitment_runtime
+
+func agency_commitment_trace() -> Array:
+	if _commitment_runtime == null:
+		return []
+	return _commitment_runtime.trace_snapshot()
+
+func agency_commitment_rng_states() -> Dictionary:
+	if _commitment_runtime == null:
+		return {}
+	return _commitment_runtime.rng_states()
+
+func _commitments_check_due() -> void:
+	var bridge := _commitment_runtime_bridge()
+	for record in bridge.cancel_orphaned(obligations, actors.keys(), tick):
+		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CANCELLED, record,
+			{"reason": CommitmentContract.CANCEL_CREDITOR_GONE})
+		_refresh_obligation_views(str(record.get("debtor_id", "")), "")
+	for record in bridge.violate_due(obligations, tick):
+		_refresh_obligation_views(str(record.get("debtor_id", "")), str(record.get("creditor_id", "")))
+		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_VIOLATED, record, {
+			"reason": "OVERDUE",
+			"due_tick": int(record.get("due_tick", 0)),
+		})
+
+## A 对"用未来回报换材料"的独立判断 + B 的条款验证。返回 true = 本分支已处理。
+func _commitments_handle_exchange_counter(
+	requester_id: String,
+	a: Dictionary,
+	request: Dictionary,
+	new_events: Array
+) -> bool:
+	var bridge := _commitment_runtime_bridge()
+	var request_bridge := _material_request_runtime_bridge()
+	var request_id := str(request.get("request_id", ""))
+	var counter: Dictionary = request.get("last_counter", {})
+	var decision: Dictionary = bridge.requester_exchange_decision(
+		request, counter, _commitment_requester_context(requester_id, a, request, counter), tick)
+	if not bool(decision.get("terms_match", true)):
+		# §十三 误解路径：A 想成交但只能给更差条款——不成债、不转移、按误解（非违约）记账。
+		var mismatch_rejected: Dictionary = request_bridge.reject_counter(request_id, tick, "TERMS_MISMATCH")
+		if bool(mismatch_rejected.get("ok", false)):
+			_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_TERMS_MISMATCH, {
+				"commitment_id": "", "debtor_id": requester_id,
+				"creditor_id": str(request.get("target_id", "")),
+				"object_id": str(request.get("item_id", "")),
+				"quantity": int(counter.get("quantity", 0)), "status": "",
+				"source_request_id": request_id,
+			}, {"demanded_terms": decision.get("demanded_terms", {}),
+				"offered_terms": decision.get("offered_terms", {})})
+			_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+				mismatch_rejected.get("request", {}), {"reason": "TERMS_MISMATCH"})
+		return true
+	if not bool(decision.get("accept", false)):
+		# §八：A 不愿以未来承诺换材料——回落 P7.1 语义（拒绝 counter，换下一个持有者）。
+		var declined: Dictionary = request_bridge.reject_counter(request_id, tick, "EXCHANGE_DECLINED")
+		if bool(declined.get("ok", false)):
+			_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+				declined.get("request", {}), {"reason": "EXCHANGE_DECLINED"})
+		return true
+	# A 接受 → B 验证承诺条款是否满足自己的条件（§七，只来自 B 的主观上下文）。
+	var creditor_id := str(request.get("target_id", ""))
+	var validation: Dictionary = bridge.creditor_validate_offer(
+		decision.get("demanded_terms", {}), decision.get("offered_terms", {}),
+		_commitment_creditor_context(creditor_id, requester_id, counter))
+	if str(validation.get("decision", "")) != "ACCEPT":
+		var refused: Dictionary = request_bridge.reject_counter(request_id, tick, "OFFER_VALUE_BELOW_MINIMUM")
+		if bool(refused.get("ok", false)):
+			_emit_material_request_event("MATERIAL_COUNTER_REJECTED", requester_id,
+				refused.get("request", {}), {"reason": str(validation.get("reason", "OFFER_VALUE_BELOW_MINIMUM"))})
+		return true
+	var created: Dictionary = bridge.open_commitment_for_request(
+		obligations, request, decision.get("offered_terms", {}), tick)
+	if not bool(created.get("ok", false)):
+		return true
+	_refresh_obligation_views(requester_id, creditor_id)  # P7.2A: PENDING 不入视图——刷新后仍不可见
+	_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CREATED, created["commitment"], {})
+	var accepted: Dictionary = request_bridge.accept_counter(request_id, tick)
+	if bool(accepted.get("ok", false)):
+		_emit_material_request_event("MATERIAL_COUNTER_ACCEPTED", requester_id, accepted.get("request", {}))
+		_material_requests_try_transfer(requester_id, a, accepted.get("request", {}), new_events)
+	return true
+
+## A 的主观上下文（§八）——需求压力/互惠规范/已有负担/对 B 的信任/对资源的再获得性判断。
+func _commitment_requester_context(
+	requester_id: String,
+	a: Dictionary,
+	request: Dictionary,
+	counter: Dictionary
+) -> Dictionary:
+	var creditor_id := str(request.get("target_id", ""))
+	var trust := relationships.composite_trust(requester_id, creditor_id)
+	var reobtainability := 0.25
+	# 自己知道来源 → 高；不知道来源但 ToM 里有人持有 → 中；只剩盲搜 → 低。
+	var ctx := AgencyContextBuilder.build(self, a)
+	var item_tags: Array = _item_catalog_if_any().tags_of(str(request.get("item_id", "")))
+	var knows_source := false
+	for tag in ctx.get("known_source_tags", []):
+		if item_tags.has(str(tag)):
+			knows_source = true
+			break
+	var tom: TheoryOfMind = a.get("tom", null)
+	var best_holder := 0.0
+	if tom != null:
+		for peer_id in actors:
+			if str(peer_id) == requester_id:
+				continue
+			best_holder = maxf(best_holder, tom.belief_about(str(peer_id),
+				MaterialRequestRuntimeBridge.holder_predicate(str(request.get("item_id", "")))))
+	if knows_source:
+		reobtainability = 0.8
+	elif best_holder >= MaterialRequestRuntimeBridge.MIN_HOLDER_BELIEF:
+		reobtainability = 0.55
+	return {
+		"need_urgency": _material_need_urgency(a, str(request.get("root_goal", ""))),
+		"own_reciprocity_norm": clampf(float(a.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)), 0.0, 1.0),
+		"trust_in_creditor": MaterialRequestRuntimeBridge.trust_probability(trust),
+		"relationship": MaterialRequestRuntimeBridge.relationship_signal(trust),
+		"subjective_reobtainability": reobtainability,
+		"active_commitment_load": CommitmentPolicy.commitment_load(
+			_commitment_runtime_bridge().tracker.active_count_for_load(obligations, requester_id)),
+		"promised_quantity_ratio": clampf(float(counter.get("quantity", 1)) / 3.0, 0.0, 1.0),
+	}
+
+## B 的验证上下文（§七）——估值只依赖 B 自己的 ToM/关系/规范与 A 对 B 的既有债务。
+func _commitment_creditor_context(creditor_id: String, requester_id: String, counter: Dictionary) -> Dictionary:
+	var creditor: Dictionary = actors.get(creditor_id, {})
+	var trust := relationships.composite_trust(creditor_id, requester_id)
+	var reliability_belief := 0.5
+	var tom: TheoryOfMind = creditor.get("tom", null)
+	if tom != null:
+		reliability_belief = clampf((tom.belief_about(requester_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+	var owed_to_me := 0
+	for record in obligations:
+		if typeof(record) == TYPE_DICTIONARY \
+				and str(record.get("debtor_id", record.get("debtor", ""))) == requester_id \
+				and str(record.get("creditor_id", record.get("creditor", ""))) == creditor_id \
+				and CommitmentContract.counts_toward_load(record):
+			owed_to_me += 1
+	return {
+		"debtor_reliability_belief": reliability_belief,
+		"relationship": MaterialRequestRuntimeBridge.relationship_signal(trust),
+		"own_reciprocity_norm": clampf(float(creditor.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)), 0.0, 1.0),
+		"debtor_visible_commitment_load": clampf(float(owed_to_me) / 3.0, 0.0, 1.0),
+		"minimum_offer_value": clampf(float(counter.get("minimum_offer_value", 0.35)), 0.0, 1.0),
+	}
+
+## 匹配的真实转移 → 承诺 ACTIVE（§四：对价交付后债务才成立）。
+func _commitments_on_transfer_success(requester_id: String, request: Dictionary, transfer_event: Dictionary) -> void:
+	if not agency_commitment_consequences_enabled:
+		return
+	var result: Dictionary = _commitment_runtime_bridge().activate_from_transfer(
+		obligations, request, transfer_event, tick)
+	if bool(result.get("ok", false)):
+		_refresh_obligation_views(requester_id, str((result["commitment"] as Dictionary).get("creditor_id", "")))
+		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_ACTIVATED,
+			result["commitment"], {"transfer_event_id": str(transfer_event.get("event_id", ""))})
+
+## 来源请求终局且无对价 → PENDING 承诺取消（§五：transfer 前失败可取消，不背包袱）。
+func _commitments_on_request_terminal(request: Dictionary, cancel_reason: String, detail: String) -> void:
+	if not agency_commitment_consequences_enabled:
+		return
+	var cancelled: Array = _commitment_runtime_bridge().cancel_for_request(
+		obligations, str(request.get("request_id", "")), cancel_reason, tick)
+	for record in cancelled:
+		_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_CANCELLED, record,
+			{"reason": cancel_reason, "detail": detail})
+		_refresh_obligation_views(str(record.get("debtor_id", "")), str(record.get("creditor_id", "")))
+
+func _emit_commitment_event(event_type: String, record: Dictionary, extra: Dictionary = {}) -> void:
+	var payload := {
+		"commitment_id": str(record.get("commitment_id", "")),
+		"debtor_id": str(record.get("debtor_id", record.get("debtor", ""))),
+		"to_id": str(record.get("creditor_id", record.get("creditor", ""))),  # 债权人 = recipient 语义
+		"object_id": str(record.get("object_id", record.get("object", ""))),
+		"quantity": int(record.get("quantity", 0)),
+		"status": str(record.get("status", "")),
+		"source_request_id": str(record.get("source_request_id", "")),
+		"parent_plan_id": str(record.get("parent_plan_id", "")),
+		"parent_run_id": str(record.get("parent_run_id", "")),
+		"blocker_step_id": str(record.get("blocker_step_id", "")),
+		"terminal_reason": str(record.get("terminal_reason", "")),
+		"source_transfer_event_id": str(record.get("source_transfer_event_id", "")),
+	}
+	for key in extra:
+		payload[key] = extra[key]
+	var debtor_id := str(payload["debtor_id"])
+	var display := debtor_id
+	if actors.has(debtor_id):
+		display = str(actors[debtor_id]["display_name"])
+	_emit(event_type, debtor_id, "%s 的承诺事件 %s" % [display, event_type], payload)
+
+# ── P7.2 §九/§十六：义务可行动 + 可解材料 blocker 进入主观估值 ──
+
+const RESOLVABLE_BLOCKER_REASONS := ["UNKNOWN_SOURCE", "MATERIALS_MISSING"]
+
+## §十六修复：BLOCKED_PLAN 的材料类 blocker 附带"按角色自己证据估算的可解性"。
+## 证据只有三种来源——自己的已知来源、自己 ToM 的持有信念、P7.0 盲搜可能。
+func _annotate_blocker_resolution(id: String, proposals: Array, ctx: Dictionary) -> void:
+	var tom: TheoryOfMind = actors[id].get("tom", null)
+	var items := _item_catalog_if_any()
+	var factors := {}
+	for proposal in proposals:
+		if typeof(proposal) != TYPE_DICTIONARY or str(proposal.get("status", "")) != "BLOCKED_PLAN":
+			continue
+		var blockers: Array = proposal.get("blockers", [])
+		if blockers.is_empty():
+			continue
+		var resolvable := true
+		for blk in blockers:
+			if typeof(blk) != TYPE_DICTIONARY \
+					or not RESOLVABLE_BLOCKER_REASONS.has(str(blk.get("reason_code", ""))):
+				resolvable = false
+				break
+		if not resolvable:
+			continue
+		var confidence_factor := 1.0
+		var extra_cost := 0.0
+		var evidence := {}
+		for blk in blockers:
+			var item_id := str((blk as Dictionary).get("item_id", ""))
+			if item_id == "":
+				continue
+			var factor: float = factors.get(item_id, -1.0)
+			if factor < 0.0:
+				factor = _resolution_factor(id, item_id, ctx, tom, items)
+				factors[item_id] = factor
+			confidence_factor = minf(confidence_factor, factor)
+			extra_cost = maxf(extra_cost, 0.35 if str((blk as Dictionary).get("reason_code", "")) == "MATERIALS_MISSING" else 0.45)
+			evidence[item_id] = {"confidence_factor": factor}
+		if confidence_factor <= 0.0:
+			continue
+		proposal["blocker_resolution"] = {
+			"resolvable": true,
+			"confidence_factor": confidence_factor,
+			"extra_cost": extra_cost,
+			"evidence": evidence,
+		}
+
+func _resolution_factor(id: String, item_id: String, ctx: Dictionary, tom: TheoryOfMind, items: ItemCatalog) -> float:
+	if items != null:
+		var item_tags: Array = items.tags_of(item_id)
+		for tag in ctx.get("known_source_tags", []):
+			if item_tags.has(str(tag)):
+				return 0.75  # 自己知道来源：采集可解
+	if tom != null:
+		var best_holder := 0.0
+		for peer_id in actors:
+			if str(peer_id) == id:
+				continue
+			best_holder = maxf(best_holder, tom.belief_about(str(peer_id),
+				MaterialRequestRuntimeBridge.holder_predicate(item_id)))
+		if best_holder >= MaterialRequestRuntimeBridge.MIN_HOLDER_BELIEF:
+			return clampf(0.5 + 0.25 * minf(1.0, best_holder), 0.0, 0.75)  # 社会可解：P7.1 请求路径
+	return 0.35  # 只剩 P7.0 盲搜：仍可尝试，但主观把握低
+
+## §九：每个 ACTIVE 承诺生成可竞争的履约计划（缺口大 → ACQUIRE 在前，可继续
+## 自然触发 P7.0 信息 / P7.1 请求；GIVE 走既有 repay_debt 行动）。
+func _commitment_obligation_plans(id: String, a: Dictionary) -> Array:
+	var out: Array = []
+	for record in _commitment_runtime_bridge().tracker.active_of(obligations, id):
+		var plan := _commitment_fulfillment_plan(record, a)
+		if not plan.is_empty():
+			out.append(plan)
+	return out
+
+func _commitment_fulfillment_plan(record: Dictionary, a: Dictionary) -> Dictionary:
+	var cid := str(record.get("commitment_id", ""))
+	var object_id := str(record.get("object_id", ""))
+	var quantity := maxi(1, int(record.get("quantity", 1)))
+	var possessed := int(a["inventory"].get(object_id, 0))
+	var gap := maxi(0, quantity - possessed)
+	var steps: Array = []
+	if gap > 0:
+		steps.append(PlanStepSpec.make("ACQUIRE", "ACQUIRE:%s#%s" % [object_id, cid],
+			"PENDING", "", object_id, gap, "", "", [], [], [], [], "为兑现承诺补足 %s" % object_id))
+	var repay_step := PlanStepSpec.make("MAIN", "MAIN:REPAY#%s" % cid, "PENDING",
+		"repay_debt", object_id, quantity, "", "", [], [], [], [],
+		"兑现对 %s 的承诺" % str(record.get("creditor_id", "")))
+	repay_step["commitment_id"] = cid  # 候选匹配与完成判定都以承诺身份为锚
+	steps.append(repay_step)
+	var trust := relationships.composite_trust(str(record.get("debtor_id", "")), str(record.get("creditor_id", "")))
+	var relationship_value := MaterialRequestRuntimeBridge.relationship_signal(trust)
+	var reciprocity := clampf(float(a.get("norms", {}).get("personal", {}).get("reciprocity", 0.5)), 0.0, 1.0)
+	var due_tick := int(record.get("due_tick", tick))
+	var total := maxi(1, due_tick - int(record.get("activated_tick", tick)))
+	var remaining := maxi(1, due_tick - tick)
+	var urgency := clampf(1.0 - float(remaining) / float(total), 0.0, 1.0)
+	return {
+		"plan_id": "PLAN_OBLIGATION_%s" % cid,
+		"root_goal": "OBLIGATION",
+		"target_resource": object_id,
+		"via_rule": "fulfill_commitment",
+		"steps": steps,
+		"missing_requirements": [],
+		"blockers": [],
+		"status": "READY",
+		"expected_benefit": clampf(0.35 + relationship_value * 0.3 + reciprocity * 0.35, 0.0, 1.0),
+		"estimated_cost": 0.3 + (0.4 if gap > 0 else 0.0),
+		"estimated_risk": 0.2 if gap > 0 else 0.05,
+		"confidence": 0.6 if gap > 0 else 0.85,
+		"knowledge_refs": [], "belief_refs": [],
+		"commitment_id": cid,
+		"obligation_pressure": 0.45 + 0.55 * urgency,
+	}
 
 func _agency_planner_slim(proposals: Array) -> void:
 	AgencyActionBridge.annotate_steps(proposals)
@@ -1397,25 +1768,49 @@ func _do_propose_rule(id: String, a: Dictionary, action: Dictionary, ev: Array) 
 				goals_left.append(g9)
 		a["institutional_goals"] = goals_left
 ## 债务辅助（视图供给）
+## P7.2A：唯一判断 helper——承诺型记录按 authoritative status（PENDING 不入视图），
+## 旧记录保持 repaid 语义。禁止在别处复制此判断。
+func _is_outstanding_obligation(record: Dictionary) -> bool:
+	if record.has("commitment_id"):
+		return CommitmentContract.is_active_debt(record)
+	return not bool(record.get("repaid", false))
+
 func _obligations_of(debtor: String) -> Array:
 	var out: Array = []
 	for ob in obligations:
-		if str(ob["debtor"]) == debtor and not bool(ob["repaid"]):
+		if typeof(ob) == TYPE_DICTIONARY and str(ob["debtor"]) == debtor \
+				and _is_outstanding_obligation(ob):
 			out.append(ob)
 	return out
 
 func _owed_to(creditor: String) -> Array:
 	var out: Array = []
 	for ob in obligations:
-		if str(ob["creditor"]) == creditor and not bool(ob["repaid"]):
+		if typeof(ob) == TYPE_DICTIONARY and str(ob["creditor"]) == creditor \
+				and _is_outstanding_obligation(ob):
 			out.append(ob)
 	return out
+
+## P7.2A：状态转移后同步双方派生视图（ACTIVATED/FULFILLED/VIOLATED/CANCELLED/CREDITOR_GONE）。
+func _refresh_obligation_views(debtor_id: String, creditor_id: String) -> void:
+	if actors.has(debtor_id):
+		actors[debtor_id]["my_obligations"] = _obligations_of(debtor_id)
+	if creditor_id != "" and actors.has(creditor_id):
+		actors[creditor_id]["owed_to_me"] = _owed_to(creditor_id)
 
 ## P1.6 还债执行：履约 → 可靠性上升（经 transition 的 PROMISE/FULFILLED 语义）
 func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var creditor := str(action.get("target_actor", ""))
 	var object_id := str(action.get("object", "food"))
 	var spec: Dictionary = ResourceSpec.spec(object_id)
+	# P7.2：承诺型债务走真实结算管线（身份/数量核验→一次性转移→证据→FULFILLED）；
+	# 旧 obligations 路径保持不变。
+	if agency_commitment_consequences_enabled:
+		var obligation: Dictionary = action.get("obligation", {})
+		var commitment_id := str(obligation.get("commitment_id", ""))
+		if commitment_id != "":
+			_commitments_settle_repay(id, a, commitment_id, creditor, object_id)
+			return
 	if not actors.has(creditor) or int(a["inventory"].get(object_id, 0)) < 2:
 		return
 	if not _is_nearby(a["tile"], actors[creditor]["tile"]):
@@ -1434,9 +1829,32 @@ func _do_repay(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void
 			{"to_id": creditor, "object": object_id,
 			"source_event_ids": [promise_event_seq] if promise_event_seq >= 0 else []})
 
+## 承诺型履约结算（§十）：bridge 核验身份/状态/数量并执行唯一一次转移。
+func _commitments_settle_repay(debtor_id: String, a: Dictionary, commitment_id: String, creditor_id: String,
+		object_id: String = "") -> void:
+	if not actors.has(creditor_id) or not _is_nearby(a["tile"], actors[creditor_id]["tile"]):
+		return  # 债主不在场——履约计划继续保留
+	# P7.2A：结算绑定行动身份（debtor/creditor/object），错向 fail closed。
+	var result: Dictionary = _commitment_runtime_bridge().settle(
+		obligations, commitment_id, a["inventory"], actors[creditor_id]["inventory"], tick,
+		debtor_id, creditor_id, object_id)
+	if not bool(result.get("ok", false)):
+		return
+	_refresh_obligation_views(debtor_id, creditor_id)
+	var evidence: Dictionary = result.get("event", {})
+	var record: Dictionary = result.get("commitment", {})
+	_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_TRANSFER_COMPLETED, record,
+		{"transfer_event_id": str(evidence.get("event_id", ""))})
+	_emit_commitment_event(CommitmentContract.EVENT_COMMITMENT_FULFILLED, record,
+		{"transfer_event_id": str(evidence.get("event_id", ""))})
+
 ## 承诺到期检查：违约 → 可靠性崩（无人在场也生效——不守信迟早传开）
 func _check_overdue_promises() -> void:
 	for ob in obligations:
+		# P7.2：承诺型记录由 CommitmentTracker 的 violate_due 统一裁决（每 tick 一次），
+		# 此处只处理旧 obligations——避免双重违约事件。
+		if ob is Dictionary and (ob as Dictionary).has("commitment_id"):
+			continue
 		if not bool(ob["repaid"]) and tick > int(ob["due_tick"]):
 			ob["repaid"] = true  # 标记完结防重复
 			if actors.has(str(ob["debtor"])):
@@ -2120,21 +2538,27 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		# P5（SN-F 修复）：目击 = 看得见（视野/LOS）或贴得很近（≤3 格听得见动静）
 		var ev_actor_tile: Vector2i = actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO
 		var close_enough := absi(ev_actor_tile.x - a["tile"].x) + absi(ev_actor_tile.y - a["tile"].y) <= 3
-		var is_witness: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
+		var spatial: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
 				int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
+		# P7.2A：承诺直接当事方通道——债权人（to_id）无需目击即可得知自己的承诺结局
+		#（到期未收款本身就是债权人的直接证据）；但非空间目击时不得经 see_at 获得
+		# 债务人当前位置，第三方仍只走空间感知。仅 COMMITMENT_* 事件，旧类型零改动。
+		var direct_recipient: bool = type.begins_with("COMMITMENT_") \
+				and id != actor_id and id == str(e.get("to_id", ""))
+		var is_witness: bool = spatial or direct_recipient
 		if is_witness:
 			var salience := 0.5
 			if id == actor_id or str(e.get("proposer_id", "")) == id or str(e.get("to_id", "")) == id or str(e.get("target_id", "")) == id:
 				salience = 1.0  # 事件涉及我
 			elif ["explored_hurt", "weather_storm"].has(str(e.get("type", ""))):
 				salience = 0.9  # 危险
-			witnesses.append({"id": id, "a": a, "salience": salience})
+			witnesses.append({"id": id, "a": a, "salience": salience, "spatial": spatial})
 	witnesses.sort_custom(func(x, y): return float(x["salience"]) > float(y["salience"]))
 	for w in witnesses.slice(0, 3):
 		var id = w["id"]
 		var a: Dictionary = w["a"]
-		if id != actor_id and actors.has(actor_id):
-			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪
+		if id != actor_id and actors.has(actor_id) and bool(w.get("spatial", true)):
+			a["tom"].see_at(actor_id, actors[actor_id]["tile"], tick)  # 我看见他在哪（直接当事方非目击者除外）
 		CognitiveTransition.process(a, e, {"relationships": relationships, "tick": tick})
 		# P7.0：目击某人实际利用资源，构成“他知道这类来源”的主观证据。
 		# 证据只写目击者 ToM；看不见的人不会凭空知道。

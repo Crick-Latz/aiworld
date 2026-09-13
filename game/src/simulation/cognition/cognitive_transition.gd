@@ -207,6 +207,11 @@ static func _update_beliefs(observer: Dictionary, se: Dictionary, interp: Dictio
 		tom.add_evidence(other, "reliable", -1.0, 0.6, seq, tick)
 		tom.add_evidence(other, "generous", -1.0, 0.2, seq, tick)
 		updates["reliable"] = -0.6
+	elif act2 == "PROMISE" and response2 == "MISUNDERSTOOD":
+		# P7.2 §十三：条款误解 ≠ 恶意违约——只降低确定性（削弱既有结论），
+		# 不新增方向性证据。
+		tom.weaken(other, "reliable", 0.04)
+		updates["reliable"] = -0.04
 	elif act2 == "ACQUIRE" and response2 == "DONE":
 		# 直接知觉证据（通用）：看见他获得 X → 他有 X。谓词由资源规格决定
 		var acquire_pred := str(ResourceSpec.spec(str(sem2.get("object", "food")))["predicate"])
@@ -246,12 +251,14 @@ static func _update_relationships(observer: Dictionary, se: Dictionary, interp: 
 	var role := str(se["role"])
 	var delta := {}
 	# 陪伴效应：共同度过的时间积累善意（相处的熟悉感，非事件性增减）
-	if type == "promise_kept" and role == "recipient":
+	# P7.2：新承诺事件沿用同一互惠弧（role=recipient=债权人视角），
+	# 与旧 promise_kept/broken 同权重——不产生第二套认知更新。
+	if (type == "promise_kept" or type == "COMMITMENT_FULFILLED") and role == "recipient":
 		# 履约（我是债主）：可靠与善意双升——这是互惠弧的终点
 		relationships.adjust(me, other, "reliability", 120.0 * float(dyn["positive_learning_rate"]))
 		relationships.adjust(me, other, "benevolence", 60.0 * float(dyn["positive_learning_rate"]))
 		delta["reliability"] = 120.0 * float(dyn["positive_learning_rate"])
-	elif type == "promise_broken" and role == "recipient":
+	elif (type == "promise_broken" or type == "COMMITMENT_VIOLATED") and role == "recipient":
 		# 违约（我是债主）：比拒绝更重——他主动承诺过
 		relationships.adjust(me, other, "reliability", -250.0 * float(dyn["betrayal_learning_rate"]))
 		relationships.adjust(me, other, "benevolence", -150.0 * float(dyn["betrayal_learning_rate"]))
@@ -341,7 +348,8 @@ static func _update_social_stance(observer: Dictionary, se: Dictionary, interp: 
 # ── 记忆：主观化 + 解释归档 ──
 
 const IMPORTANT_TYPES := ["explored_hurt", "explored_found", "ruins_loot", "shared_food", "promise_kept", "promise_broken", "reason_claimed",
-	"weather_storm", "food_requested", "food_request_accepted", "food_request_refused"]
+	"weather_storm", "food_requested", "food_request_accepted", "food_request_refused",
+	"COMMITMENT_CREATED", "COMMITMENT_FULFILLED", "COMMITMENT_VIOLATED", "COMMITMENT_TERMS_MISMATCH"]
 
 static func _write_memory(observer: Dictionary, event: Dictionary, se: Dictionary, interp: Dictionary, appraisal: Dictionary) -> void:
 	var type := str(event.get("type", ""))

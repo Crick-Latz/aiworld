@@ -48,6 +48,7 @@ func _run() -> void:
 		"plan_adoption_trace": sim.agency_adoption_trace(),
 		"information_subgoal_trace": sim.agency_information_trace(),
 		"material_request_trace": sim.agency_material_request_trace(),
+		"commitment_trace": sim.agency_commitment_trace(),
 		"notes": ["Terrain remains the existing fixture; simulation seed controls resource placement and agent randomness.",
 			"Replay is recomputation from initial inputs, not fast mid-run save/restore.",
 			"No live LLM or graphical UI is required."]}
