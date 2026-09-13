@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_new_round_resets_asked()
 	_test_polarity_freshness()
 	_test_holder_unknown_reserved()
+	_test_holder_attempt_limit_semantics()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -306,3 +307,52 @@ func _test_holder_unknown_reserved() -> void:
 	var answer := InformationExchangePolicy.evaluate_holder_query(empty, "a", "shells", 0, 50, null)
 	_check("unknown_reserved_unreachable_with_full_self_knowledge",
 		str(answer.get("response", "")) == InformationExchangePolicy.HOLDER_SELF_ABSENT)
+
+func _test_holder_attempt_limit_semantics() -> void:
+	# P7.2B-R1.1 C：HOLDER 不因通用 MAX_ATTEMPTS 进 FAILED——终止权唯一归
+	# request/run/step/gap contract；问尽后保持 ACTIVE。SOURCE 语义逐位不变。
+	var tracker := TrackerClass.new()
+	var goal := tracker.prepare_holder("a", _request("m30"), 10)
+	var action := {"action": "ask_item_holder", "information_goal_id": goal.get("goal_id"),
+		"item_id": "shells"}
+	# 10 次完成（超过 MAX_ATTEMPTS=8），每次问不同的人。
+	for i in 10:
+		action["target_actor"] = "peer_%d" % i
+		var seg := [{"type": "holder_information_self_absent", "seq": 100 + i,
+			"information_goal_id": goal.get("goal_id")}]
+		tracker.on_action_complete("a", action, seg, {}, 11 + i)
+	var after := tracker.current_goal("a")
+	_check("holder_beyond_max_attempts_stays_active",
+		str(after.get("state", "")) == "ACTIVE"
+		and str(after.get("goal_id", "")) == str(goal.get("goal_id", ""))
+		and int(after.get("attempts", 0)) == 10, str(after.get("state", "")))
+	_check("holder_asked_list_preserved_after_limit",
+		(after.get("asked_actor_ids", []) as Array).size() == 10)
+	var reused := tracker.prepare_holder("a", _request("m30"), 30)
+	_check("prepare_holder_reuses_goal_beyond_limit",
+		str(reused.get("goal_id", "")) == str(goal.get("goal_id", ""))
+		and (reused.get("asked_actor_ids", []) as Array).size() == 10)
+	# SOURCE：8 次 search 完成仍走旧 ATTEMPT_LIMIT + 冷却。
+	var source_goal := {
+		"goal_id": "INFO:a:99:p:shells", "query_kind": "SOURCE", "state": "ACTIVE",
+		"actor_id": "a", "parent_plan_id": "PLAN_HUNGER_fish_food",
+		"item_id": "shells", "source_kinds": ["shell"], "attempts": 0,
+		"asks": 0, "refusals": 0, "stale_reports": 0, "unknown_responses": 0,
+		"search_failures": 0, "tried_tiles": [], "asked_actor_ids": [],
+		"evidence_refs": [], "last_result": "", "retry_after_tick": -1,
+		"last_attempt_tick": -1, "created_tick": 1, "updated_tick": 1,
+		"root_goal": "HUNGER", "score": 1.0, "quantity": 1,
+	}
+	tracker.goals["a"] = source_goal
+	var search_action := {"action": "search_resource_source",
+		"information_goal_id": source_goal["goal_id"], "target": Vector2i(3, 4)}
+	for i in 8:
+		var seg := [{"type": "source_search_failed", "seq": 200 + i,
+			"information_goal_id": source_goal["goal_id"]}]
+		tracker.on_action_complete("a", search_action, seg, {}, 40 + i)
+	var source_after := tracker.current_goal("a")
+	_check("source_attempt_limit_unchanged",
+		str(source_after.get("state", "")) == "FAILED"
+		and str(source_after.get("last_result", "")) == "ATTEMPT_LIMIT"
+		and int(source_after.get("retry_after_tick", -1)) >= 47,
+		str(source_after.get("state", "")) + "/" + str(source_after.get("last_result", "")))

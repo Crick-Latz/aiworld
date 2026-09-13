@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_flag_off_compatibility()
 	_test_audit_sensitivity()
 	_test_no_duplicate_peer_in_round()
+	_test_funnel_diagnostics_appear_and_stay_out_of_state()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -297,3 +298,32 @@ func _test_no_duplicate_peer_in_round() -> void:
 	_check("sole_asked_peer_not_reasked", none.is_empty())
 	_check("goal_stays_active_without_candidates",
 		str(tracker.current_goal("a").get("state", "")) == "ACTIVE")
+
+func _test_funnel_diagnostics_appear_and_stay_out_of_state() -> void:
+	# P7.2B-R1.1 D：诊断计数出现于 summary、不进 state hash、不改行为。
+	var pair := _pair(76701)
+	var sim: IslandSimulation = pair["sim"]
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("funnel_fixture_holder_goal", false, "no holder goal")
+		return
+	_check("funnel_fixture_holder_goal", true)
+	sim._holder_goals_sync_all()
+	var diag := sim.agency_holder_funnel_diagnostics()
+	_check("funnel_active_ticks_counted", int(diag.get("holder_active_ticks", 0)) >= 1)
+	var prepare: Dictionary = sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("funnel_decision_ticks_counted", int(diag.get("holder_decision_ticks", 0)) >= 1)
+	var fp1 := SimulationAudit.fingerprint(sim)
+	_holder_diag_helper(sim)
+	var fp2 := SimulationAudit.fingerprint(sim)
+	_check("funnel_diag_excluded_from_state_hash",
+		str(fp1["state_sha256"]) == str(fp2["state_sha256"]))
+	var summary := SimulationAudit.summary(sim)
+	_check("funnel_diag_in_summary", (summary.get("holder_funnel", {}) as Dictionary).size() > 0)
+
+func _holder_diag_helper(sim: IslandSimulation) -> void:
+	# 仅追加诊断计数，不应改变 state hash。
+	sim._holder_diag_inc("holder_test_probe", 1)
