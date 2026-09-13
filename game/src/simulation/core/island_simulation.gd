@@ -55,6 +55,16 @@ var _commitment_runtime: CommitmentRuntimeBridge = null
 # P7.2B：NO_SUBJECTIVE_TARGET → FIND_HOLDER 信息目标 → 开放式询问 → 来源化持有证据
 # → 同一 material request 重新选目标。默认 false；旧 profile 行为不变。
 var agency_holder_evidence_reachability_enabled := false
+# P7.2C：C1 主观找人 + C2 询问仲裁 + C-0 客观材料审计。默认 false；
+# 行为变化只在此 profile 开启；诊断计数器本身 write-only。
+var agency_holder_reachability_enabled := false
+# P7.2C C-0B：objective material-availability audit —— 只存在于诊断层的
+# 真实世界持有者统计（行为系统绝不读取）；write-only，不入 state 编码。
+var _objective_material_audit := {}
+# P7.2C C-0A：仲裁探针——_agency_prepare 写入本轮 best ask 候选（utility 最大），
+# 决策产出后对比胜者。write-only 诊断，绝不反向影响候选或决策。
+var _holder_arbitration_probe: Dictionary = {}
+
 # P7.2B-R1.1：opportunity funnel 诊断计数——纯加性、只写不读、不参与任何行为/
 # RNG/排序决策；不进入 state 编码（audit 排除），仅随 summary 输出供分析器消费。
 var _holder_funnel_diag := {}
@@ -288,6 +298,9 @@ func step() -> Array:
 		_commitments_check_due()
 	if agency_holder_evidence_reachability_enabled:
 		_holder_goals_sync_all()
+	# P7.2C C-0C：每 tick 携带统计（write-only；不读取、不参与行为）。
+	if agency_holder_reachability_enabled:
+		_record_material_carriage_ticks()
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
 	for id in actors:
@@ -430,6 +443,19 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_holder_evidence_reachability_enabled \
 			and str(decision.get("action", "")) == "ask_item_holder":
 		_holder_diag_inc("holder_ask_actions_selected")
+	if agency_holder_reachability_enabled \
+			and str(decision.get("action", "")) == "seek_holder_person":
+		_holder_diag_inc("holder_seek_actions_selected")
+	# P7.2C C-0A：询问仲裁诊断——只在 ACTIVE HOLDER goal 存在且本轮有 ask 候选时记录。
+	# 读取已产生的 decision（不重算、不耗 RNG）；write-only。
+	if agency_holder_reachability_enabled \
+			and str(decision.get("action", "")) != "ask_item_holder" \
+			and _holder_arbitration_probe != null:
+		_record_inquiry_arbitration_loss(actor_view, decision)
+	if agency_holder_reachability_enabled \
+			and str(decision.get("action", "")) == "ask_item_holder" \
+			and _holder_arbitration_probe != null:
+		_record_inquiry_arbitration_win(decision)
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["action_travel_stall_ticks"] = 0
@@ -511,6 +537,8 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 				and str(information_goal.get("state", "")) == "ACTIVE":
 			_holder_diag_inc("holder_decision_ticks")
 			var diag_view := _build_actor_view(id, a)
+			diag_view["now_tick"] = tick
+			information_goal["holder_reachability_enabled"] = agency_holder_reachability_enabled
 			var asked_ids: Array = information_goal.get("asked_actor_ids", [])
 			var excluded_ids: Array = information_goal.get("excluded_target_ids", [])
 			var visible_count := 0
@@ -532,6 +560,25 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
 			_holder_diag_inc("holder_ask_candidates_emitted", diag_candidates.size())
+			# P7.2C C-0A：best ask 候选探针（不改真实候选顺序）。
+			if agency_holder_reachability_enabled and not diag_candidates.is_empty():
+				var best_ask: Dictionary = diag_candidates[0]
+				for dc in diag_candidates:
+					if float((dc as Dictionary).get("utility", 0.0)) > float(best_ask.get("utility", 0.0)):
+						best_ask = dc
+				_holder_arbitration_probe = {
+					"actor_id": id, "goal_id": str(information_goal.get("goal_id", "")),
+					"item_id": str(information_goal.get("item_id", "")),
+					"best_utility": float(best_ask.get("utility", 0.0)),
+					"target_actor": str(best_ask.get("target_actor", "")),
+				}
+				_holder_diag_inc("holder_ask_candidate_ticks")
+				_record_objective_material_audit(id, str(information_goal.get("item_id", "")))
+			else:
+				_holder_arbitration_probe = {}
+			# P7.2C C-0B：objective audit 无论有无候选都采样（决策 tick 粒度）。
+			if agency_holder_reachability_enabled and diag_candidates.is_empty():
+				_record_objective_material_audit(id, str(information_goal.get("item_id", "")))
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -749,6 +796,12 @@ func _material_requests_process_requester(
 			elif agency_holder_evidence_reachability_enabled \
 					and str(offered.get("reason", "")) == "NO_SUBJECTIVE_TARGET":
 				# 我不知道谁有 X——这本身就是向身边人打听的理由（开放询问入口）。
+				# P7.2C C2：parent blockedness 随 run BLOCKED 驻留时长进入询问权重。
+				var _run_for_block := agency_plan_run(requester_id)
+				var _blocked_ticks := 0.5
+				if not _run_for_block.is_empty() and str(_run_for_block.get("state", "")) == "BLOCKED":
+					_blocked_ticks = clampf(float(tick - int(_run_for_block.get("updated_tick", tick))) / 48.0 + 0.5, 0.0, 1.0)
+				request["parent_blockedness"] = _blocked_ticks
 				_information_tracker().prepare_holder(requester_id, request, tick,
 					bridge.excluded_targets_for(str(request.get("request_id", ""))),
 					clampf(float(request.get("urgency", 0.5)), 0.0, 1.0))
@@ -1086,8 +1139,117 @@ func _material_request_event_text(event_type: String, request: Dictionary) -> St
 func _holder_diag_inc(key: String, n: int = 1) -> void:
 	_holder_funnel_diag[key] = int(_holder_funnel_diag.get(key, 0)) + n
 
+## P7.2C C-0A：行动类别分类（纯字符串映射，无 RNG、无行为读取）。
+const ACTION_CATEGORY := {
+	"forage_berries": "SURVIVAL", "drink_water": "SURVIVAL", "fish": "SURVIVAL",
+	"gather_shells": "SURVIVAL", "gather_wood": "SURVIVAL", "search_ruins": "SURVIVAL",
+	"rest": "SURVIVAL", "sit_by_fire": "SURVIVAL", "build_shelter": "SURVIVAL",
+	"do_nothing": "SURVIVAL", "repay_debt": "OBLIGATION",
+	"request_share": "SOCIAL", "request_water": "SOCIAL", "request_tool": "SOCIAL",
+	"share_food": "SOCIAL", "socialize": "SOCIAL", "seek_person": "SOCIAL",
+	"propose_rule": "SOCIAL", "ask_reason": "SOCIAL", "observe_person": "SOCIAL",
+	"explore": "EXPLORATION", "relocate": "EXPLORATION", "keep_distance": "EXPLORATION",
+	"search_resource_source": "INFORMATION_SOURCE", "ask_resource_source": "INFORMATION_SOURCE",
+	"ask_item_holder": "HOLDER_INQUIRY",
+	"craft_fish_spear": "PLAN_EXECUTION", "set_trap": "PLAN_EXECUTION", "light_fire": "PLAN_EXECUTION",
+}
+
+static func _action_category(action_name: String) -> String:
+	return str(ACTION_CATEGORY.get(action_name, "OTHER"))
+
+## C-0A：ask 候选存在但败选——记录胜者类别与 utility delta（write-only）。
+func _record_inquiry_arbitration_loss(actor_view: Dictionary, decision: Dictionary) -> void:
+	if _holder_arbitration_probe.is_empty():
+		return
+	var winner := str(decision.get("action", ""))
+	var winner_utility := float(decision.get("utility", 0.0))
+	var best_ask := float(_holder_arbitration_probe.get("best_utility", 0.0))
+	var category := _action_category(winner)
+	_holder_diag_inc("ask_candidate_lost")
+	_holder_diag_inc("ask_lost_to_" + category)
+	_holder_diag_inc("ask_loss_utility_delta_sum", int(round((winner_utility - best_ask) * 1000)))
+	_holder_diag_inc("ask_loss_utility_delta_count")
+	_holder_arbitration_probe = {}
+
+## C-0A：ask 候选存在且胜选——记录（write-only）。
+func _record_inquiry_arbitration_win(decision: Dictionary) -> void:
+	if _holder_arbitration_probe.is_empty():
+		return
+	_holder_diag_inc("ask_candidate_won")
+	var best_ask := float(_holder_arbitration_probe.get("best_utility", 0.0))
+	_holder_diag_inc("ask_win_utility_sum", int(round(best_ask * 1000)))
+	_holder_diag_inc("ask_win_utility_count")
+	_holder_arbitration_probe = {}
+
+## P7.2C C-0B：objective material-availability audit。
+## 只在诊断层统计真实世界持有者——行为系统绝不读取本函数的任何输出；
+## 输出仅进 _objective_material_audit（audit state 编码排除、summary 输出）。
+func _record_objective_material_audit(requester_id: String, item_id: String) -> void:
+	if item_id == "":
+		return
+	var holder_count := 0
+	var nearest := -1
+	var requester_tile: Vector2i = actors[requester_id]["tile"] if actors.has(requester_id) else Vector2i.ZERO
+	var requester_tom: TheoryOfMind = actors[requester_id].get("tom", null) if actors.has(requester_id) else null
+	var visible := 0
+	var known_last_seen := 0
+	for other_id in actors:
+		if str(other_id) == requester_id:
+			continue
+		var other: Dictionary = actors[other_id]
+		if int(other.get("inventory", {}).get(item_id, 0)) > 0:
+			holder_count += 1
+			var dist := absi(int(other["tile"].x) - requester_tile.x) + absi(int(other["tile"].y) - requester_tile.y)
+			if nearest < 0 or dist < nearest:
+				nearest = dist
+			if _is_nearby(requester_tile, other["tile"]):
+				visible += 1
+			if requester_tom != null and not requester_tom.last_seen_of(str(other_id)).is_empty():
+				known_last_seen += 1
+	_obj_inc("objective_audit_ticks")
+	if holder_count > 0:
+		_obj_inc("objective_any_holder_ticks")
+	else:
+		_obj_inc("objective_no_holder_ticks")
+	_obj_inc("objective_holder_count", holder_count)
+	if nearest >= 0:
+		_obj_inc("objective_nearest_holder_distance_sum", nearest)
+		_obj_inc("objective_nearest_holder_count")
+	_obj_inc("objective_actual_holder_visible_ticks", visible)
+	_obj_inc("objective_actual_holder_known_last_seen_ticks", known_last_seen)
+	_obj_inc("objective_actual_holder_unknown_ticks", holder_count - known_last_seen)
+	_obj_inc("objective_audit_item_" + item_id + "_ticks")
+
+func _obj_inc(key: String, n: int = 1) -> void:
+	_objective_material_audit[key] = int(_objective_material_audit.get(key, 0)) + n
+
+## P7.2C C-0C：材料驻留审计——中间材料库存生命周期（write-only）。
+## 在库存事件点采样：gathered/crafted 进、craft 消耗出、craft 后盈余。
+func _record_material_residence(actor_id: String, item_id: String, kind: String) -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	_obj_inc("material_event_" + kind + "_" + item_id)
+	if kind == "acquired":
+		_obj_inc("material_residence_open_" + item_id + "_" + actor_id)
+	elif kind == "consumed":
+		_obj_inc("material_residence_close_" + item_id + "_" + actor_id)
+
+## C-0C：每 tick 携带统计（在 sync 全局时点调用一次）。
+func _record_material_carriage_ticks() -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	for other_id in actors:
+		var inv: Dictionary = actors[other_id].get("inventory", {})
+		if int(inv.get("wood", 0)) > 0:
+			_obj_inc("carriage_wood_actor_ticks")
+		if int(inv.get("shells", 0)) > 0:
+			_obj_inc("carriage_shells_actor_ticks")
+
 func agency_holder_funnel_diagnostics() -> Dictionary:
 	return _holder_funnel_diag.duplicate(true)
+
+func agency_objective_material_audit() -> Dictionary:
+	return _objective_material_audit.duplicate(true)
 
 func _commitment_runtime_bridge() -> CommitmentRuntimeBridge:
 	if _commitment_runtime == null:
@@ -1460,6 +1622,8 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 		"ask_item_holder":
 			_holder_diag_inc("holder_ask_actions_completed")
 			_do_ask_item_holder(id, a, action, new_events)
+		"seek_holder_person":
+			_do_seek_holder_person(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
 		"observe_person":
@@ -2179,6 +2343,41 @@ func _do_ask_resource_source(id: String, a: Dictionary, action: Dictionary, ev: 
 ## P7.2B：开放式持有询问执行。回答方只用两类合法信息源——自己的库存自知、
 ## 自己 ToM 的第三方持有证据；报告带 observed/received 双时间与 reporter 来源，
 ## 请求者以 claim 证据写入自己的 ToM（绝不直读对方库存）。
+## P7.2C C1：主观找人执行——走向自己 ToM last_seen 记忆的位置；到场与否由
+## 真实世界裁决（扑空是合法结果，绝不读真实坐标修正）。到场产生一次相遇，
+## 下一决策 tick 被找者进入 others_visible，询问即可自然发生。
+func _do_seek_holder_person(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var target_id := str(action.get("target_actor", ""))
+	var goal_id := str(action.get("information_goal_id", ""))
+	var item_id := str(action.get("item_id", ""))
+	if agency_holder_reachability_enabled:
+		_holder_diag_inc("holder_seek_actions_completed")
+	if not actors.has(target_id):
+		if agency_holder_reachability_enabled:
+			_holder_diag_inc("holder_seek_person_gone")
+		_emit("holder_seek_person_not_found", id, "%s 找的人已经不在了" % a["display_name"], {
+			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+			"item_id": item_id, "target_id": target_id,
+		})
+		return
+	var target: Dictionary = actors[target_id]
+	if _is_nearby(a["tile"], target["tile"]):
+		if agency_holder_reachability_enabled:
+			_holder_diag_inc("holder_seek_found_person")
+		_emit("holder_seek_found_person", id,
+			"%s 找到了 %s" % [a["display_name"], target["display_name"]], {
+				"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+				"item_id": item_id, "target_id": target_id, "to_id": target_id,
+			})
+	else:
+		if agency_holder_reachability_enabled:
+			_holder_diag_inc("holder_seek_person_missed")
+		_emit("holder_seek_person_not_found", id,
+			"%s 扑了个空——%s 已经不在那里了" % [a["display_name"], target["display_name"]], {
+				"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+				"item_id": item_id, "target_id": target_id,
+			})
+
 func _do_ask_item_holder(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var target_id := str(action.get("target_actor", ""))
 	var goal_id := str(action.get("information_goal_id", ""))

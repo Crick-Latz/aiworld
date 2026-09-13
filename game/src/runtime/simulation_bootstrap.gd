@@ -26,10 +26,13 @@ static func configure(sim: IslandSimulation, profile: String = "") -> Dictionary
 	if bool(config.get("holder_evidence_reachability", false)) \
 			and not (bool(config.get("information_subgoals", false)) and bool(config.get("material_requests", false))):
 		return {"ok": false, "error": "HOLDER_EVIDENCE_REQUIRES_INFORMATION_AND_MATERIAL_REQUESTS"}
+	if bool(config.get("holder_reachability", false)) and not bool(config.get("holder_evidence_reachability", false)):
+		return {"ok": false, "error": "HOLDER_REACHABILITY_REQUIRES_HOLDER_EVIDENCE"}
 	if (bool(config.get("plan_execution", false)) or bool(config.get("causal_step_value", false)) \
 			or bool(config.get("information_subgoals", false)) or bool(config.get("material_requests", false)) \
 			or bool(config.get("commitment_consequences", false)) \
-			or bool(config.get("holder_evidence_reachability", false))) \
+			or bool(config.get("holder_evidence_reachability", false)) \
+			or bool(config.get("holder_reachability", false))) \
 			and str(config["agency_mode"]) != "LIVE_BRIDGE":
 		return {"ok": false, "error": "EXECUTION_REQUIRES_LIVE_BRIDGE"}
 	sim.agency_mode = str(config["agency_mode"])
@@ -40,6 +43,7 @@ static func configure(sim: IslandSimulation, profile: String = "") -> Dictionary
 	sim.agency_material_requests_enabled = bool(config.get("material_requests", false))
 	sim.agency_commitment_consequences_enabled = bool(config.get("commitment_consequences", false))
 	sim.agency_holder_evidence_reachability_enabled = bool(config.get("holder_evidence_reachability", false))
+	sim.agency_holder_reachability_enabled = bool(config.get("holder_reachability", false))
 	return {"ok": true, "profile": profile, "config": config.duplicate(true)}
 
 static func create(seed_value: int, profile: String = "") -> Dictionary:

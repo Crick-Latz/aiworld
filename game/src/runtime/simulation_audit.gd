@@ -43,7 +43,8 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 	for row in sim.agency_material_request_trace():
 		var material_event := str(row.get("event", ""))
 		material_requests[material_event] = int(material_requests.get(material_event, 0)) + 1
-	var holder_funnel := sim.agency_holder_funnel_diagnostics()
+	var holder_funnel: Dictionary = sim.agency_holder_funnel_diagnostics()
+	var objective_audit: Dictionary = sim.agency_objective_material_audit()
 	var commitments := {}
 	for row in sim.agency_commitment_trace():
 		var commitment_event := str(row.get("event", ""))
@@ -53,6 +54,7 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 		"information_counts": information, "material_request_counts": material_requests,
 		"commitment_counts": commitments,
 		"holder_funnel": holder_funnel,
+		"objective_material_audit": objective_audit,
 		"planner_calls": sim.agency_planner_calls, "planner_cache_hits": sim.agency_cache_hits}
 
 static func _encode(value: Variant, active: Dictionary) -> Variant:
@@ -88,6 +90,9 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 						or key == "agency_commitment_consequences_enabled" \
 						or key == "agency_holder_evidence_reachability_enabled" \
 						or key == "_holder_funnel_diag" \
+					or key == "_objective_material_audit" \
+					or key == "_holder_arbitration_probe" \
+					or key == "agency_holder_reachability_enabled" \
 						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)
