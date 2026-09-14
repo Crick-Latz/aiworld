@@ -289,26 +289,26 @@ func _relations_bbcode(sel: Dictionary) -> String:
 	var rows: Array = sel.get("relationship_rows", [])
 	if rows.is_empty():
 		return "[color=#8899aa]暂无关系数据[/color]"
+	# 紧凑排版（v3.1 evidence）：视口仅容 ~9 逻辑行，名字并入维度行、
+	# 变化轨迹仅在非空时显示，保证【关系】与【ToM】两区可同屏取证
 	var out := "[color=#e8c170]── 关系（真实有向边）──[/color]
 "
 	for r in rows:
-		var name := str(r.get("other_name", "?"))
-		out += "[color=#c0d8e8]%s[/color]
-" % name
-		out += "  综合信任%s 善意%s 可靠性%s
+		out += "[color=#c0d8e8]%s[/color] 信任%s 善意%s 可靠性%s
 " % [
+			str(r.get("other_name", "?")),
 			_sign(int(r.get("trust", 0))),
 			_sign(int(r.get("benevolence", 0))),
 			_sign(int(r.get("reliability", 0)))]
-		out += "  亏欠%s 畏惧%s
-" % [
+		out += "  亏欠%s 畏惧%s" % [
 			_sign(int(r.get("obligation", 0))),
 			_sign(int(r.get("fear", 0)))]
 		var change := str(r.get("change", ""))
-		out += "  [color=#8899aa]关系变化：%s[/color]
-" % (change if change != "" else "—（暂无轨迹数据）")
-	out += "
-[color=#e8c170]── 我对他的判断（Theory of Mind）──[/color]
+		if change != "":
+			out += "  [color=#8899aa]变化：%s[/color]" % change
+		out += "
+"
+	out += "[color=#e8c170]── 我对他的判断（Theory of Mind）──[/color]
 "
 	for r in rows:
 		var tom: Dictionary = r.get("tom", {})

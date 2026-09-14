@@ -46,6 +46,26 @@ func _run() -> void:
 	var tab_after := str(args.get("tab", ""))
 	if tab_after != "" and mode == "observer" and hud != null:
 		hud.set_inspector_tab(tab_after)
+	# 证据工具：滚动当前 Inspector 页（RichTextLabel）到指定行，供 relations 等长页取证
+	var scroll_line := str(args.get("scroll", ""))
+	if scroll_line != "" and hud != null:
+		var page = hud.pages.get(hud._inspector_tab if "_inspector_tab" in hud else tab_after, null)
+		if page != null and page is RichTextLabel:
+			var rtl := page as RichTextLabel
+			rtl.scroll_to_line(int(scroll_line))
+			print("UI_CAPTURE scrolled %s to line %s (lines=%d)" % [str(tab_after), scroll_line, rtl.get_line_count()])
+	var dump := str(args.get("dump", ""))
+	if dump != "" and hud != null:
+		var page2 = hud.pages.get(tab_after, null)
+		if page2 != null and page2 is RichTextLabel:
+			var rng: PackedStringArray = dump.split("-", true, 1)
+			var lo := int(rng[0])
+			var hi := int(rng[1]) if rng.size() > 1 else lo
+			var rtl2 := page2 as RichTextLabel
+			for ln in range(lo, mini(hi + 1, rtl2.get_line_count())):
+				var t: String = rtl2.get_line(ln).strip_edges()
+				if t != "":
+					print("DUMP %d|%s" % [ln, t])
 	await _wait_frames(6)
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
