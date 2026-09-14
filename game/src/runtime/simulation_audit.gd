@@ -98,6 +98,8 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 						or key == "_holder_seek_arbitration_probe" \
 						or key == "_material_residence_probe" \
 						or key == "agency_holder_reachability_enabled" \
+						or key == "agency_holder_possession_observation_enabled" \
+						or key == "agency_holder_causal_arbitration_enabled" \
 						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)

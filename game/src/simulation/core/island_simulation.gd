@@ -58,6 +58,10 @@ var agency_holder_evidence_reachability_enabled := false
 # P7.2C：C1 主观找人 + C2 询问仲裁 + C-0 客观材料审计。默认 false；
 # 行为变化只在此 profile 开启；诊断计数器本身 write-only。
 var agency_holder_reachability_enabled := false
+# P7.2C-R2 C3b：视觉持有观察（A 看见 B → ToM 正证据）。默认 false。
+var agency_holder_possession_observation_enabled := false
+# P7.2C-R2 C2：持有行动因果仲裁（blocker 解除价值 + 探索相关性）。默认 false。
+var agency_holder_causal_arbitration_enabled := false
 # P7.2C C-0B：objective material-availability audit —— 只存在于诊断层的
 # 真实世界持有者统计（行为系统绝不读取）；write-only，不入 state 编码。
 var _objective_material_audit := {}
@@ -303,6 +307,8 @@ func step() -> Array:
 		_holder_goals_sync_all()
 	# P7.2C C-0C：每 tick 携带统计（write-only；不读取、不参与行为）。
 	if agency_holder_reachability_enabled:
+		if tick == 0:
+			_record_material_initial_stock()
 		_record_material_carriage_ticks()
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
@@ -553,6 +559,7 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			var diag_view := _build_actor_view(id, a)
 			diag_view["now_tick"] = tick
 			information_goal["holder_reachability_enabled"] = agency_holder_reachability_enabled
+			information_goal["causal_arbitration_enabled"] = agency_holder_causal_arbitration_enabled
 			var asked_ids: Array = information_goal.get("asked_actor_ids", [])
 			var excluded_ids: Array = information_goal.get("excluded_target_ids", [])
 			var visible_count := 0
@@ -1373,6 +1380,14 @@ func _record_material_consumed(actor_id: String, item_id: String, sink: String, 
 	_obj_inc("material_consumed_units_" + item_id + "_" + sink, quantity)
 	_obj_inc("material_consumed_units_" + item_id, quantity)
 	_obj_inc("successful_consumption_events_" + item_id + "_" + sink)
+
+func _record_material_initial_stock() -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	for other_id in actors:
+		var inv: Dictionary = actors[other_id].get("inventory", {})
+		for item_id in ["wood", "shells"]:
+			_obj_inc("material_initial_units_" + item_id, int(inv.get(item_id, 0)))
 
 func _record_material_acquired(actor_id: String, item_id: String, quantity: int) -> void:
 	if not agency_holder_reachability_enabled:
@@ -3129,6 +3144,19 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 					if holder_id != "" and holder_id != id and observed_item != "":
 						a["tom"].add_evidence(holder_id, MaterialRequestRuntimeBridge.holder_predicate(observed_item),
 							1.0, 0.65, int(e.get("seq", -1)), tick)
+			# P7.2C-R2 C3b：A 真实看见 B 时，B 明显携带的材料形成 ToM 正证据。
+			# 只在 possession observation flag 开启时；只产生 positive 证据。
+			if agency_holder_possession_observation_enabled and agency_material_requests_enabled:
+				var event_actor := str(e.get("actor_id", ""))
+				if event_actor != "" and event_actor != id and actors.has(event_actor):
+					var visible_inv: Dictionary = actors[event_actor].get("inventory", {})
+					for obs_item in ["shells", "wood"]:
+						if int(visible_inv.get(obs_item, 0)) > 0:
+							a["tom"].add_evidence(event_actor,
+								TheoryOfMind.possession_predicate(obs_item),
+								1.0, 0.55, int(e.get("seq", -1)), tick)
+							if agency_holder_reachability_enabled:
+								_holder_diag_inc("direct_possession_observation_" + obs_item)
 		# P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → descriptive_compliance
 		var evt_rule := str(e.get("rule_id", ""))
 		if evt_rule != "" and id != actor_id:

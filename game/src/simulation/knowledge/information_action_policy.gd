@@ -155,6 +155,29 @@ static func _direction_quadrant(origin: Vector2i, tile: Vector2i, rotation: int)
 		base = 2 if delta.y >= 0 else 3
 	return (base - rotation) % 4
 
+## P7.2C-R2 C2：统一的 blocker 解除价值——ask 与 seek 共用同一语义。
+## parent blockedness、request urgency、goal age、trust/reliability 的函数；
+## 不用两套魔法常量；causal flag 开启时取代旧的直接 utility 公式。
+static func holder_resolution_value(goal: Dictionary, actor: Dictionary,
+		peer_id: String, base_pressure: float) -> float:
+	var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
+	var urgency := clampf(float(goal.get("request_urgency", 0.5)), 0.0, 1.0)
+	var goal_age := clampf(float(int(actor.get("now_tick", 0)) - int(goal.get("created_tick", 0))) / 120.0, 0.0, 1.0)
+	var trust_norm := clampf((float(actor.get("trust_of", {}).get(peer_id, 0.0)) + 1000.0) / 2000.0, 0.0, 1.0)
+	var tom: TheoryOfMind = actor.get("tom", null)
+	var reliable := 0.5
+	if tom != null:
+		reliable = clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+	return clampf(
+		0.16
+		+ blockedness * 0.26
+		+ maxf(urgency, base_pressure) * 0.24
+		+ goal_age * 0.06
+		+ trust_norm * 0.14
+		+ reliable * 0.10
+		+ (0.06 if goal.get("possession_belief_boost", false) else 0.0),
+		0.06, 0.95)
+
 ## P7.2B：开放式持有询问。"我不知道谁有 X"本身就是向身边人打听的理由——
 ## 不要求预先相信对方"知道答案"；候选=当前可见、非自己、本轮未问过、未被本次
 ## material request 拒绝过。排序只用 A 自己的信任/ToM/人格/距离，不读任何真值。
@@ -187,11 +210,17 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 		var peer_tile: Vector2i = peer.get("tile", actor.get("tile", Vector2i.ZERO))
 		var actor_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
 		var distance := absi(peer_tile.x - actor_tile.x) + absi(peer_tile.y - actor_tile.y)
-		# P7.2C C2：parent blockedness 进入询问权重——父计划被材料 blocker 卡住
-		# 越久，询问作为解除 blocker 行为的竞争力越高（不硬锁；极端生存仍可压过）。
-		var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
-		var utility := clampf(0.14 + maxf(pressure, urgency) * 0.26 + blockedness * 0.22
-			+ trust_norm * 0.14 + reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.95)
+		# P7.2C-R2 C2：causal flag 开启时用统一 holder_resolution_value；
+		# 关闭时保持 R1 的 blockedness 公式（ablation 对照）。
+		var utility: float
+		if bool(goal.get("causal_arbitration_enabled", false)):
+			if tom.belief_about(peer_id, TheoryOfMind.possession_predicate(item_id)) > 0.05:
+				goal["possession_belief_boost"] = true
+			utility = holder_resolution_value(goal, actor, peer_id, maxf(pressure, urgency))
+		else:
+			var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
+			utility = clampf(0.14 + maxf(pressure, urgency) * 0.26 + blockedness * 0.22
+				+ trust_norm * 0.14 + reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.95)
 		out.append({
 			"action": "ask_item_holder",
 			"target": peer_tile,
@@ -258,6 +287,9 @@ static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
 		var distance_belief := clampf(1.0 / (1.0 + float(distance) / 30.0), 0.1, 1.0)
 		var score := trust_norm * 0.28 + reliable * 0.22 + sociability * 0.12 \
 			+ freshness * 0.18 + distance_belief * 0.10 + clampf(maxf(pressure, urgency), 0.0, 1.0) * 0.10
+		# P7.2C-R2 C3b-4：请求者对目标已有 positive has_item:X belief → 更高优先。
+		if tom.belief_about(peer_id, TheoryOfMind.possession_predicate(str(goal.get("item_id", "")))) > 0.05:
+			score += 0.20
 		if score > best_score:
 			best_score = score
 			best_id = peer_id
@@ -265,7 +297,15 @@ static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
 	if best_id == "":
 		return {}
 	var seek_tile: Vector2i = best_seen.get("tile", origin)
-	var utility := clampf(0.14 + maxf(pressure, urgency) * 0.30 + best_score * 0.42, 0.06, 0.92)
+	var utility: float
+	if bool(goal.get("causal_arbitration_enabled", false)):
+		# P7.2C-R2 C2：统一 resolution value + known-holder belief 加分。
+		utility = holder_resolution_value(goal, actor, best_id, maxf(pressure, urgency))
+		# P7.2C-R2 C3b-4：对已有 positive has_item:X belief 的目标加分（主观）。
+		if tom.belief_about(best_id, TheoryOfMind.possession_predicate(str(goal.get("item_id", "")))) > 0.05:
+			utility = clampf(utility + 0.12, 0.06, 0.92)
+	else:
+		utility = clampf(0.14 + maxf(pressure, urgency) * 0.30 + best_score * 0.42, 0.06, 0.92)
 	return {
 		"action": "seek_holder_person",
 		"target": seek_tile,
