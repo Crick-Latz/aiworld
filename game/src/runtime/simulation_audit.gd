@@ -5,6 +5,9 @@ extends RefCounted
 ## RNG seed/state are strings so 64-bit values survive JSON consumers exactly.
 
 static func fingerprint(sim: IslandSimulation) -> Dictionary:
+	# P7.2C-R1 B3：导出前闭合残留 residence episode（标 censored——纯诊断，
+	# 不改 authoritative state；已在 _encode 排除表中）。
+	sim._censor_open_residence_episodes()
 	return {
 		"events_sha256": AgencyMeasure.canon(sim.events).sha256_text(),
 		"execution_sha256": AgencyMeasure.canon(sim.agency_execution_trace()).sha256_text(),
@@ -90,9 +93,11 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 						or key == "agency_commitment_consequences_enabled" \
 						or key == "agency_holder_evidence_reachability_enabled" \
 						or key == "_holder_funnel_diag" \
-					or key == "_objective_material_audit" \
-					or key == "_holder_arbitration_probe" \
-					or key == "agency_holder_reachability_enabled" \
+						or key == "_objective_material_audit" \
+						or key == "_holder_arbitration_probe" \
+						or key == "_holder_seek_arbitration_probe" \
+						or key == "_material_residence_probe" \
+						or key == "agency_holder_reachability_enabled" \
 						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)

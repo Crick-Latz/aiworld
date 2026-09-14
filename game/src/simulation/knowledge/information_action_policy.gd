@@ -233,6 +233,9 @@ static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
 	var origin: Vector2i = actor.get("tile", Vector2i.ZERO)
 	var asked: Array = goal.get("asked_actor_ids", [])
 	var excluded: Array = goal.get("excluded_target_ids", [])
+	# P7.2C-R1：本轮已找过的人不再重复找（stale last_seen 扑空后换目标）；
+	# 找到的人只进 sought——不排除后续 ask（ask 只看 asked/excluded）。
+	var sought: Array = goal.get("sought_actor_ids", [])
 	var best_id := ""
 	var best_score := 0.0
 	var best_seen := {}
@@ -240,7 +243,7 @@ static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
 	for other_id in actor.get("trust_of", {}):
 		var peer_id := str(other_id)
 		if peer_id == "" or peer_id == str(actor.get("id", "")) \
-				or asked.has(peer_id) or excluded.has(peer_id):
+				or asked.has(peer_id) or excluded.has(peer_id) or sought.has(peer_id):
 			continue
 		var seen := tom.last_seen_of(peer_id)
 		if seen.is_empty():

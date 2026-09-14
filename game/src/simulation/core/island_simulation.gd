@@ -64,6 +64,9 @@ var _objective_material_audit := {}
 # P7.2C C-0A：仲裁探针——_agency_prepare 写入本轮 best ask 候选（utility 最大），
 # 决策产出后对比胜者。write-only 诊断，绝不反向影响候选或决策。
 var _holder_arbitration_probe: Dictionary = {}
+var _holder_seek_arbitration_probe: Dictionary = {}
+# P7.2C-R1 B3：material residence episode probe（纯诊断；audit 排除）。
+var _material_residence_probe := {}
 
 # P7.2B-R1.1：opportunity funnel 诊断计数——纯加性、只写不读、不参与任何行为/
 # RNG/排序决策；不进入 state 编码（audit 排除），仅随 summary 输出供分析器消费。
@@ -446,16 +449,27 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_holder_reachability_enabled \
 			and str(decision.get("action", "")) == "seek_holder_person":
 		_holder_diag_inc("holder_seek_actions_selected")
-	# P7.2C C-0A：询问仲裁诊断——只在 ACTIVE HOLDER goal 存在且本轮有 ask 候选时记录。
-	# 读取已产生的 decision（不重算、不耗 RNG）；write-only。
-	if agency_holder_reachability_enabled \
-			and str(decision.get("action", "")) != "ask_item_holder" \
-			and _holder_arbitration_probe != null:
-		_record_inquiry_arbitration_loss(actor_view, decision)
-	if agency_holder_reachability_enabled \
-			and str(decision.get("action", "")) == "ask_item_holder" \
-			and _holder_arbitration_probe != null:
-		_record_inquiry_arbitration_win(decision)
+	# P7.2C-R1：ask/seek 仲裁分离——只读已产生的 decision；write-only；
+	# probe 为空字典时（无对应候选）不记录，seek 胜不进 ask loss。
+	if agency_holder_reachability_enabled:
+		var chosen_action := str(decision.get("action", ""))
+		if chosen_action == "ask_item_holder":
+			if not _holder_arbitration_probe.is_empty():
+				_record_inquiry_arbitration_win(decision)
+			if not _holder_seek_arbitration_probe.is_empty():
+				_record_seek_arbitration_loss(decision)
+		elif chosen_action == "seek_holder_person":
+			if not _holder_seek_arbitration_probe.is_empty():
+				_record_seek_arbitration_win(decision)
+			if not _holder_arbitration_probe.is_empty():
+				_record_inquiry_arbitration_loss(actor_view, decision)
+		else:
+			if not _holder_arbitration_probe.is_empty():
+				_record_inquiry_arbitration_loss(actor_view, decision)
+			if not _holder_seek_arbitration_probe.is_empty():
+				_record_seek_arbitration_loss(decision)
+		_holder_arbitration_probe = {}
+		_holder_seek_arbitration_probe = {}
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["action_travel_stall_ticks"] = 0
@@ -559,11 +573,21 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			else:
 				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
-			_holder_diag_inc("holder_ask_candidates_emitted", diag_candidates.size())
-			# P7.2C C-0A：best ask 候选探针（不改真实候选顺序）。
-			if agency_holder_reachability_enabled and not diag_candidates.is_empty():
-				var best_ask: Dictionary = diag_candidates[0]
-				for dc in diag_candidates:
+			# P7.2C-R1：诊断层按 action 字段拆分 ask / seek——seek 绝不
+			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
+			var diag_asks: Array = []
+			var diag_seeks: Array = []
+			for dc in diag_candidates:
+				if str((dc as Dictionary).get("action", "")) == "seek_holder_person":
+					diag_seeks.append(dc)
+				else:
+					diag_asks.append(dc)
+			_holder_diag_inc("holder_ask_candidates_emitted", diag_asks.size())
+			_holder_diag_inc("holder_seek_candidates_emitted", diag_seeks.size())
+			# ask funnel：只记 ask 候选的 tick 计数与 best-ask 探针。
+			if not diag_asks.is_empty():
+				var best_ask: Dictionary = diag_asks[0]
+				for dc in diag_asks:
 					if float((dc as Dictionary).get("utility", 0.0)) > float(best_ask.get("utility", 0.0)):
 						best_ask = dc
 				_holder_arbitration_probe = {
@@ -571,14 +595,29 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 					"item_id": str(information_goal.get("item_id", "")),
 					"best_utility": float(best_ask.get("utility", 0.0)),
 					"target_actor": str(best_ask.get("target_actor", "")),
+					"kind": "ASK",
 				}
 				_holder_diag_inc("holder_ask_candidate_ticks")
-				_record_objective_material_audit(id, str(information_goal.get("item_id", "")))
 			else:
 				_holder_arbitration_probe = {}
-			# P7.2C C-0B：objective audit 无论有无候选都采样（决策 tick 粒度）。
-			if agency_holder_reachability_enabled and diag_candidates.is_empty():
-				_record_objective_material_audit(id, str(information_goal.get("item_id", "")))
+			# seek funnel：独立探针与 tick 计数。
+			if agency_holder_reachability_enabled and not diag_seeks.is_empty():
+				var best_seek: Dictionary = diag_seeks[0]
+				for dc in diag_seeks:
+					if float((dc as Dictionary).get("utility", 0.0)) > float(best_seek.get("utility", 0.0)):
+						best_seek = dc
+				_holder_seek_arbitration_probe = {
+					"actor_id": id, "goal_id": str(information_goal.get("goal_id", "")),
+					"item_id": str(information_goal.get("item_id", "")),
+					"best_utility": float(best_seek.get("utility", 0.0)),
+					"target_actor": str(best_seek.get("target_actor", "")),
+					"kind": "SEEK",
+				}
+				_holder_diag_inc("holder_seek_candidate_ticks")
+			else:
+				_holder_seek_arbitration_probe = {}
+			# P7.2C C-0B：objective audit 在决策 tick 粒度采样（含 item 拆分）。
+			_record_objective_material_audit(id, str(information_goal.get("item_id", "")))
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -1171,6 +1210,21 @@ func _record_inquiry_arbitration_loss(actor_view: Dictionary, decision: Dictiona
 	_holder_diag_inc("ask_loss_utility_delta_count")
 	_holder_arbitration_probe = {}
 
+## P7.2C-R1：seek 仲裁 win/loss（独立 funnel；write-only）。
+func _record_seek_arbitration_win(decision: Dictionary) -> void:
+	_holder_diag_inc("seek_candidate_won")
+	_holder_diag_inc("seek_win_utility_sum", int(round(float(_holder_seek_arbitration_probe.get("best_utility", 0.0)) * 1000)))
+	_holder_diag_inc("seek_win_utility_count")
+
+func _record_seek_arbitration_loss(decision: Dictionary) -> void:
+	var winner := str(decision.get("action", ""))
+	var winner_utility := float(decision.get("utility", 0.0))
+	var best_seek := float(_holder_seek_arbitration_probe.get("best_utility", 0.0))
+	_holder_diag_inc("seek_candidate_lost")
+	_holder_diag_inc("seek_lost_to_" + _action_category(winner))
+	_holder_diag_inc("seek_loss_utility_delta_sum", int(round((winner_utility - best_seek) * 1000)))
+	_holder_diag_inc("seek_loss_utility_delta_count")
+
 ## C-0A：ask 候选存在且胜选——记录（write-only）。
 func _record_inquiry_arbitration_win(decision: Dictionary) -> void:
 	if _holder_arbitration_probe.is_empty():
@@ -1216,9 +1270,29 @@ func _record_objective_material_audit(requester_id: String, item_id: String) -> 
 		_obj_inc("objective_nearest_holder_distance_sum", nearest)
 		_obj_inc("objective_nearest_holder_count")
 	_obj_inc("objective_actual_holder_visible_ticks", visible)
-	_obj_inc("objective_actual_holder_known_last_seen_ticks", known_last_seen)
+	# P7.2C-R1：改名——last_seen 是位置记忆，不是持有知识。
+	_obj_inc("actual_holder_position_known_ticks", known_last_seen)
 	_obj_inc("objective_actual_holder_unknown_ticks", holder_count - known_last_seen)
 	_obj_inc("objective_audit_item_" + item_id + "_ticks")
+	# P7.2C-R1：item 拆分的 objective audit + 真实持有信念（ requester ToM > threshold）。
+	if holder_count > 0:
+		_obj_inc("objective_any_holder_" + item_id + "_ticks")
+	else:
+		_obj_inc("objective_no_holder_" + item_id + "_ticks")
+	_obj_inc("holder_count_sum_" + item_id, holder_count)
+	if nearest >= 0:
+		_obj_inc("nearest_distance_sum_" + item_id, nearest)
+		_obj_inc("nearest_distance_count_" + item_id)
+	_obj_inc("visible_actual_holder_" + item_id, visible)
+	var possession_belief := 0
+	if requester_tom != null:
+		for other_id in actors:
+			if str(other_id) == requester_id:
+				continue
+			var other: Dictionary = actors[other_id]
+			if int(other.get("inventory", {}).get(item_id, 0)) > 0 					and requester_tom.belief_about(str(other_id), TheoryOfMind.possession_predicate(item_id)) > 0.08:
+				possession_belief += 1
+	_obj_inc("actual_holder_positive_possession_belief_ticks", possession_belief)
 
 func _obj_inc(key: String, n: int = 1) -> void:
 	_objective_material_audit[key] = int(_objective_material_audit.get(key, 0)) + n
@@ -1234,16 +1308,59 @@ func _record_material_residence(actor_id: String, item_id: String, kind: String)
 	elif kind == "consumed":
 		_obj_inc("material_residence_close_" + item_id + "_" + actor_id)
 
-## C-0C：每 tick 携带统计（在 sync 全局时点调用一次）。
+## C-0C：每 tick 携带统计 + residence episode 追踪（0→正 记起点，正→0 记时长）。
+## 纯诊断：probe 从 audit state 排除；run 结束时未闭合的 episode 标 censored。
 func _record_material_carriage_ticks() -> void:
 	if not agency_holder_reachability_enabled:
 		return
 	for other_id in actors:
+		var oid := str(other_id)
 		var inv: Dictionary = actors[other_id].get("inventory", {})
-		if int(inv.get("wood", 0)) > 0:
-			_obj_inc("carriage_wood_actor_ticks")
-		if int(inv.get("shells", 0)) > 0:
-			_obj_inc("carriage_shells_actor_ticks")
+		for item_id in ["wood", "shells"]:
+			var positive := int(inv.get(item_id, 0)) > 0
+			if positive:
+				_obj_inc("carriage_" + item_id + "_actor_ticks")
+			var episode_key: String = oid + "|" + item_id
+			var episode: Dictionary = _material_residence_probe.get(episode_key, {})
+			if positive and episode.is_empty():
+				# 0 → positive：新 episode 开始。
+				_material_residence_probe[episode_key] = {"start_tick": tick}
+				_obj_inc("residence_episode_started_" + item_id)
+			elif not positive and not episode.is_empty():
+				# positive → 0：episode 闭合，记真实时长（min/max 用增量修正）。
+				var duration := tick - int(episode.get("start_tick", tick))
+				_obj_inc("residence_duration_sum_" + item_id, duration)
+				_obj_inc("residence_duration_count_" + item_id)
+				var prev_min := int(_objective_material_audit.get("residence_duration_min_" + item_id, 999999))
+				if duration < prev_min:
+					_objective_material_audit["residence_duration_min_" + item_id] = duration
+				var prev_max := int(_objective_material_audit.get("residence_duration_max_" + item_id, -1))
+				if duration > prev_max:
+					_objective_material_audit["residence_duration_max_" + item_id] = duration
+				_material_residence_probe.erase(episode_key)
+			# positive 且已有 episode：继续（carriage tick 已计）。
+
+## P7.2C-R1：run 结束/诊断导出时闭合残留 episode（标 censored，不假装消费完）。
+func _censor_open_residence_episodes() -> void:
+	for episode_key in _material_residence_probe.keys():
+		var parts := str(episode_key).split("|")
+		if parts.size() != 2:
+			continue
+		var item_id := str(parts[1])
+		var episode: Dictionary = _material_residence_probe[episode_key]
+		var duration := tick - int(episode.get("start_tick", tick))
+		_obj_inc("residence_censored_count_" + item_id)
+		_obj_inc("residence_censored_duration_sum_" + item_id, duration)
+		_material_residence_probe.erase(episode_key)
+
+## P7.2C-R1：craft 成功后对 consumed item 检查盈余（纯诊断；不改 craft 行为）。
+func _record_post_craft_surplus(actor_id: String, consumed_item: String) -> void:
+	if not agency_holder_reachability_enabled or not actors.has(actor_id):
+		return
+	var remaining := int(actors[actor_id].get("inventory", {}).get(consumed_item, 0))
+	if remaining > 0:
+		_obj_inc("post_craft_surplus_actor_events_" + consumed_item)
+		_obj_inc("post_craft_surplus_quantity_" + consumed_item, remaining)
 
 func agency_holder_funnel_diagnostics() -> Dictionary:
 	return _holder_funnel_diag.duplicate(true)
@@ -1799,6 +1916,9 @@ func _do_craft(id: String, a: Dictionary, ev: Array, action: Dictionary = {}) ->
 			"consumed_items": txn.get("consumed_items", {}), "produced_items": txn.get("produced_items", {}),
 			"capabilities_before": caps_before, "capabilities_after": caps_after})
 	AuthoritySystem.self_identity(a, "crafted")
+	# P7.2C-R1 B3：craft 后盈余（纯诊断；不改行为）。
+	for consumed_id in (txn.get("consumed_items", {}) as Dictionary).keys():
+		_record_post_craft_surplus(id, str(consumed_id))
 ## P6.3A-R1 §4：窄方法暴露只读知识 store（不进 actor Dictionary——首/后续 tick 同语义）
 func agency_knowledge_store() -> WorldKnowledgeStore:
 	if _agency_store == null:
