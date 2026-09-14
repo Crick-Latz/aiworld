@@ -1,7 +1,19 @@
 # UI-R1 2D 像素观察原型 —— 本地验证记录
 
+## 顶层状态（v3.1 closeout）
+
+- 分支：`work/ui-r1-2d-pixel-observer`（基线 main `d693a2f`）
+- 最终状态：地形 100% 自制（Kenney 全撤回待逐 tile 人工批准）、关系/ToM 两层分离、
+  阻挡物件零上 walkable（营地/工坊结构=Planned）、游戏式 HUD（Inspector 随选中显隐、
+  时间线真收起 16px、顶栏菜单化）、生成器入库可复现、observer-only 48×36 小世界
+- v3.1 完整回归：PASS 42 套件 / 1269 断言 / 18 python（详见下文 v3.1 Closeout 记录）
+- **历史轮次（v1/v2/v3）的过程描述见下方 Historical Notes，其中与最终状态冲突的
+  （如"Kenney 混合已并入""营地建筑已摆放"）一律以本节为准——那些是当时状态。**
+
+## Historical Notes（过程记录，非当前状态）
+
 - 分支：`work/ui-r1-2d-pixel-observer`（基线 main `d693a2f`；v2 迭代含 48×36 小地图、
-  6 页 Inspector、Kenney CC0 混合地形、整数倍放大）
+  6 页 Inspector、Kenney CC0 混合地形【v3 已撤回】、整数倍放大）
 - 日期：2026-09-13
 - 引擎：Godot 4.7.2（`tools/Godot_v4.7.2-stable_win64_console.exe`，Windows）
 - 范围：presentation / scene / assets-prep / inspector；不触碰 simulation / runtime / config / scripts
@@ -113,3 +125,22 @@
    证据 .tmp/ui-r1-strict-evidence/）；9 fixtures、island/wander 启动、7 个定向
    套件（observer_sim/island_sim/execution_receipt/p0_cognition/p1_social/
    camera_rotation/run_all 共 278 断言）与 module_boundaries 全部复验通过。
+
+
+## UI-R1 v3.1 Closeout 记录
+
+1. **BottomPanel 真收起**：v3 的 visible=false 只藏内容页，面板仍占 74px（约 27% 画布）。
+   v3.1 以 offset 动态切换：collapsed=16px（仅 tab 条）/ expanded=74px；无选中 + 收起时
+   画布世界占比 ≈88.1%（顶栏 16 + tab 条 16 = 32/270 遮挡），满足 ≥80%。
+2. **walkable 灌木移除**：bush/berry_bush 具视觉阻挡性，从草地散布分支删除
+   （资产保留 RESERVED，待 non-walkable footprint）；walkable 仅 flower/weed/sapling/
+   crop/shell/driftwood。
+3. **Fresh Import + 全部截图重拍**：v3 截图被发现仍含已撤回的 Kenney tile——根因是
+   regen 后未重新 --import，运行时渲染 .godot 缓存图集。v3.1 清理 import cache 后
+   fresh import，从最终资源状态重拍全部 7 张（旧截图全部作废）。教训：**每次动生成器
+   输出后必须 --import 再截图**。
+4. ASSET_MANIFEST（tree.png→tree_oak/pine、RESERVED 标注、POI=poi_flag、Kenney 11 ID
+   全量）、ui-architecture（Current/Planned 重写）、本文件（顶层 v3.1 + 历史折叠）同步。
+5. **v3.1 后完整回归（已提交状态 2bb8bdc 上运行）：PASS 42 套件 / 1269 断言 / 18 python
+   测试**；资产复验 48 张自制 PNG generated==committed 零失配（logs/asset-repro.txt）；
+   world-clean 像素级来源自证（水体/草地主色=自制调色板，Kenney 灰蓝命中 0.01% 噪声级）。

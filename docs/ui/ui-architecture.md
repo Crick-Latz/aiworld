@@ -14,10 +14,12 @@ assets-prep / inspector，不改模拟机制。
   喂给 IslandSimulation 的地图输入**——observer 世界与 headless/default profile 的
   64×64 世界不是同一张图、不逐状态等价；island 观察相关测试套件在 48×36 下全绿，
   headless 回归路径不受影响。
-- 六分区：海滩/草地/树林由生成地图自然呈现；**营地**（小木屋/篝火/箱/桶/柜/井/围栏）、
-  **农地**（耕地 + 两档作物）、**工坊**（工作台/锯木台/木堆/石堆）在出生点邻域
-  确定性布景（`World2DProjector._dress_zones`，稳定排序不耗 RNG）。
-- 布景物件纯视觉（无碰撞），NPC 可穿过——原型已知限制。
+- 布景纪律（v3.1 生效）：
+  **Current**：自然海滩/草地/树林/岩区（地图生成呈现）+ 轻量农地（耕地 tile + 小作物）
+  + 轻装饰（花/杂草/幼苗/贝壳/漂木）+ POI 轻木牌（poi_flag，可穿过）。
+  **Planned**：营地建筑群（木屋/篝火/箱柜/围栏）、工坊物件（工作台/锯木台/木石堆）——
+  等机制线提供可分配的 non-walkable footprint 后接入；当前**不摆放**任何阻挡语义物件
+  （`World2DProjector._dress_zones`，稳定排序不耗 RNG）。
 
 ## 像素规格（明确选择）
 

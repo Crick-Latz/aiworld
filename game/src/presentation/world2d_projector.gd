@@ -126,11 +126,11 @@ static func _classify(map_controller, x: int, z: int, size: Vector2i) -> Diction
 			return forest_out
 		if _stable_hash(x, z, "dirt") % 23 == 0:
 			return {"tile": "dirt"}
+		# v3.1：walkable 草地只放可穿过的轻装饰；bush/berry_bush 是视觉阻挡性灌木，
+		# 资产保留但不再投影到可行走格（待 non-walkable footprint 机制）
 		var grass_out := {"tile": "grass_a" if alt else "grass_b"}
 		var pick := _stable_hash(x, z, "deco")
-		if pick % 29 == 0:
-			grass_out["prop"] = "berry_bush" if _stable_hash(x, z, "berry") % 2 == 0 else "bush"
-		elif pick % 43 == 0:
+		if pick % 43 == 0:
 			grass_out["prop"] = "flower"
 		elif pick % 47 == 0:
 			grass_out["prop"] = "weed"

@@ -17,7 +17,7 @@
 
 | asset | source | license | author | modified | where used |
 |---|---|---|---|---|---|
-| tile_0089/0011/0012/0094/0100/0101/0106/0112/0113 | kenney.nl/assets/tiny-farm | CC0 1.0 | Kenney | 未修改（vendor 原样） | **无**（v2 误用已移除；待 contact sheet 人工批准） |
+| tile_0089 / 0011 / 0012 / 0093 / 0094 / 0100 / 0101 / 0106 / 0107 / 0112 / 0113（全部 11 个 vendor 文件） | kenney.nl/assets/tiny-farm | CC0 1.0 | Kenney | 未修改（vendor 原样） | **无**（v2 误用已全部移除；待 contact sheet 逐 tile 人工批准） |
 
 **当前游戏画面内全部为自制占位像素图。** 所有 PNG 由
 `game/assets/pixel/tools/generate_placeholders.py`（Python 3 + Pillow）确定性生成，
@@ -54,15 +54,17 @@ shallow_a/b、deep_a/b、rock_ground_a/b、cliff_edge、gravel、foam_edge、san
 
 | 资产 | 尺寸 | 授权 | 作者 | 修改 | 使用处 |
 |---|---|---|---|---|---|
-| `props/tree.png` | 16×24 | 项目自制 | UI-R1 生成脚本 | 否 | 树障碍格 |
-| `props/lighthouse.png` | 16×24 | 项目自制 | UI-R1 生成脚本 | 否 | old_lighthouse POI |
+| `props/tree_oak.png` | 16×24 | 项目自制 | UI-R1 生成脚本 | 否 | 树障碍格（阔叶） |
+| `props/tree_pine.png` | 16×24 | 项目自制 | UI-R1 生成脚本 | 否 | 树障碍格（松，哈希混布） |
+| `props/lighthouse.png` | 16×24 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（当前 world usage = NONE；待 non-walkable footprint）** |
 | `props/stump.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 预留（砍伐后树桩） |
 | `props/rock.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 岩石障碍格 |
-| `props/bush.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 草地散布装饰 |
-| `props/berry_bush.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 草地散布装饰 |
-| `props/campfire.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 出生点营火 |
-| `props/tent.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | post_house POI |
-| `props/market_stall.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | tide_market POI |
+| `props/bush.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（阻挡感灌木，不投影 walkable；待 non-walkable footprint）** |
+| `props/berry_bush.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（同上）** |
+| `props/campfire.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（当前 world usage = NONE）** |
+| `props/tent.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（当前 world usage = NONE）** |
+| `props/market_stall.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **RESERVED（当前 world usage = NONE）** |
+| `props/poi_flag.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | **POI 标记（全部 POI 当前用轻木牌）** |
 | `props/shell.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 沙滩散布装饰 |
 | `props/driftwood.png` | 16×16 | 项目自制 | UI-R1 生成脚本 | 否 | 沙滩散布装饰 |
 

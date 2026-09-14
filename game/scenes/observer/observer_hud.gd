@@ -22,6 +22,8 @@ var _inspector_tab := "overview"
 var _timeline_tab := "events"
 var _timeline_autopicked := false
 var _timeline_expanded := false
+const TIMELINE_COLLAPSED_HEIGHT := 16
+const TIMELINE_EXPANDED_HEIGHT := 74
 
 @onready var world_label: Label = $Root/TopBar/TopMargin/TopHBox/WorldLabel
 @onready var tick_label: Label = $Root/TopBar/TopMargin/TopHBox/TickLabel
@@ -34,6 +36,7 @@ var _timeline_expanded := false
 @onready var menu_btn: Button = $Root/TopBar/TopMargin/TopHBox/MenuBtn
 @onready var inspector_panel: PanelContainer = $Root/InspectorPanel
 @onready var bottom_pages: Control = $Root/BottomPanel/BotMargin/BotVBox/PagesH
+@onready var bottom_panel: PanelContainer = $Root/BottomPanel
 @onready var sel_name: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/SelName
 @onready var sel_status: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/StatusLabel
 @onready var goal_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/GoalLabel
@@ -75,7 +78,7 @@ func _ready() -> void:
 	for tab_name in TIMELINE_TABS:
 		timeline_pages[tab_name] = $Root/BottomPanel/BotMargin/BotVBox/PagesH.get_node(NodePath(String(tab_name).capitalize() + "Label")) as Control
 	inspector_panel.visible = false # 未选中即收起（v3）
-	bottom_pages.visible = false # 时间线默认收起
+	_apply_timeline_collapse(false) # 默认收起：面板真的只有 tab 条高度
 	_set_inspector_tab(_inspector_tab)
 	_set_timeline_tab(_timeline_tab)
 
@@ -92,20 +95,23 @@ func _on_menu_id(id: int) -> void:
 ## 点击 tab：未展开或切换页 → 展开；再次点击当前页 → 收回
 func _on_timeline_tab_pressed(tab_name: String) -> void:
 	if _timeline_expanded and _timeline_tab == tab_name:
-		_timeline_expanded = false
-		bottom_pages.visible = false
+		_apply_timeline_collapse(false)
 	else:
-		_timeline_expanded = true
-		bottom_pages.visible = true
+		_apply_timeline_collapse(true)
 		_set_timeline_tab(tab_name)
+
+## 收起时 BottomPanel 的 offset_top 收到 -16（只剩 tab 条），否则面板仍占 74px 挡世界
+func _apply_timeline_collapse(expanded: bool) -> void:
+	_timeline_expanded = expanded
+	bottom_pages.visible = expanded
+	bottom_panel.offset_top = -TIMELINE_EXPANDED_HEIGHT if expanded else -TIMELINE_COLLAPSED_HEIGHT
 
 ## 预览/截图工具入口
 func set_inspector_tab(tab_name: String) -> void:
 	_set_inspector_tab(tab_name)
 
 func set_timeline_tab(tab_name: String) -> void:
-	_timeline_expanded = true
-	bottom_pages.visible = true
+	_apply_timeline_collapse(true)
 	_set_timeline_tab(tab_name)
 
 func _set_inspector_tab(tab_name: String) -> void:
