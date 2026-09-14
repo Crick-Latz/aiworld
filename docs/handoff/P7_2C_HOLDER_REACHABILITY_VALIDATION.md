@@ -149,3 +149,58 @@ next bottleneck: C3 材料驻留（CONFIRMED：86.2% 无持有 + 18.3tick 驻留
   "找人失败后换目标/更新记忆"机制（样本仅 5）。
 - EXPLORATION 作为主要仲裁胜者：其 utility 结构（好奇心驱动）与信息行动的
   语义重叠值得 C3 之后复查——探索本身也是一种信息获取。
+
+---
+
+# P7.2C-R1 Seek Bookkeeping & Diagnostic Integrity（返修记录）
+
+GPT Round 1 复审：C-0/C1/C2 均 CHANGES_REQUIRED（三个 blocker）。全部修复（d5307fc / 3a15cc7）。
+PR #9（P7.2B）已按独立授权正常合并（merge commit 84cab8e）。
+
+## 修复内容
+
+### B1：seek bookkeeping 分流
+- on_action_complete 按 match 分流：seek_holder_person 写 seeks/sought_actor_ids
+  （_dynamic_list 动态创建——flag-off 的旧 goal shape 逐位不变），不碰 asks/asked_actor_ids。
+- _build_seek_holder 排除 self/asked/excluded/**sought**（stale 扑空后换人找）。
+- 找到的人进 sought 不进 asked——下一决策 tick 可正常 ask。
+
+### B2：诊断漏斗 ask/seek 分离
+- 诊断层按 action 字段过滤：ask_item_holder → ask funnel；seek_holder_person → seek funnel。
+- 独立 probe（kind 字段）；seek 胜不进 ask loss、ask 胜不进 seek loss。
+- 不变量测试锁定：eligible peer → 只产 ask；无 eligible + last_seen → 只产 seek；
+  ask_candidate_ticks <= eligible_ticks。
+
+### B3：真实 material residence episode tracker
+- carriage tick 驱动：0→正记 episode 起点；正→0 闭合记时长（sum/count/min/max）。
+- SimulationAudit.fingerprint() 调用 _censor_open_residence_episodes() 导出时闭合残留
+  （censored 标记，不假装消费完）。
+- post-craft surplus 在 _do_craft 真实结算点记录（per consumed item）。
+- objective audit 拆分 per-item（any/no_holder_<item>_ticks、distance_sum/count_<item>、
+  visible_actual_holder_<item>），改名 actual_holder_position_known，新增
+  actual_holder_positive_possession_belief（ToM belief > threshold）。
+
+## 修正后自然实验漏斗（同 10 seed，20/20 replay verified）
+
+### CORRECTED ask funnel（此前 272 candidate 中 85 实为 seek）
+
+
+### CORRECTED seek funnel（独立）
+
+
+### 真实 residence duration
+
+
+### item-specific objective audit
+
+
+## 修正后瓶颈判定
+
+
+
+## P7.2B PR #9 merge 后状态
+
+
+
+## 验证
+
