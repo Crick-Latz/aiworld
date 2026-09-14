@@ -54,11 +54,7 @@ const TIMELINE_EXPANDED_HEIGHT := 74
 @onready var menu_btn: Button = $Root/TopBar/TopMargin/TopHBox/MenuBtn
 @onready var sel_name: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/SelName
 @onready var sel_status: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/StatusLabel
-@onready var goal_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/GoalLabel
-@onready var location_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/LocationLabel
-@onready var inventory_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/InventoryLabel
-@onready var needs_label: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/NeedsLabel
-@onready var why_overview: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/WhyOverview
+@onready var needs_label: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage
 @onready var events_label: RichTextLabel = $Root/BottomPanel/BotMargin/BotVBox/PagesH/EventsLabel
 @onready var hint_label: Label = $Root/HintLabel
 @onready var inspector_panel: PanelContainer = $Root/InspectorPanel
@@ -234,18 +230,7 @@ func _render_selection(sel) -> void:
 	_last_brain = sel
 	sel_name.text = str(sel.get("display_name", "-"))
 	sel_status.text = str(sel.get("status_text", sel.get("activity_text", "-")))
-	goal_label.text = "目标：%s" % (str(sel.get("goal_text", "")) if str(sel.get("goal_text", "")) != "" else "—")
-	location_label.text = "位置：%s" % str(sel.get("location_text", "—"))
-	var inv: Array = sel.get("inventory_items", [])
-	if inv.is_empty():
-		inventory_label.text = "物资：—"
-	else:
-		var parts: Array = []
-		for item in inv:
-			parts.append("%s×%d" % [str(item.get("id", "?")), int(item.get("count", 0))])
-		inventory_label.text = "物资：%s [事实]" % "、".join(parts)
 	_render_needs(sel)
-	_render_why(sel)
 	_render_decision(sel)
 	_render_plan(sel)
 	_render_mind(sel)
@@ -257,7 +242,19 @@ func _render_selection(sel) -> void:
 func _render_needs(sel: Dictionary) -> void:
 	var needs: Dictionary = sel.get("needs", {})
 	var rows: Array = needs.get("rows", [])
-	var lines: Array = ["[color=%s]── 需求 ──[/color]" % C_GOLD]
+	var lines: Array = []
+	lines.append("目标：%s" % (str(sel.get("goal_text", "")) if str(sel.get("goal_text", "")) != "" else "—"))
+	lines.append("位置：%s" % str(sel.get("location_text", "—")))
+	var inv: Array = sel.get("inventory_items", [])
+	if inv.is_empty():
+		lines.append("物资：—")
+	else:
+		var parts: Array = []
+		for item in inv:
+			parts.append("%s×%d" % [str(item.get("id", "?")), int(item.get("count", 0))])
+		lines.append("物资：%s %s" % ["、".join(parts), _prov("objective")])
+	lines.append("")
+	lines.append("[color=%s]── 需求 ──[/color]" % C_GOLD)
 	for row in rows:
 		var note := ""
 		if str(row.get("key", "")) == "fatigue":
@@ -276,6 +273,8 @@ func _render_needs(sel: Dictionary) -> void:
 	else:
 		var q: Dictionary = questions[0]
 		lines.append("[color=%s]当前最重要问题：[/color]%s %s" % [C_GOLD, _question_text(q), _prov("subjective")])
+	lines.append("")
+	lines.append(_why_bbcode(sel))
 	_set_rtl(needs_label, "\n".join(lines))
 
 func _question_text(q: Dictionary) -> String:
@@ -285,18 +284,17 @@ func _question_text(q: Dictionary) -> String:
 	return "关于 %s 的疑问（%s）" % [str(q.get("about_name", str(q.get("about", "")))), str(q.get("kind", ""))]
 
 ## Why chain（确定性；节点带 provenance；LLM 不参与）
-func _render_why(sel: Dictionary) -> void:
+func _why_bbcode(sel: Dictionary) -> String:
 	var chain: Array = sel.get("why_chain", [])
 	if chain.is_empty():
-		_set_rtl(why_overview, "[color=%s]── 为什么这样做？──[/color]\n[color=%s]暂无链（等待决策留痕）[/color]" % [C_GOLD, C_DIM])
-		return
+		return "[color=%s]── 为什么这样做？──[/color]\n[color=%s]暂无链（等待决策留痕）[/color]" % [C_GOLD, C_DIM]
 	var lines: Array = ["[color=%s]── 为什么这样做？──[/color]" % C_GOLD]
 	for i in range(chain.size()):
 		var node: Dictionary = chain[i]
 		lines.append("%s %s" % [str(node.get("label", "")), _prov(str(node.get("provenance", "subjective")))])
 		if i < chain.size() - 1:
 			lines.append("[color=%s]  ↓[/color]" % C_DIM)
-	_set_rtl(why_overview, "\n".join(lines))
+	return "\n".join(lines)
 
 ## 决策页：当前决定/为什么/行动/阻塞/下一步 + 真实候选效用表 + Raw 节选
 func _render_decision(sel: Dictionary) -> void:

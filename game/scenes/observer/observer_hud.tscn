@@ -184,36 +184,9 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 2
 
-[node name="OverviewPage" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+[node name="OverviewPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 2
-
-[node name="GoalLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-autowrap_mode = 3
-text = "目标：—"
-
-[node name="LocationLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-text = "位置：—"
-
-[node name="InventoryLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-autowrap_mode = 3
-text = "物资：—"
-
-[node name="NeedsLabel" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-size_flags_vertical = 3
-bbcode_enabled = true
-
-[node name="WhyOverview" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-size_flags_vertical = 6
 bbcode_enabled = true
 
 [node name="DecisionPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
