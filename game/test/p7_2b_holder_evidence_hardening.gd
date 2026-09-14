@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_c0_arbitration_and_objective_audit()
 	_test_r1_seek_bookkeeping_split()
 	_test_r2_funnel_split_invariants()
+	_test_r11_residence_regression()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -514,3 +515,85 @@ func _test_r2_funnel_split_invariants() -> void:
 	_check("r2_no_eligible_produces_seek_not_ask",
 		seek2 > before_seek and ask2 == 0,
 		"seek=%d→%d ask=%d" % [before_seek, seek2, ask2])
+
+# ── P7.2C-R1.1：精确 residence episode 回归（受控多段 + censored + 不变量）──
+
+func _test_r11_residence_regression() -> void:
+	var created := SimulationBootstrap.create(78110, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var actor: Dictionary = sim.actors[str(ids[0])]
+	var audit := sim.agency_objective_material_audit()
+	# 第 1 段：tick 10 开始，tick 15 闭合 → duration=5。
+	sim.tick = 10
+	sim._record_material_carriage_ticks()  # 无库存：不开始
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()  # 开始 episode
+	_check("r11_episode1_started",
+		int(sim.agency_objective_material_audit().get("residence_episode_started_wood", 0)) == 1)
+	for t in range(11, 15):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 15
+	actor["inventory"] = {"wood": 0}
+	sim._record_material_carriage_ticks()  # 闭合
+	audit = sim.agency_objective_material_audit()
+	_check("r11_episode1_closed",
+		int(audit.get("residence_duration_count_wood", 0)) == 1
+		and int(audit.get("residence_duration_sum_wood", -1)) == 5
+		and int(audit.get("residence_duration_min_wood", -1)) == 5
+		and int(audit.get("residence_duration_max_wood", -1)) == 5)
+	_check("r11_episode1_no_negative",
+		int(audit.get("residence_duration_min_wood", -1)) >= 0)
+	# 第 2 段：duration=9。
+	sim.tick = 20
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()
+	for t in range(21, 29):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 29
+	actor["inventory"] = {}
+	sim._record_material_carriage_ticks()
+	audit = sim.agency_objective_material_audit()
+	_check("r11_episode2_accumulated",
+		int(audit.get("residence_duration_count_wood", 0)) == 2
+		and int(audit.get("residence_duration_sum_wood", -1)) == 14
+		and int(audit.get("residence_duration_min_wood", -1)) == 5
+		and int(audit.get("residence_duration_max_wood", -1)) == 9)
+	# censored：start=35，run end=40 → censored duration=5。
+	sim.tick = 35
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()
+	for t in range(36, 40):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 40
+	SimulationAudit.fingerprint(sim)  # 触发 censor
+	audit = sim.agency_objective_material_audit()
+	_check("r11_censored_correct",
+		int(audit.get("residence_censored_count_wood", 0)) == 1
+		and int(audit.get("residence_censored_duration_sum_wood", -1)) == 5
+		and int(audit.get("residence_duration_count_wood", 0)) == 2)  # closed 不增
+	# 样本列表。
+	var samples: Array = audit.get("residence_duration_samples_wood", [])
+	_check("r11_samples_recorded", samples.size() == 2 and samples.has(5) and samples.has(9))
+	# 守恒不变量：carriage actor-ticks >= closed sum + censored sum
+	# （开放 episode 贡献的 carriage 尚未闭合；等号在全部闭合时成立）。
+	_check("r11_conservation_holds",
+		int(audit.get("carriage_wood_actor_ticks", -1)) >=
+			int(audit.get("residence_duration_sum_wood", 0))
+			+ int(audit.get("residence_censored_duration_sum_wood", 0)),
+		"carriage=%d closed=%d censored=%d" % [int(audit.get("carriage_wood_actor_ticks", -1)),
+			int(audit.get("residence_duration_sum_wood", 0)),
+			int(audit.get("residence_censored_duration_sum_wood", 0))])
+	# 材料流 ledger。
+	actor["inventory"] = {"wood": 3}
+	sim._record_material_consumed(str(ids[0]), "wood", "SHELTER", 2)
+	sim._record_material_acquired(str(ids[0]), "wood", 1)
+	audit = sim.agency_objective_material_audit()
+	_check("r11_flow_ledger_counts",
+		int(audit.get("material_consumed_units_wood_SHELTER", 0)) == 2
+		and int(audit.get("material_acquired_units_wood", 0)) == 1
+		and int(audit.get("successful_consumption_events_wood_SHELTER", 0)) == 1)
