@@ -22,6 +22,9 @@ func _run() -> void:
 	_test_r1_seek_bookkeeping_split()
 	_test_r2_funnel_split_invariants()
 	_test_r11_residence_regression()
+	_test_r2r1_spatial_only_observation()
+	_test_r2r1_candidate_local_boost()
+	_test_r2r1_c2_semantics()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -597,3 +600,132 @@ func _test_r11_residence_regression() -> void:
 		int(audit.get("material_consumed_units_wood_SHELTER", 0)) == 2
 		and int(audit.get("material_acquired_units_wood", 0)) == 1
 		and int(audit.get("successful_consumption_events_wood_SHELTER", 0)) == 1)
+
+# ── P7.2C-R2-R1 K1：possession observation 严格 spatial-only ──
+
+func _test_r2r1_spatial_only_observation() -> void:
+	var pair := _pair(79001)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_possession_observation_enabled = true
+	sim.agency_holder_reachability_enabled = true
+	var requester_id := str(pair["requester_id"])
+	var giver_id := str(pair["giver_id"])
+	var requester: Dictionary = pair["requester"]
+	var giver: Dictionary = pair["giver"]
+	# 场景 1：spatial witness（近距离）→ possession evidence 产生。
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {"shells": 2}
+	var belief_before := (requester["tom"] as TheoryOfMind).belief_about(giver_id,
+		TheoryOfMind.possession_predicate("shells"))
+	# 模拟一个事件让 perception loop 处理（B 在 A 附近做某事）。
+	var seq1 := sim._emit("socialized", giver_id, "B chats", {"to_id": requester_id})
+	var belief_after := (requester["tom"] as TheoryOfMind).belief_about(giver_id,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r1_spatial_witness_produces_possession",
+		belief_after > belief_before,
+		"before=%.3f after=%.3f" % [belief_before, belief_after])
+	# 场景 2：direct_recipient 但 spatial 不可感知 → 不得产生 possession evidence。
+	var pair2 := _pair(79002)
+	var sim2: IslandSimulation = pair2["sim"]
+	sim2.agency_holder_possession_observation_enabled = true
+	sim2.agency_holder_reachability_enabled = true
+	sim2.agency_commitment_consequences_enabled = true
+	var req2 := str(pair2["requester_id"])
+	var giv2 := str(pair2["giver_id"])
+	var requester2: Dictionary = pair2["requester"]
+	var giver2: Dictionary = pair2["giver2"] if pair2.has("giver2") else pair2["giver"]
+	requester2["tile"] = Vector2i(10, 10)
+	sim2.actors[giv2]["tile"] = Vector2i(60, 60)  # 远处——不可感知
+	sim2.actors[giv2]["inventory"] = {"shells": 2}
+	var belief2_before := (requester2["tom"] as TheoryOfMind).belief_about(giv2,
+		TheoryOfMind.possession_predicate("shells"))
+	# 模拟 COMMITMENT 事件（direct_recipient 路径，非 spatial）。
+	sim2._emit_commitment_event("COMMITMENT_CREATED", {
+		"commitment_id": "c1", "debtor_id": req2, "creditor_id": giv2,
+		"object_id": "shells", "quantity": 1, "status": "ACTIVE",
+	}, {})
+	var belief2_after := (requester2["tom"] as TheoryOfMind).belief_about(giv2,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r1_direct_recipient_no_possession_leak",
+		belief2_after == belief2_before,
+		"before=%.3f after=%.3f" % [belief2_before, belief2_after])
+	# 场景 3：flag off → 不产生。
+	var pair3 := _pair(79003)
+	var sim3: IslandSimulation = pair3["sim"]
+	var req3 := str(pair3["requester_id"])
+	var giv3 := str(pair3["giver_id"])
+	var req_a: Dictionary = pair3["requester"]
+	sim3.agency_holder_possession_observation_enabled = false  # flag off
+	sim3.agency_material_requests_enabled = true
+	sim3.actors[giv3]["inventory"] = {"shells": 2}
+	sim3.actors[giv3]["tile"] = Vector2i(11, 10)
+	var belief3_before := (req_a["tom"] as TheoryOfMind).belief_about(giv3,
+		TheoryOfMind.possession_predicate("shells"))
+	sim3._emit("socialized", giv3, "B chats", {"to_id": req3})
+	var belief3_after := (req_a["tom"] as TheoryOfMind).belief_about(giv3,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r1_flag_off_no_possession", belief3_after == belief3_before)
+
+# ── P7.2C-R2-R1 K2：candidate-local boost（order-independent）──
+
+func _test_r2r1_candidate_local_boost() -> void:
+	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
+	var goal := {"parent_blockedness": 0.8, "request_urgency": 0.8,
+		"created_tick": 0, "causal_arbitration_enabled": true,
+		"item_id": "shells", "asked_actor_ids": [], "excluded_target_ids": [],
+		"holder_reachability_enabled": true}
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {"b": 500.0, "c": 500.0, "d": 500.0},
+		"tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"sociability": 0.5, "conflict_avoidance": 0.2}, {}),
+		"others_visible": [], "needs": {}}
+	# B 是已知持有者；C/D 未知。
+	(actor["tom"] as TheoryOfMind).add_evidence("b",
+		TheoryOfMind.possession_predicate("shells"), 1.0, 0.9, 1, 10)
+	var u_b := policy.holder_resolution_value(goal, actor, "b", 0.8, true)
+	var u_c := policy.holder_resolution_value(goal, actor, "c", 0.8, false)
+	var u_d := policy.holder_resolution_value(goal, actor, "d", 0.8, false)
+	_check("r2r1_known_holder_gets_boost", u_b > u_c,
+		"u_b=%.3f u_c=%.3f" % [u_b, u_c])
+	_check("r2r1_unknown_peers_equal", is_equal_approx(u_c, u_d),
+		"u_c=%.3f u_d=%.3f" % [u_c, u_d])
+	# order-independent：无论调用顺序如何，每个 peer 的 utility 不变。
+	var u_b_rev := policy.holder_resolution_value(goal, actor, "b", 0.8, true)
+	var u_c_rev := policy.holder_resolution_value(goal, actor, "c", 0.8, false)
+	_check("r2r1_order_independent",
+		is_equal_approx(u_b, u_b_rev) and is_equal_approx(u_c, u_c_rev))
+	# goal dict 不含临时 boost 字段。
+	_check("r2r1_no_goal_dict_pollution",
+		not goal.has("possession_belief_boost"))
+
+# ── P7.2C-R2-R1 K5：C2 受控行为测试 ──
+
+func _test_r2r1_c2_semantics() -> void:
+	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 30,
+		"trust_of": {"b": 0.0}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"sociability": 0.5, "conflict_avoidance": 0.2}, {}),
+		"others_visible": [], "needs": {}}
+	var base_goal := {"parent_blockedness": 0.5, "request_urgency": 0.5,
+		"created_tick": 0, "causal_arbitration_enabled": true, "item_id": "shells"}
+	# 1）urgency 上升 → utility 不降。
+	var low := policy.holder_resolution_value(base_goal, actor, "b", 0.3, false)
+	base_goal["request_urgency"] = 0.9
+	var high := policy.holder_resolution_value(base_goal, actor, "b", 0.3, false)
+	_check("r2r1_c2_urgency_monotone", high >= low,
+		"low=%.3f high=%.3f" % [low, high])
+	# 2）blockedness 上升 → 不降。
+	base_goal["request_urgency"] = 0.5
+	base_goal["parent_blockedness"] = 0.2
+	var bl := policy.holder_resolution_value(base_goal, actor, "b", 0.5, false)
+	base_goal["parent_blockedness"] = 0.9
+	var bh := policy.holder_resolution_value(base_goal, actor, "b", 0.5, false)
+	_check("r2r1_c2_blockedness_monotone", bh >= bl,
+		"low=%.3f high=%.3f" % [bl, bh])
+	# 3）上界不硬锁。
+	base_goal["parent_blockedness"] = 1.0
+	base_goal["request_urgency"] = 1.0
+	var max_u := policy.holder_resolution_value(base_goal, actor, "b", 1.0, true)
+	_check("r2r1_c2_never_hardlocked", max_u <= 0.95 and max_u >= 0.5,
+		"max=%.3f" % max_u)
