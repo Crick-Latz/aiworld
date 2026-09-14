@@ -306,9 +306,13 @@ func step() -> Array:
 	if agency_holder_evidence_reachability_enabled:
 		_holder_goals_sync_all()
 	# P7.2C C-0C：每 tick 携带统计（write-only；不读取、不参与行为）。
+	# P7.2C-R2-R1 K3：initial stock 在第一次 step 的行为发生前记录一次
+	# （diagnostic-only sentinel，不入 authoritative state；旧 tick==0 写法
+	# 在 tick+=1 之后永不成立）。
 	if agency_holder_reachability_enabled:
-		if tick == 0:
+		if not _objective_material_audit.has("_material_initial_stock_recorded"):
 			_record_material_initial_stock()
+			_objective_material_audit["_material_initial_stock_recorded"] = true
 		_record_material_carriage_ticks()
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
@@ -452,6 +456,15 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_holder_evidence_reachability_enabled \
 			and str(decision.get("action", "")) == "ask_item_holder":
 		_holder_diag_inc("holder_ask_actions_selected")
+		# K4：selected ask 是否指向 positive-belief peer。
+		var sel_target := str(decision.get("target_actor", ""))
+		var sel_tom: TheoryOfMind = a.get("tom", null)
+		var sel_item := str((agency_extra.get("information_goal", {}) as Dictionary).get("item_id", ""))
+		if sel_tom != null and sel_item != "" and sel_tom.belief_about(sel_target,
+				TheoryOfMind.possession_predicate(sel_item)) > 0.05:
+			_holder_diag_inc("selected_ask_to_positive_belief_peer")
+		else:
+			_holder_diag_inc("selected_ask_to_unknown_peer")
 	if agency_holder_reachability_enabled \
 			and str(decision.get("action", "")) == "seek_holder_person":
 		_holder_diag_inc("holder_seek_actions_selected")
@@ -579,6 +592,37 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 				_holder_diag_inc("holder_ticks_with_eligible_peers")
 			else:
 				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
+			# P7.2C-R2-R1 K4：knowledge-at-request funnel（纯诊断）。
+			var item_id_str := str(information_goal.get("item_id", ""))
+			var req_tom: TheoryOfMind = diag_view.get("tom", null)
+			var pos_belief_peers := 0
+			var fresh_belief_peers := 0
+			var belief_with_last_seen := 0
+			var latest_obs_tick := -1
+			if req_tom != null and item_id_str != "":
+				var pred := TheoryOfMind.possession_predicate(item_id_str)
+				for other_id in actors:
+					var oid := str(other_id)
+					if oid == id or oid == "":
+						continue
+					if req_tom.belief_about(oid, pred) > 0.05:
+						pos_belief_peers += 1
+						var last_t := req_tom.last_evidence_tick(oid, pred)
+						latest_obs_tick = maxi(latest_obs_tick, last_t)
+						if last_t >= 0 and tick - last_t <= 72:
+							fresh_belief_peers += 1
+						if not req_tom.last_seen_of(oid).is_empty():
+							belief_with_last_seen += 1
+			_holder_diag_inc("holder_ticks_with_any_positive_possession_belief",
+				1 if pos_belief_peers > 0 else 0)
+			_holder_diag_inc("holder_ticks_with_fresh_positive_possession_belief",
+				1 if fresh_belief_peers > 0 else 0)
+			_holder_diag_inc("holder_ticks_with_positive_belief_and_last_seen",
+				1 if belief_with_last_seen > 0 else 0)
+			_holder_diag_inc("positive_belief_peer_count_sum", pos_belief_peers)
+			if latest_obs_tick >= 0:
+				_holder_diag_inc("latest_positive_observed_tick_sum", tick - latest_obs_tick)
+				_holder_diag_inc("latest_positive_observed_tick_count")
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
 			# P7.2C-R1：诊断层按 action 字段拆分 ask / seek——seek 绝不
 			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
@@ -591,6 +635,23 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 					diag_asks.append(dc)
 			_holder_diag_inc("holder_ask_candidates_emitted", diag_asks.size())
 			_holder_diag_inc("holder_seek_candidates_emitted", diag_seeks.size())
+			# P7.2C-R2-R1 K4：known-holder ASK/SEEK funnel（纯诊断）。
+			var ask_known := 0
+			var ask_unknown := 0
+			for dc in diag_asks:
+				var dpid := str((dc as Dictionary).get("target_actor", ""))
+				if req_tom != null and req_tom.belief_about(dpid,
+						TheoryOfMind.possession_predicate(item_id_str)) > 0.05:
+					ask_known += 1
+				else:
+					ask_unknown += 1
+			_holder_diag_inc("ask_candidates_to_positive_belief_peer", ask_known)
+			_holder_diag_inc("ask_candidates_to_unknown_peer", ask_unknown)
+			if not diag_seeks.is_empty():
+				var seek_target := str(diag_seeks[0].get("target_actor", ""))
+				if req_tom != null and req_tom.belief_about(seek_target,
+						TheoryOfMind.possession_predicate(item_id_str)) > 0.05:
+					_holder_diag_inc("known_holder_seek_candidate_ticks")
 			# ask funnel：只记 ask 候选的 tick 计数与 best-ask 探针。
 			if not diag_asks.is_empty():
 				var best_ask: Dictionary = diag_asks[0]
@@ -3144,9 +3205,11 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 					if holder_id != "" and holder_id != id and observed_item != "":
 						a["tom"].add_evidence(holder_id, MaterialRequestRuntimeBridge.holder_predicate(observed_item),
 							1.0, 0.65, int(e.get("seq", -1)), tick)
-			# P7.2C-R2 C3b：A 真实看见 B 时，B 明显携带的材料形成 ToM 正证据。
-			# 只在 possession observation flag 开启时；只产生 positive 证据。
-			if agency_holder_possession_observation_enabled and agency_material_requests_enabled:
+			# P7.2C-R2-R1 K1：A 真实看见 B（spatial witness）时，B 明显携带的材料
+			# 形成 ToM 正证据。严格 spatial-only——direct_recipient（P7.2A 远程承诺
+			# 通道）不得读取对方库存；只产生 positive 证据。
+			if agency_holder_possession_observation_enabled and agency_material_requests_enabled \
+					and bool(w.get("spatial", true)):
 				var event_actor := str(e.get("actor_id", ""))
 				if event_actor != "" and event_actor != id and actors.has(event_actor):
 					var visible_inv: Dictionary = actors[event_actor].get("inventory", {})
