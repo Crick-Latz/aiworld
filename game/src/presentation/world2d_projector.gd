@@ -85,7 +85,7 @@ static func project(map_controller, ground_layer: TileMapLayer, props_root: Node
 			_spawn_prop(props_root, prop_name, Vector2i(t.x, t.z))
 			occupied[Vector2i(t.x, t.z)] = true
 			stats["props"] += 1
-	# 六分区布景：营地（出生点邻域）+ 农地 + 工坊
+	# 轻量出生点布景：农地 + 可穿过装饰；营地/工坊阻挡结构待 non-walkable footprint
 	stats["zones"] = _dress_zones(map_controller, ground_layer, props_root, occupied)
 	stats["props"] += int((stats["zones"] as Dictionary).get("props", 0))
 	return stats

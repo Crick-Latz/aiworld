@@ -89,8 +89,9 @@ contact sheet，见 Review Package），生成器不读取也不联网。生成�
 
 - water：邻陆 → 浅水/泡沫边，否则深水
 - tree → 林地底 + 树；rock → 岩地 + 岩石
-- 可行走：邻水 → 沙滩；邻林 → 林地；哈希散布 dirt/bush/berry_bush/shell/driftwood
-- POI → 帐篷/市集/灯塔占位；出生点 → 营火
+- walkable：邻水 → 沙滩；邻林 → 林地；哈希散布 dirt / flower / weed / sapling / shell / driftwood / small crops（仅可穿过的小装饰）
+- POI → poi_flag（轻木牌）；spawn area → light farmland / light decoration only
+- Blocking camp/workshop structures = Planned（待 non-walkable footprint 接入）
 
 装饰散布用稳定 FNV 哈希（非 RNG 流，不参与确定性回放诊断，纯视觉）。
 

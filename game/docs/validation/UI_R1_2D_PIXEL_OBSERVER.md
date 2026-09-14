@@ -141,6 +141,7 @@
    输出后必须 --import 再截图**。
 4. ASSET_MANIFEST（tree.png→tree_oak/pine、RESERVED 标注、POI=poi_flag、Kenney 11 ID
    全量）、ui-architecture（Current/Planned 重写）、本文件（顶层 v3.1 + 历史折叠）同步。
-5. **v3.1 后完整回归（已提交状态 2bb8bdc 上运行）：PASS 42 套件 / 1269 断言 / 18 python
+5. **v3.1 后完整回归（在最终提交树上执行；精确 validated HEAD 记录于 Review Package
+   manifest 与最终交接报告）：PASS 42 套件 / 1269 断言 / 18 python
    测试**；资产复验 48 张自制 PNG generated==committed 零失配（logs/asset-repro.txt）；
    world-clean 像素级来源自证（水体/草地主色=自制调色板，Kenney 灰蓝命中 0.01% 噪声级）。
