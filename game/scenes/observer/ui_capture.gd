@@ -62,8 +62,10 @@ func _run() -> void:
 			var lo := int(rng[0])
 			var hi := int(rng[1]) if rng.size() > 1 else lo
 			var rtl2 := page2 as RichTextLabel
-			for ln in range(lo, mini(hi + 1, rtl2.get_line_count())):
-				var t: String = rtl2.get_line(ln).strip_edges()
+			# RichTextLabel 无 get_line()（Godot 4.7）——按逻辑行转写用 get_parsed_text()
+			var all_lines: PackedStringArray = (rtl2.get_parsed_text() as String).split("\n")
+			for ln in range(lo, mini(hi + 1, all_lines.size())):
+				var t: String = all_lines[ln].strip_edges()
 				if t != "":
 					print("DUMP %d|%s" % [ln, t])
 	await _wait_frames(6)
