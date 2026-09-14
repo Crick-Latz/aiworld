@@ -8,6 +8,7 @@ Aggregation rules (locked by tests/cognition/test_p7_2b_aggregation.py):
 - found→ask funnel joins seek_found events to subsequent ask events by goal_id.
 """
 import json
+import math
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -65,7 +66,7 @@ def lifetime_stats(lifetimes: list) -> dict:
     ordered = sorted(lifetimes)
     return {"count": len(ordered), "avg": round(sum(ordered) / len(ordered), 4),
             "median": statistics.median(ordered),
-            "p90": ordered[max(0, int(len(ordered) * 0.9) - 1)],
+            "p90": ordered[math.ceil(0.9 * len(ordered)) - 1],
             "min": ordered[0], "max": ordered[-1],
             "le1": sum(1 for x in ordered if x <= 1),
             "gt1": sum(1 for x in ordered if x > 1)}
