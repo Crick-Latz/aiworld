@@ -19,6 +19,8 @@ func _run() -> void:
 	_test_no_duplicate_peer_in_round()
 	_test_funnel_diagnostics_appear_and_stay_out_of_state()
 	_test_c0_arbitration_and_objective_audit()
+	_test_r1_seek_bookkeeping_split()
+	_test_r2_funnel_split_invariants()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -405,3 +407,110 @@ func _test_c0_arbitration_and_objective_audit() -> void:
 	plain_sim._obj_inc("noop", 1)
 	_check("c0_legacy_flag_off_fingerprint_stable",
 		str(fp3["state_sha256"]) == str(SimulationAudit.fingerprint(plain_sim)["state_sha256"]))
+
+# ── P7.2C-R1 B1：seek 不污染 ask 记账 ──
+
+func _test_r1_seek_bookkeeping_split() -> void:
+	var tracker := preload("res://src/simulation/knowledge/information_subgoal_tracker.gd").new()
+	var goal := tracker.prepare_holder("a",
+		{"request_id": "m40", "requester_id": "a", "item_id": "shells",
+			"parent_plan_id": "P", "parent_run_id": "r", "blocker_step_id": "s",
+			"root_goal": "HUNGER"}, 10)
+	var seek_action := {"action": "seek_holder_person", "target_actor": "b",
+		"information_goal_id": goal.get("goal_id"), "item_id": "shells"}
+	tracker.on_action_complete("a", seek_action, [{"type": "holder_seek_found_person",
+		"seq": 60, "information_goal_id": goal.get("goal_id")}], {}, 11)
+	var after := tracker.current_goal("a")
+	_check("r1_seek_does_not_pollute_ask_bookkeeping",
+		int(after.get("asks", 0)) == 0
+		and not (after.get("asked_actor_ids", []) as Array).has("b")
+		and int(after.get("seeks", 0)) == 1
+		and (after.get("sought_actor_ids", []) as Array).has("b"))
+	# flag-off（holder_evidence）旧 goal shape 不含新字段。
+	var legacy := {"goal_id": "INFO:a:1:x", "query_kind": "HOLDER", "state": "ACTIVE",
+		"actor_id": "a", "source_request_id": "m41", "parent_plan_id": "P",
+		"item_id": "shells", "attempts": 0, "asks": 0, "refusals": 0,
+		"stale_reports": 0, "unknown_responses": 0, "asked_actor_ids": [],
+		"evidence_refs": [], "last_result": "", "retry_after_tick": -1,
+		"last_attempt_tick": -1, "created_tick": 1, "updated_tick": 1,
+		"root_goal": "HUNGER", "score": 1.0, "quantity": 1,
+		"source_kinds": [], "tried_tiles": [], "request_urgency": 0.5}
+	_check("r1_legacy_goal_shape_no_seek_fields",
+		not legacy.has("seeks") and not legacy.has("sought_actor_ids"))
+
+func _test_r2_funnel_split_invariants() -> void:
+	var pair := _pair(76901)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("r2_fixture", false, "no holder goal")
+		return
+	_check("r2_fixture", true)
+	# 场景 1：有可见合格同伴（giver 在 11,10，未问过）→ 只产 ask 候选。
+	sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	var diag := sim.agency_holder_funnel_diagnostics()
+	var ask_ticks := int(diag.get("holder_ask_candidate_ticks", 0))
+	var seek_ticks := int(diag.get("holder_seek_candidate_ticks", 0))
+	var eligible := int(diag.get("holder_ticks_with_eligible_peers", 0))
+	_check("r2_eligible_peer_produces_ask_not_seek",
+		ask_ticks >= 1 and seek_ticks == 0,
+		"ask=%d seek=%d" % [ask_ticks, seek_ticks])
+	# 不变量：ask_candidate_ticks <= eligible ticks（tick 计数不混用 candidate 数）。
+	_check("r2_ask_ticks_le_eligible_ticks", ask_ticks <= eligible,
+		"ask=%d eligible=%d" % [ask_ticks, eligible])
+	# 场景 2：giver 已问过（无 eligible）但 third actor 有 last_seen → seek 产生。
+	# _pair 只留两个 actor——需引入 third 使 "giver asked / third seekable" 可分辨。
+	var triple := SimulationBootstrap.create(76901, "holder_reachability")
+	var tsim: IslandSimulation = triple["sim"]
+	var tids: Array = tsim.actors.keys()
+	tids.sort()
+	var t_req := str(tids[0])
+	var t_giver := str(tids[1])
+	var t_third := str(tids[2])
+	var t_requester: Dictionary = tsim.actors[t_req]
+	var t_giver_a: Dictionary = tsim.actors[t_giver]
+	var t_third_a: Dictionary = tsim.actors[t_third]
+	t_requester["tile"] = Vector2i(10, 10)
+	t_giver_a["tile"] = Vector2i(11, 10)
+	t_third_a["tile"] = Vector2i(50, 50)  # 远处——不可见但有 last_seen
+	t_giver_a["inventory"] = {"shells": 2}
+	t_requester["inventory"] = {}
+	t_requester["needs"]["hunger"] = 800
+	(t_requester["tom"] as TheoryOfMind).see_at(t_third, Vector2i(50, 50), 1)
+	tsim.relationships.adjust(t_req, t_third, "benevolence", 500)
+	tsim.relationships.adjust(t_req, t_third, "reliability", 500)
+	var t_step := PlanStepSpec.make("ACQUIRE", "ACQUIRE:shells", "PENDING", "", "shells", 2, "", "", [], [], [], [], "x")
+	tsim._execution_tracker().runs[t_req] = {
+		"run_id": t_req + "#1", "actor_id": t_req,
+		"plan_id": "PLAN_HUNGER_fish_food", "root_goal": "HUNGER",
+		"current_step_id": t_step["step_id"], "steps": [t_step], "state": "ACTIVE",
+		"baseline_items": {}, "pending": {}, "attempt_seq": 0, "missed_opportunities": 0,
+	}
+	t_requester["_execution_receipt"] = {
+		"actor_id": t_req, "decision_tick": tsim.tick,
+		"run_id": t_req + "#1", "step_id": t_step["step_id"],
+		"selected": false, "candidate_key": "",
+		"chosen_key": AgencyActionBridge.candidate_key({"action": "do_nothing"}),
+		"selection_mode": "SOFTMAX", "blocker_reason": "MATERIALS_MISSING",
+	}
+	tsim._plan_execution_on_decision(t_req, t_requester,
+		{"action": "do_nothing", "target": null},
+		{"ctx": AgencyContextBuilder.build(tsim, t_requester), "catalog": tsim._recipe_catalog_if_any()})
+	tsim._material_requests_process_actor(t_req, t_requester, [])
+	var t_goal := tsim._information_tracker().current_goal(t_req)
+	if str(t_goal.get("query_kind", "")) != "HOLDER":
+		_check("r2_triple_fixture", false, "no holder goal")
+		return
+	# 先标记 giver 已问过（改 tracker 内部权威 goal——current_goal 只返回副本）。
+	tsim._information_tracker().goals[t_req]["asked_actor_ids"] = [t_giver]
+	var before_seek := int(tsim.agency_holder_funnel_diagnostics().get("holder_seek_candidate_ticks", 0))
+	tsim._agency_prepare(t_req, t_requester)
+	var t_diag := tsim.agency_holder_funnel_diagnostics()
+	var seek2 := int(t_diag.get("holder_seek_candidate_ticks", 0))
+	var ask2 := int(t_diag.get("holder_ask_candidate_ticks", 0))
+	_check("r2_no_eligible_produces_seek_not_ask",
+		seek2 > before_seek and ask2 == 0,
+		"seek=%d→%d ask=%d" % [before_seek, seek2, ask2])

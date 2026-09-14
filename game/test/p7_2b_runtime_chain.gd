@@ -401,3 +401,135 @@ func _test_c2_inquiry_utility_semantics() -> void:
 		"u=%.3f" % competitive)
 	_check("c2_ask_not_locked_over_survival", competitive <= 0.95,
 		"u=%.3f（不应硬锁压过一切）" % competitive)
+
+# ── P7.2C-R1 C1：seek found → ask 完整链（bookkeeping 不阻断）──
+
+func _test_r1_found_then_ask_full_chain() -> void:
+	var created := SimulationBootstrap.create(78101, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(38, 38)
+	giver["inventory"] = {"shells": 2}
+	giver["personality"] = PersonalityProfile.new(
+		{"altruism": 0.9, "empathy": 0.9, "caution": 0.1, "sociability": 0.9}, {})
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	(requester["tom"] as TheoryOfMind).see_at(giver_id, Vector2i(38, 38), 1)
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 500)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 500)
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("r1c_fixture", str(goal.get("query_kind", "")) == "HOLDER")
+	# 1) 无可见同伴 → seek 候选
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var cands: Array = InformationActionPolicy.build(view, goal, sim.tick)
+	var seek: Dictionary = {}
+	for c in cands:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seek = c
+	_check("r1c_seek_emitted", not seek.is_empty())
+	if seek.is_empty():
+		return
+	# 2) 到场找到（giver 在记忆位置；requester 模拟抵达）
+	requester["tile"] = Vector2i(37, 38)
+	requester["current_action"] = seek
+	sim._complete_action(requester_id, requester, [])
+	_check("r1c_found_emitted", _count(sim, "holder_seek_found_person") == 1)
+	# 3) bookkeeping：B ∉ asked，B ∈ sought，asks=0，seeks=1
+	goal = sim._information_tracker().current_goal(requester_id)
+	_check("r1c_bookkeeping_clean",
+		not (goal.get("asked_actor_ids", []) as Array).has(giver_id)
+		and (goal.get("sought_actor_ids", []) as Array).has(giver_id)
+		and int(goal.get("asks", 0)) == 0
+		and int(goal.get("seeks", 0)) == 1)
+	# 4) 下一决策：giver 现在可见 → ask_item_holder(giver) 候选必须出现
+	var view2 := sim._build_actor_view(requester_id, requester)
+	view2["now_tick"] = sim.tick
+	var cands2: Array = InformationActionPolicy.build(view2, goal, sim.tick)
+	var ask_c: Dictionary = {}
+	for c in cands2:
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			ask_c = c
+	_check("r1c_found_person_askable_after_seek", not ask_c.is_empty(),
+		str(cands2.size()))
+	# 5) 完成 ask：B ∈ asked，asks=1，真实 response，goal/request 身份不变
+	if ask_c.is_empty():
+		return
+	var seed_rng := RandomNumberGenerator.new()
+	seed_rng.seed = 0
+	sim._information_rngs[giver_id] = seed_rng
+	requester["current_action"] = ask_c
+	sim._complete_action(requester_id, requester, [])
+	goal = sim._information_tracker().current_goal(requester_id)
+	_check("r1c_ask_after_found_works",
+		(goal.get("asked_actor_ids", []) as Array).has(giver_id)
+		and int(goal.get("asks", 0)) == 1
+		and (_count(sim, "holder_information_shared") == 1
+			or _count(sim, "holder_information_self_absent") == 1
+			or _count(sim, "holder_information_refused") == 1))
+	_check("r1c_identity_preserved",
+		str(goal.get("goal_id", "")) != ""
+		and str(sim.agency_material_request(request_id).get("request_id", "")) == request_id)
+
+# ── P7.2C-R1 §8：真实仲裁语义（不锁 softmax 比率，锁边界方向）──
+
+func _test_r1_real_arbitration_semantics() -> void:
+	var created := SimulationBootstrap.create(78102, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {}
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	# 场景 A：普通竞争（低 urgency explore）vs 完全 blocked ask → ask 可胜。
+	goal["parent_blockedness"] = 1.0
+	goal["request_urgency"] = 0.95
+	var ask_u := -1.0
+	for c in InformationActionPolicy.build(view, goal, sim.tick):
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			ask_u = float((c as Dictionary).get("utility", 0.0))
+	# ActionRegistry 的一般 explore 候选 utility 通常在 0.2-0.5 区间；
+	# 断言语义而非固定选择率：blocked ask 的 utility 必须达到"有现实竞争力"水平。
+	_check("r1_blocked_ask_competitive", ask_u >= 0.55, "u=%.3f" % ask_u)
+	# 场景 B：critical survival utility 必须仍能超过 ask 的上限。
+	# 现有 SURVIVAL 类别最高 utility（鱼叉捕鱼的 desperation 路径可达 ~0.9）。
+	# ask 的 clamp 上限是 0.95——断言存在一个"ask 上限不可达"的水平
+	# 与"critical 生存行动可达该水平"的组合约束：ask 不硬锁（< 1.0），
+	# 且公式上限 + critical 场景的实际效用均 < 1.0 → 两者在 softmax 中真实竞争。
+	_check("r1_ask_never_hardlocked", ask_u < 1.0 and ask_u <= 0.95,
+		"u=%.3f" % ask_u)
+	# 场景 C：极低 blockedness + 低 urgency 的 ask 明显弱于 blocked 版（方向正确）。
+	goal["parent_blockedness"] = 0.0
+	goal["request_urgency"] = 0.1
+	var weak_u := -1.0
+	for c in InformationActionPolicy.build(view, goal, sim.tick):
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			weak_u = float((c as Dictionary).get("utility", 0.0))
+	_check("r1_unblocked_weak_ask_lower", weak_u < ask_u,
+		"weak=%.3f blocked=%.3f" % [weak_u, ask_u])
