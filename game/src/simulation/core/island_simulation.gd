@@ -592,37 +592,94 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 				_holder_diag_inc("holder_ticks_with_eligible_peers")
 			else:
 				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
-			# P7.2C-R2-R1 K4：knowledge-at-request funnel（纯诊断）。
+			# P7.2C-R2-R1.1 K4：knowledge-at-request funnel（polarity-aware + actionable 拆分 +
+			# distributed knowledge audit）。纯诊断——行为系统绝不读取。
 			var item_id_str := str(information_goal.get("item_id", ""))
 			var req_tom: TheoryOfMind = diag_view.get("tom", null)
 			var pos_belief_peers := 0
+			var actionable_belief_peers := 0
 			var fresh_belief_peers := 0
 			var belief_with_last_seen := 0
 			var latest_obs_tick := -1
-			if req_tom != null and item_id_str != "":
+			# distributed knowledge：非请求者中谁知道。
+			var other_knows := 0
+			var other_knows_fresh := 0
+			var visible_peer_knows := 0
+			var last_seen_peer_knows := 0
+			if item_id_str != "":
 				var pred := TheoryOfMind.possession_predicate(item_id_str)
 				for other_id in actors:
 					var oid := str(other_id)
 					if oid == id or oid == "":
 						continue
-					if req_tom.belief_about(oid, pred) > 0.05:
-						pos_belief_peers += 1
-						var last_t := req_tom.last_evidence_tick(oid, pred)
-						latest_obs_tick = maxi(latest_obs_tick, last_t)
-						if last_t >= 0 and tick - last_t <= 72:
-							fresh_belief_peers += 1
-						if not req_tom.last_seen_of(oid).is_empty():
-							belief_with_last_seen += 1
+					var other_tom: TheoryOfMind = actors[other_id].get("tom", null)
+					if other_tom == null:
+						continue
+					if other_tom.belief_about(oid, pred) > 0.05:
+						# 不合理的自引用——跳过 actor 对自己的 belief
+						continue
+					# 检查这个 actor 对其他 actor 的 possession belief
+					var knows_any := false
+					for target_id in actors:
+						var tid := str(target_id)
+						if tid == oid or tid == "":
+							continue
+						if other_tom.belief_about(tid, pred) > 0.05:
+							knows_any = true
+							break
+					if knows_any:
+						other_knows += 1
+						if req_tom != null and not req_tom.last_seen_of(oid).is_empty():
+							last_seen_peer_knows += 1
+						var is_visible := false
+						for pv in (diag_view.get("others_visible", []) as Array):
+							if str((pv as Dictionary).get("id", "")) == oid:
+								is_visible = true
+								break
+						if is_visible:
+							visible_peer_knows += 1
+				if req_tom != null:
+					for other_id in actors:
+						var oid := str(other_id)
+						if oid == id or oid == "":
+							continue
+						var belief_val := req_tom.belief_about(oid, pred)
+						if belief_val > 0.05:
+							pos_belief_peers += 1
+							# polarity-aware freshness：正向支持证据的最新 tick。
+							var pos_tick := req_tom.latest_supporting_tick(oid, pred, 1.0)
+							latest_obs_tick = maxi(latest_obs_tick, pos_tick)
+							if pos_tick >= 0 and tick - pos_tick <= 72:
+								fresh_belief_peers += 1
+							if not req_tom.last_seen_of(oid).is_empty():
+								belief_with_last_seen += 1
+						if belief_val >= 0.08:
+							actionable_belief_peers += 1
 			_holder_diag_inc("holder_ticks_with_any_positive_possession_belief",
 				1 if pos_belief_peers > 0 else 0)
+			_holder_diag_inc("holder_ticks_with_actionable_possession_belief",
+				1 if actionable_belief_peers > 0 else 0)
 			_holder_diag_inc("holder_ticks_with_fresh_positive_possession_belief",
 				1 if fresh_belief_peers > 0 else 0)
 			_holder_diag_inc("holder_ticks_with_positive_belief_and_last_seen",
 				1 if belief_with_last_seen > 0 else 0)
 			_holder_diag_inc("positive_belief_peer_count_sum", pos_belief_peers)
+			_holder_diag_inc("actionable_belief_peer_count_sum", actionable_belief_peers)
 			if latest_obs_tick >= 0:
 				_holder_diag_inc("latest_positive_observed_tick_sum", tick - latest_obs_tick)
 				_holder_diag_inc("latest_positive_observed_tick_count")
+			# distributed knowledge audit。
+			_holder_diag_inc("non_requester_positive_holder_belief_count", other_knows)
+			_holder_diag_inc("visible_peer_knows_actual_holder_ticks",
+				1 if visible_peer_knows > 0 else 0)
+			_holder_diag_inc("last_seen_peer_knows_actual_holder_ticks",
+				1 if last_seen_peer_knows > 0 else 0)
+			if pos_belief_peers > 0:
+				_holder_diag_inc("requester_knows_actual_holder_ticks")
+			elif other_knows > 0:
+				_holder_diag_inc("knowledge_exists_elsewhere_ticks")
+			else:
+				_holder_diag_inc("social_knowledge_none_ticks")
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
 			# P7.2C-R1：诊断层按 action 字段拆分 ask / seek——seek 绝不
 			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
@@ -3167,8 +3224,11 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		# P5（SN-F 修复）：目击 = 看得见（视野/LOS）或贴得很近（≤3 格听得见动静）
 		var ev_actor_tile: Vector2i = actors[actor_id]["tile"] if actors.has(actor_id) else Vector2i.ZERO
 		var close_enough := absi(ev_actor_tile.x - a["tile"].x) + absi(ev_actor_tile.y - a["tile"].y) <= 3
-		var spatial: bool = id == actor_id or close_enough or SpatialPerception.can_see(map_query,
+		# P7.2C-R2-R1.1 K1：拆 visual / audible_close —— possession observation
+		# 要求 visual（LOS 可见）；听觉贴近只是旧事件目击资格，不能读库存。
+		var visual: bool = id == actor_id or SpatialPerception.can_see(map_query,
 				int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
+		var spatial: bool = visual or close_enough
 		# P7.2A：承诺直接当事方通道——债权人（to_id）无需目击即可得知自己的承诺结局
 		#（到期未收款本身就是债权人的直接证据）；但非空间目击时不得经 see_at 获得
 		# 债务人当前位置，第三方仍只走空间感知。仅 COMMITMENT_* 事件，旧类型零改动。
@@ -3181,7 +3241,8 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 				salience = 1.0  # 事件涉及我
 			elif ["explored_hurt", "weather_storm"].has(str(e.get("type", ""))):
 				salience = 0.9  # 危险
-			witnesses.append({"id": id, "a": a, "salience": salience, "spatial": spatial})
+			witnesses.append({"id": id, "a": a, "salience": salience, "spatial": spatial,
+				"visual": visual, "audible_close": close_enough})
 	witnesses.sort_custom(func(x, y): return float(x["salience"]) > float(y["salience"]))
 	for w in witnesses.slice(0, 3):
 		var id = w["id"]
@@ -3206,10 +3267,10 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 						a["tom"].add_evidence(holder_id, MaterialRequestRuntimeBridge.holder_predicate(observed_item),
 							1.0, 0.65, int(e.get("seq", -1)), tick)
 			# P7.2C-R2-R1 K1：A 真实看见 B（spatial witness）时，B 明显携带的材料
-			# 形成 ToM 正证据。严格 spatial-only——direct_recipient（P7.2A 远程承诺
-			# 通道）不得读取对方库存；只产生 positive 证据。
+			# 形成 ToM 正证据。严格 visual-only——听觉贴近（close_enough）和
+			# direct_recipient（P7.2A 远程承诺通道）都不得读取对方库存。
 			if agency_holder_possession_observation_enabled and agency_material_requests_enabled \
-					and bool(w.get("spatial", true)):
+					and bool(w.get("visual", false)):
 				var event_actor := str(e.get("actor_id", ""))
 				if event_actor != "" and event_actor != id and actors.has(event_actor):
 					var visible_inv: Dictionary = actors[event_actor].get("inventory", {})
