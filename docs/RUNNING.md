@@ -121,7 +121,32 @@ python3 narrative-learning/compile_cases.py \
 
 现有程序可以在进程内持续推进并输出完整事件记录。长期存档恢复、跨版本迁移和事件归档压缩仍需要专门实现。当前默认案例包为工程测试样本，运行配置不会自动将它注入角色决策。LLM 的后续接入必须经过结构化候选与合法性检查，世界状态继续由规则系统裁决。
 
-## 7. GitHub 自动验收
+## 7. UI 观察模式（UI-R1 2D 像素原型）
+
+观察模式默认进入 2D 俯视像素小地图原型（48×36 六分区舞台；内部渲染 480×270、16×16
+图块、整数倍放大，窗口默认 1920×1080；HUD 为游戏式覆盖——未选中时 Inspector 收起、
+时间线默认收起）。此 48×36 为 observer-only 小世界配置（改变 observer 会话的地图
+输入，不等于 headless/default 世界）。`AIW_UI_MAP=full` 可让观察模式回到 64×64 全图。
+
+```bash
+# 正式观察（island 认知岛模拟 + 2D 像素世界 + Inspector/时间线）
+tools/Godot_v4.7.2-stable_win64_console.exe --path game
+
+# 离线 HUD 布局预览（无模拟依赖；fixture 见 scenes/ui/ui_preview.gd）
+tools/Godot_v4.7.2-stable_win64_console.exe --path game res://scenes/ui/ui_preview.tscn
+#   AIW_PREVIEW_FIXTURE=NPC_SELECTED 等可选夹具；AIW_PREVIEW_TAB=memory 可预选页
+
+# 截图工具（窗口模式）
+tools/Godot_v4.7.2-stable_win64_console.exe --path game res://scenes/observer/ui_capture.tscn --   --mode=observer --select=npc_weila --tab=memory --out=D:/abs/shot.png --frames=240
+
+# 旧 3D 演示模式（wander/story）仍可用：
+AIW_MODE=wander tools/Godot_v4.7.2-stable_win64_console.exe --path game
+```
+
+ViewModel 契约与字段清单见 `docs/ui/OBSERVER_VIEW_MODEL.md`；像素资产（全部自制占位，
+可再生成）见 `docs/ui/ASSET_MANIFEST.md`；架构与已知限制见 `docs/ui/ui-architecture.md`。
+
+## 8. GitHub 自动验收
 
 `.github/workflows/framework-ci.yml` 在面向 `main` 的 Pull Request 和 `main` push 上运行。工作流下载 checksum 固定的 Godot 4.7.2 Linux 引擎，执行完整严格回归、framework 1000 tick 重放及 information 1000 tick 重放，并保留 14 天证据 artifact。
 
