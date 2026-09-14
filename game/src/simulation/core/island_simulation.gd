@@ -1327,16 +1327,20 @@ func _record_material_carriage_ticks() -> void:
 				_material_residence_probe[episode_key] = {"start_tick": tick}
 				_obj_inc("residence_episode_started_" + item_id)
 			elif not positive and not episode.is_empty():
-				# positive → 0：episode 闭合，记真实时长（min/max 用增量修正）。
+				# positive → 0：episode 闭合，记真实时长。
+				# P7.2C-R1.1：min/max 直接赋值（不用 sentinel get + delta——旧写法产生
+				# -999995 级负数）。原始 duration 进 samples 列表（分析器重算分布）。
 				var duration := tick - int(episode.get("start_tick", tick))
+				assert(duration >= 0)
 				_obj_inc("residence_duration_sum_" + item_id, duration)
 				_obj_inc("residence_duration_count_" + item_id)
-				var prev_min := int(_objective_material_audit.get("residence_duration_min_" + item_id, 999999))
-				if duration < prev_min:
-					_objective_material_audit["residence_duration_min_" + item_id] = duration
-				var prev_max := int(_objective_material_audit.get("residence_duration_max_" + item_id, -1))
-				if duration > prev_max:
-					_objective_material_audit["residence_duration_max_" + item_id] = duration
+				var min_key: String = "residence_duration_min_" + item_id
+				if not _objective_material_audit.has(min_key) or duration < int(_objective_material_audit[min_key]):
+					_objective_material_audit[min_key] = duration
+				var max_key: String = "residence_duration_max_" + item_id
+				if not _objective_material_audit.has(max_key) or duration > int(_objective_material_audit[max_key]):
+					_objective_material_audit[max_key] = duration
+				_append_residence_sample(item_id, duration)
 				_material_residence_probe.erase(episode_key)
 			# positive 且已有 episode：继续（carriage tick 已计）。
 
@@ -1349,9 +1353,38 @@ func _censor_open_residence_episodes() -> void:
 		var item_id := str(parts[1])
 		var episode: Dictionary = _material_residence_probe[episode_key]
 		var duration := tick - int(episode.get("start_tick", tick))
+		assert(duration >= 0)
 		_obj_inc("residence_censored_count_" + item_id)
 		_obj_inc("residence_censored_duration_sum_" + item_id, duration)
 		_material_residence_probe.erase(episode_key)
+
+## P7.2C-R1.1-C：原始 duration 样本（分析器重算 median/p90；不入 authoritative hash）。
+func _append_residence_sample(item_id: String, duration: int) -> void:
+	var key := "residence_duration_samples_" + item_id
+	if not _objective_material_audit.has(key):
+		_objective_material_audit[key] = []
+	(_objective_material_audit[key] as Array).append(duration)
+
+## P7.2C-R1.1-D：item material flow ledger——write-only per-sink consumption audit。
+## shelter=-2 wood / fire=-1 wood / craft=recipe 各消耗；纯计数，不改库存操作。
+func _record_material_consumed(actor_id: String, item_id: String, sink: String, quantity: int) -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	_obj_inc("material_consumed_units_" + item_id + "_" + sink, quantity)
+	_obj_inc("material_consumed_units_" + item_id, quantity)
+	_obj_inc("successful_consumption_events_" + item_id + "_" + sink)
+
+func _record_material_acquired(actor_id: String, item_id: String, quantity: int) -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	_obj_inc("material_acquired_units_" + item_id, quantity)
+	_obj_inc("successful_acquisition_events_" + item_id)
+
+## P7.2C-R1.1-E：craft 成功时记录 consuming 分母（配合 surplus events 计算 ratio）。
+func _record_craft_consuming(consumed_item: String) -> void:
+	if not agency_holder_reachability_enabled:
+		return
+	_obj_inc("craft_success_consuming_" + consumed_item)
 
 ## P7.2C-R1：craft 成功后对 consumed item 检查盈余（纯诊断；不改 craft 行为）。
 func _record_post_craft_surplus(actor_id: String, consumed_item: String) -> void:
@@ -1837,6 +1870,7 @@ func _do_fish(id: String, a: Dictionary, ev: Array) -> void:
 
 func _do_shells(id: String, a: Dictionary, ev: Array) -> void:
 	a["inventory"]["shells"] = int(a["inventory"].get("shells", 0)) + 1
+	_record_material_acquired(id, "shells", 1)
 	_emit("gathered_shells", id, "%s 捡到了贝壳" % a["display_name"], {"shells": 1})
 
 func _do_explore(id: String, a: Dictionary, ev: Array) -> void:
@@ -1874,6 +1908,7 @@ func _do_shelter(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("wood", 0)) >= 2:
 		a["inventory"]["wood"] = int(a["inventory"]["wood"]) - 2
 		world["shelters"][str(a["tile"])] = true
+		_record_material_consumed(id, "wood", "SHELTER", 2)
 		_emit("shelter_built", id, "%s 搭建了一个简易庇护所" % a["display_name"], {"pos": str(a["tile"])})
 		AuthoritySystem.self_identity(a, "shelter_built")
 
@@ -1916,9 +1951,13 @@ func _do_craft(id: String, a: Dictionary, ev: Array, action: Dictionary = {}) ->
 			"consumed_items": txn.get("consumed_items", {}), "produced_items": txn.get("produced_items", {}),
 			"capabilities_before": caps_before, "capabilities_after": caps_after})
 	AuthoritySystem.self_identity(a, "crafted")
-	# P7.2C-R1 B3：craft 后盈余（纯诊断；不改行为）。
+	# P7.2C-R1.1 D/E：craft 材料流 + 盈余分母。
 	for consumed_id in (txn.get("consumed_items", {}) as Dictionary).keys():
-		_record_post_craft_surplus(id, str(consumed_id))
+		var cid := str(consumed_id)
+		var cq := int((txn.get("consumed_items", {}) as Dictionary).get(consumed_id, 0))
+		_record_material_consumed(id, cid, "CRAFT", cq)
+		_record_craft_consuming(cid)
+		_record_post_craft_surplus(id, cid)
 ## P6.3A-R1 §4：窄方法暴露只读知识 store（不进 actor Dictionary——首/后续 tick 同语义）
 func agency_knowledge_store() -> WorldKnowledgeStore:
 	if _agency_store == null:
@@ -1934,6 +1973,7 @@ func _do_fire(id: String, a: Dictionary, ev: Array) -> void:
 	if int(a["inventory"].get("wood", 0)) >= 1:
 		a["inventory"]["wood"] = int(a["inventory"]["wood"]) - 1
 		world["fires"][str(a["tile"])] = true
+		_record_material_consumed(id, "wood", "FIRE", 1)
 		_emit("fire_lit", id, "%s 生了一堆火" % a["display_name"], {"pos": str(a["tile"])})
 
 func _do_socialize(id: String, a: Dictionary, ev: Array) -> void:
@@ -2382,6 +2422,7 @@ func _do_gather_wood(id: String, a: Dictionary, ev: Array) -> void:
 	for tree in world["trees"]:
 		if absi(tree.x - a["tile"].x) + absi(tree.y - a["tile"].y) <= 1:
 			a["inventory"]["wood"] = int(a["inventory"].get("wood", 0)) + 1
+			_record_material_acquired(id, "wood", 1)
 			_emit("gathered_wood", id, "%s 拾了一些柴火" % a["display_name"], {"wood": 1})
 			return
 	_emit("gather_wood_empty", id, "%s 找了一圈，附近没有合适的柴" % a["display_name"], {})
