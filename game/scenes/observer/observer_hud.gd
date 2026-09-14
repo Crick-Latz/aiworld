@@ -1,27 +1,45 @@
 extends CanvasLayer
-## UI-R1 观察 HUD（2D 像素版）：只暴露 render(ViewModel) 与意图信号。
-## 布局（v3 游戏式 HUD）：顶部紧凑状态栏（左世界名/日期时间，右 倍速/暂停/菜单）；
-## 右侧 NPC Inspector（6 页，未选中时收起）；底部时间线（事件·故事·对话·因果链，
-## 默认收起为 tab 条，点击展开、再点当前 tab 收回）。世界画面是视觉主体。
-## 内部节点路径不外泄；不读写 Simulation 内部状态；缺字段一律显示占位文案。
+## UI-R2 观察 HUD：七页大脑观察器（概览/决策/计划/认知/关系/记忆/社会）+ 底部时间线。
+## 只消费 ViewModel 字典（大脑 ViewModel 由 NpcBrainViewModel 组装，schema 0.3）；
+## 每个数据块带 provenance 徽章：[事实] objective / [主观] subjective / [推导] derived。
 ## 契约（observer_sim.gd 依赖）：render(model)、tick_label 含 "N×"、sel_name 含角色名、
 ## events_label 解析文本含事件文本；信号 pause/speed/save/scenario 不变。
+## 节点复用：静态结构全部在 tscn，4Hz 刷新只更新文本/bbcode，不重建 Inspector 树。
 
 signal pause_requested
 signal speed_requested(multiplier: int)
 signal save_requested
 signal scenario_requested(scenario_name: String)
 
-const INSPECTOR_TABS := ["overview", "memory", "personality", "decision", "relations", "history"]
+const INSPECTOR_TABS := ["overview", "decision", "plan", "mind", "relations", "memory", "social"]
 const TIMELINE_TABS := ["events", "stories", "dialogue", "causal"]
-const EMOTION_LABELS := {"joy": "开心", "fear": "恐惧", "anger": "愤怒", "sadness": "悲伤", "guilt": "内疚"}
+const EMOTION_LABELS := {"joy": "喜悦", "fear": "担忧", "anger": "愤怒", "sadness": "悲伤", "guilt": "内疚"}
 const MAX_EVENT_LINES := 14
-const MAX_MEMORIES := 8
+const RAW_SNIPPET_LEN := 240
+
+## 语义色（集中定义——§47 不散写；控件色走 Theme）
+const C_GOLD := "#e8c170"
+const C_BLUE := "#7ab8d4"
+const C_GRAY := "#9a9a8a"
+const C_BODY := "#c0d8e8"
+const C_DIM := "#8899aa"
+const C_POS := "#8ac964"
+const C_NEG := "#e07a5f"
+const C_ACTIVE := "#e8c170"
+const C_BLOCK := "#e07a5f"
+const PLAN_STATUS := {
+	"DONE": {"icon": "✓", "color": C_POS}, "ACTIVE": {"icon": "▶", "color": C_ACTIVE},
+	"BLOCKED": {"icon": "!", "color": C_BLOCK}, "PENDING": {"icon": "…", "color": C_DIM},
+	"FAILED": {"icon": "×", "color": C_NEG}, "CANCELLED": {"icon": "–", "color": C_DIM},
+}
 
 var _inspector_tab := "overview"
 var _timeline_tab := "events"
 var _timeline_autopicked := false
 var _timeline_expanded := false
+var _memory_filter := "all"
+var _last_brain: Dictionary = {}
+
 const TIMELINE_COLLAPSED_HEIGHT := 16
 const TIMELINE_EXPANDED_HEIGHT := 74
 
@@ -34,22 +52,26 @@ const TIMELINE_EXPANDED_HEIGHT := 74
 @onready var x2_btn: Button = $Root/TopBar/TopMargin/TopHBox/X2Btn
 @onready var x4_btn: Button = $Root/TopBar/TopMargin/TopHBox/X4Btn
 @onready var menu_btn: Button = $Root/TopBar/TopMargin/TopHBox/MenuBtn
-@onready var inspector_panel: PanelContainer = $Root/InspectorPanel
-@onready var bottom_pages: Control = $Root/BottomPanel/BotMargin/BotVBox/PagesH
-@onready var bottom_panel: PanelContainer = $Root/BottomPanel
 @onready var sel_name: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/SelName
 @onready var sel_status: Label = $Root/InspectorPanel/InsMargin/InsVBox/HeaderH/StatusLabel
 @onready var goal_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/GoalLabel
-@onready var decision_line_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/DecisionLineLabel
 @onready var location_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/LocationLabel
-@onready var needs_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/NeedsLabel
 @onready var inventory_label: Label = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/InventoryLabel
+@onready var needs_label: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/NeedsLabel
+@onready var why_overview: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage/WhyOverview
 @onready var events_label: RichTextLabel = $Root/BottomPanel/BotMargin/BotVBox/PagesH/EventsLabel
 @onready var hint_label: Label = $Root/HintLabel
+@onready var inspector_panel: PanelContainer = $Root/InspectorPanel
+@onready var bottom_pages: Control = $Root/BottomPanel/BotMargin/BotVBox/PagesH
+@onready var bottom_panel: PanelContainer = $Root/BottomPanel
+@onready var memory_list: RichTextLabel = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryList
 var tab_buttons := {}
 var timeline_buttons := {}
 var pages := {}
 var timeline_pages := {}
+var memory_filter_buttons := {}
+
+var _menu: PopupMenu
 
 func _ready() -> void:
 	pause_btn.pressed.connect(func(): pause_requested.emit())
@@ -77,12 +99,16 @@ func _ready() -> void:
 		pages[tab_name] = $Root/InspectorPanel/InsMargin/InsVBox/PagesV.get_node(NodePath(String(tab_name).capitalize() + "Page")) as Control
 	for tab_name in TIMELINE_TABS:
 		timeline_pages[tab_name] = $Root/BottomPanel/BotMargin/BotVBox/PagesH.get_node(NodePath(String(tab_name).capitalize() + "Label")) as Control
-	inspector_panel.visible = false # 未选中即收起（v3）
+	var filter_row: HBoxContainer = $Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryFilterRow
+	for filter_name in ["all", "social", "important", "recent"]:
+		var node_name: String = {"all": "FilterAll", "social": "FilterSocial", "important": "FilterImportant", "recent": "FilterRecent"}[filter_name]
+		var fbtn: Button = filter_row.get_node(NodePath(node_name))
+		fbtn.pressed.connect(func(): _set_memory_filter(filter_name))
+		memory_filter_buttons[filter_name] = fbtn
+	inspector_panel.visible = false # 未选中即收起
 	_apply_timeline_collapse(false) # 默认收起：面板真的只有 tab 条高度
 	_set_inspector_tab(_inspector_tab)
 	_set_timeline_tab(_timeline_tab)
-
-var _menu: PopupMenu
 
 func _on_menu_id(id: int) -> void:
 	if id == 0:
@@ -132,7 +158,15 @@ func _set_timeline_tab(tab_name: String) -> void:
 		if timeline_buttons.has(name_key):
 			(timeline_buttons[name_key] as Button).set_pressed_no_signal(str(name_key) == tab_name)
 
-## model 见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.2）
+## 记忆筛选（纯 presentation filter，不改模拟状态）
+func _set_memory_filter(filter_name: String) -> void:
+	_memory_filter = filter_name
+	for name_key in memory_filter_buttons:
+		(memory_filter_buttons[name_key] as Button).set_pressed_no_signal(str(name_key) == filter_name)
+	if not _last_brain.is_empty():
+		_render_memory(_last_brain)
+
+## model 见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.3）
 func render(model: Dictionary) -> void:
 	world_label.text = str(model.get("world_name", "灰雾港 · 观察模式"))
 	var warning := str(model.get("warning_text", ""))
@@ -154,35 +188,299 @@ func render(model: Dictionary) -> void:
 	if hint != "":
 		hint_label.text = hint
 
+# ————— provenance 徽章与工具 —————
+
+func _prov(p: String) -> String:
+	match p:
+		"objective": return "[color=%s][事实][/color]" % C_GOLD
+		"derived": return "[color=%s][推导][/color]" % C_GRAY
+		_: return "[color=%s][主观][/color]" % C_BLUE
+
+func _bar(frac: float, cells: int = 8) -> String:
+	var filled := int(round(clampf(frac, 0.0, 1.0) * float(cells)))
+	var s := ""
+	for i in cells:
+		s += "▓" if i < filled else "·"
+	return s
+
+func _fmt_signed(v: int) -> String:
+	return ("+" if v > 0 else "") + str(v)
+
+func _fmt_float(v: float) -> String:
+	return "%+.2f" % v
+
+func _set_rtl(page, bbcode: String) -> void:
+	var rtl := page as RichTextLabel
+	if rtl == null:
+		return
+	rtl.clear()
+	rtl.append_text(bbcode)
+
+func _raw_snippet(data) -> String:
+	var s := JSON.stringify(data, "  ")
+	if s.length() > RAW_SNIPPET_LEN:
+		s = s.substr(0, RAW_SNIPPET_LEN) + "…"
+	return s
+
+# ————— 选中渲染 —————
+
 func _render_selection(sel) -> void:
 	inspector_panel.visible = sel != null and typeof(sel) == TYPE_DICTIONARY
-	if sel != null and typeof(sel) == TYPE_DICTIONARY:
-		sel_name.text = str(sel.get("display_name", "-"))
-		sel_status.text = str(sel.get("status_text", sel.get("activity_text", "-")))
-		goal_label.text = "目标：%s" % _placeholder(sel, "goal_text")
-		var decision_text := str(sel.get("decision_text", ""))
-		decision_line_label.text = "决策：%s" % (decision_text if decision_text != "" else "—")
-		location_label.text = "位置：%s" % _placeholder(sel, "location_text")
-		needs_label.text = "需求：%s" % str(sel.get("needs_text", "—"))
-		inventory_label.text = "物资：%s" % _inventory_text(sel)
-		_set_rtl_bbcode(pages["memory"], _memory_bbcode(sel))
-		_set_rtl_bbcode(pages["personality"], _personality_bbcode(sel))
-		_set_rtl_bbcode(pages["decision"], _decision_bbcode(sel))
-		_set_rtl_bbcode(pages["relations"], _relations_bbcode(sel))
-		_set_rtl_bbcode(pages["history"], _history_bbcode(sel))
-	else:
+	if not (sel != null and typeof(sel) == TYPE_DICTIONARY):
 		sel_name.text = "未选中"
 		sel_status.text = "点击世界中的角色"
-		goal_label.text = "目标：—"
-		decision_line_label.text = "决策：—"
-		location_label.text = "位置：—"
-		needs_label.text = "需求：—"
+		_last_brain = {}
+		return
+	_last_brain = sel
+	sel_name.text = str(sel.get("display_name", "-"))
+	sel_status.text = str(sel.get("status_text", sel.get("activity_text", "-")))
+	goal_label.text = "目标：%s" % (str(sel.get("goal_text", "")) if str(sel.get("goal_text", "")) != "" else "—")
+	location_label.text = "位置：%s" % str(sel.get("location_text", "—"))
+	var inv: Array = sel.get("inventory_items", [])
+	if inv.is_empty():
 		inventory_label.text = "物资：—"
-		for key in ["memory", "personality", "decision", "relations", "history"]:
-			_set_rtl_bbcode(pages[key], "[color=#8899aa]暂无数据（未选中角色）[/color]")
+	else:
+		var parts: Array = []
+		for item in inv:
+			parts.append("%s×%d" % [str(item.get("id", "?")), int(item.get("count", 0))])
+		inventory_label.text = "物资：%s [事实]" % "、".join(parts)
+	_render_needs(sel)
+	_render_why(sel)
+	_render_decision(sel)
+	_render_plan(sel)
+	_render_mind(sel)
+	_render_relations(sel)
+	_render_memory(sel)
+	_render_social(sel)
+
+## 概览：needs bars（fatigue 为 1000-energy 的推导换算，显式标注）+ 情绪 + 最重要问题
+func _render_needs(sel: Dictionary) -> void:
+	var needs: Dictionary = sel.get("needs", {})
+	var rows: Array = needs.get("rows", [])
+	var lines: Array = ["[color=%s]── 需求 ──[/color]" % C_GOLD]
+	for row in rows:
+		var note := ""
+		if str(row.get("key", "")) == "fatigue":
+			note = " %s(=1000-energy)" % _prov("derived")
+		lines.append("%s %s %4d%s" % [str(row.get("label", "?")), _bar(float(row.get("frac", 0.0))), int(row.get("value", 0)), note])
+	var emotions: Dictionary = sel.get("emotions", {})
+	var dominant: Dictionary = emotions.get("dominant", {})
+	lines.append("")
+	lines.append("[color=%s]── 情绪 ──[/color] 主导：%s %s %s" % [C_GOLD, str(dominant.get("label", "平静")), _fmt_float(float(dominant.get("value", 0.0))), _prov("subjective")])
+	for e in emotions.get("rows", []):
+		lines.append("%s %s %+.2f" % [str(e.get("label", "?")), _bar(absf(float(e.get("value", 0.0)))), float(e.get("value", 0.0))])
+	var questions: Array = sel.get("mind", {}).get("open_questions", [])
+	lines.append("")
+	if questions.is_empty():
+		lines.append("[color=%s]当前最重要问题：[/color]无明确疑问" % C_GOLD)
+	else:
+		var q: Dictionary = questions[0]
+		lines.append("[color=%s]当前最重要问题：[/color]%s %s" % [C_GOLD, _question_text(q), _prov("subjective")])
+	_set_rtl(needs_label, "\n".join(lines))
+
+func _question_text(q: Dictionary) -> String:
+	var kind_text: String = {"why_refused": "不明白 %s 为什么拒绝我"}.get(str(q.get("kind", "")), "")
+	if kind_text != "":
+		return kind_text % str(q.get("about_name", str(q.get("about", ""))))
+	return "关于 %s 的疑问（%s）" % [str(q.get("about_name", str(q.get("about", "")))), str(q.get("kind", ""))]
+
+## Why chain（确定性；节点带 provenance；LLM 不参与）
+func _render_why(sel: Dictionary) -> void:
+	var chain: Array = sel.get("why_chain", [])
+	if chain.is_empty():
+		_set_rtl(why_overview, "[color=%s]── 为什么这样做？──[/color]\n[color=%s]暂无链（等待决策留痕）[/color]" % [C_GOLD, C_DIM])
+		return
+	var lines: Array = ["[color=%s]── 为什么这样做？──[/color]" % C_GOLD]
+	for i in range(chain.size()):
+		var node: Dictionary = chain[i]
+		lines.append("%s %s" % [str(node.get("label", "")), _prov(str(node.get("provenance", "subjective")))])
+		if i < chain.size() - 1:
+			lines.append("[color=%s]  ↓[/color]" % C_DIM)
+	_set_rtl(why_overview, "\n".join(lines))
+
+## 决策页：当前决定/为什么/行动/阻塞/下一步 + 真实候选效用表 + Raw 节选
+func _render_decision(sel: Dictionary) -> void:
+	var d: Dictionary = sel.get("decision", {})
+	var lines: Array = []
+	lines.append("[color=%s]── 当前决定 ──[/color] %s %s" % [C_GOLD, str(d.get("chosen", "—")), _prov("subjective")])
+	lines.append("[color=%s]为什么：[/color]%s" % [C_GOLD, str(d.get("reason", "")) if str(d.get("reason", "")) != "" else "—"])
+	lines.append("[color=%s]当前行动：[/color]%s %s" % [C_GOLD, str(d.get("current_action", "—")), _prov("objective")])
+	lines.append("[color=%s]阻塞：[/color]%s" % [C_GOLD, str(d.get("blocker", "")) if str(d.get("blocker", "")) != "" else "无"])
+	lines.append("[color=%s]下一步：[/color]%s" % [C_GOLD, str(d.get("next_step", "")) if str(d.get("next_step", "")) != "" else "—"])
+	var interp := str(d.get("dominant_interpretation", ""))
+	if interp != "":
+		lines.append("[color=%s]他对局面的解读：[/color]%s" % [C_GOLD, interp])
+	var candidates: Array = d.get("candidates", [])
+	if not candidates.is_empty():
+		lines.append("")
+		lines.append("[color=%s]── 候选行为（真实效用）──[/color] %s" % [C_GOLD, _prov("subjective")])
+		for c in candidates:
+			var mark := " ←" if bool(c.get("chosen", false)) else ""
+			var col: String = C_ACTIVE if bool(c.get("chosen", false)) else C_BODY
+			lines.append("[color=%s]%s  %.2f%s[/color]" % [col, str(c.get("action", "?")), float(c.get("utility", 0.0)), mark])
+	else:
+		lines.append("")
+		lines.append("[color=%s]候选效用：[/color][color=%s]本轮无决策留痕（ViewModel gap: decision_candidates 于无决策 tick 时为空）[/color]" % [C_GOLD, C_DIM])
+	lines.append("")
+	lines.append("[color=%s]▸ Raw（节选）[/color] %s" % [C_GRAY, _raw_snippet(d)])
+	_set_rtl(pages["decision"], "\n".join(lines))
+
+## 计划页：竖向 flow（目标→计划→步骤→阻塞→子目标），状态图标与色集中定义
+func _render_plan(sel: Dictionary) -> void:
+	var p: Dictionary = sel.get("plan", {})
+	var nodes: Array = p.get("nodes", [])
+	var lines: Array = ["[color=%s]── 计划流 ──[/color] %s" % [C_GOLD, _prov("subjective")]]
+	if nodes.is_empty():
+		lines.append("[color=%s]暂无计划留痕（ViewModel gap: active_plan_steps——只有 trace 内当前步骤）[/color]" % C_DIM)
+	for i in range(nodes.size()):
+		var n: Dictionary = nodes[i]
+		var status := str(n.get("status", "PENDING"))
+		var style: Dictionary = PLAN_STATUS.get(status, PLAN_STATUS["PENDING"])
+		var value := str(n.get("value", ""))
+		var line := "[color=%s]%s[/color] %s" % [str(style["color"]), str(style["icon"]), str(n.get("label", ""))]
+		if value != "":
+			line += " [color=%s]%s[/color]" % [C_DIM, value]
+		lines.append(line)
+		if i < nodes.size() - 1:
+			lines.append("[color=%s]  ↓[/color]" % C_DIM)
+	lines.append("")
+	lines.append("[color=%s]图例：[/color][color=%s]✓完成[/color] [color=%s]▶进行[/color] [color=%s]!阻塞[/color] [color=%s]…待定[/color] [color=%s]×失败[/color] [color=%s]–取消[/color]" % [
+		C_DIM, C_POS, C_ACTIVE, C_BLOCK, C_DIM, C_NEG, C_DIM])
+	var ex: Dictionary = p.get("execution", {})
+	if not ex.is_empty():
+		lines.append("")
+		lines.append("[color=%s]▸ Raw（执行留痕节选）[/color] %s" % [C_GRAY, _raw_snippet(ex)])
+	_set_rtl(pages["plan"], "\n".join(lines))
+
+## 认知页：特质 bars + 信念(weight) + 未解之问 + ToM 动态谓词知识 + last seen
+func _render_mind(sel: Dictionary) -> void:
+	var lines: Array = []
+	var personality: Dictionary = sel.get("personality", {})
+	lines.append("[color=%s]── 特质 ──[/color] %s" % [C_GOLD, _prov("objective")])
+	for t in personality.get("traits", []):
+		lines.append("%s %s %.2f" % [str(t.get("label", "?")), _bar(float(t.get("value", 0.0))), float(t.get("value", 0.0))])
+	var beliefs: Array = personality.get("beliefs", [])
+	if not beliefs.is_empty():
+		lines.append("")
+		lines.append("[color=%s]── 信念 ──[/color] %s" % [C_GOLD, _prov("subjective")])
+		for b in beliefs:
+			lines.append("“%s” %.2f" % [str(b.get("text", "")), float(b.get("weight", 0.0))])
+	var mind: Dictionary = sel.get("mind", {})
+	var questions: Array = mind.get("open_questions", [])
+	lines.append("")
+	lines.append("[color=%s]── 未解之问 ──[/color] %s" % [C_GOLD, _prov("subjective")])
+	if questions.is_empty():
+		lines.append("[color=%s]当前没有明确疑问[/color]" % C_DIM)
+	for q in questions:
+		lines.append("· %s（熵 %.2f 利害 %.2f）" % [_question_text(q), float(q.get("entropy", 0.0)), float(q.get("stakes", 0.0))])
+	var subjects: Array = mind.get("tom_subjects", [])
+	lines.append("")
+	lines.append("[color=%s]── 我知道什么（对他人的判断）──[/color] %s" % [C_GOLD, _prov("subjective")])
+	if subjects.is_empty():
+		lines.append("[color=%s]尚未形成对他人的判断[/color]" % C_DIM)
+	for subject in subjects:
+		lines.append("[color=%s]关于 %s[/color]" % [C_BODY, str(subject.get("other_name", "?"))])
+		for row in subject.get("rows", []):
+			lines.append("  %s %s 置信%.2f 证据tick %d" % [
+				str(row.get("label", "?")), _fmt_float(float(row.get("value", 0.0))),
+				float(row.get("confidence", 0.0)), int(row.get("last_evidence_tick", -1))])
+		var seen: Dictionary = subject.get("last_seen", {})
+		if not seen.is_empty():
+			var tile: Vector2i = seen.get("tile", Vector2i.ZERO)
+			lines.append("  [color=%s]最后看到：( %d, %d ) tick %d（可能过时）[/color]" % [C_DIM, tile.x, tile.y, int(seen.get("tick", -1))])
+	var perr := float(mind.get("prediction_error", 0.0))
+	lines.append("")
+	lines.append("[color=%s]心智模型预测误差：[/color]%.3f %s" % [C_GOLD, perr, _prov("subjective")])
+	_set_rtl(pages["mind"], "\n".join(lines))
+
+## 关系页：真实关系边（有向）与 ToM 判断两层分离（R1 语义保持）
+func _render_relations(sel: Dictionary) -> void:
+	var rows: Array = sel.get("relationships", {}).get("rows", [])
+	if rows.is_empty():
+		_set_rtl(pages["relations"], "[color=%s]暂无关系数据[/color]" % C_DIM)
+		return
+	var me := str(sel.get("display_name", "?"))
+	var lines: Array = ["[color=%s]── 关系（真实有向边）──[/color] %s" % [C_GOLD, _prov("objective")]]
+	for r in rows:
+		lines.append("[color=%s]%s → %s[/color] 信任%s 善意%s 可靠性%s" % [C_BODY, me, str(r.get("other_name", "?")),
+			_fmt_signed(int(r.get("trust", 0))), _fmt_signed(int(r.get("benevolence", 0))), _fmt_signed(int(r.get("reliability", 0)))])
+		lines.append("  亏欠%s 畏惧%s" % [_fmt_signed(int(r.get("obligation", 0))), _fmt_signed(int(r.get("fear", 0)))])
+	lines.append("")
+	lines.append("[color=%s]── 我对他的判断（Theory of Mind）──[/color] %s" % [C_GOLD, _prov("subjective")])
+	for r in rows:
+		var tom: Dictionary = r.get("tom", {})
+		if tom.is_empty():
+			continue
+		lines.append("[color=%s]%s[/color] 有食%s 慷慨%s 可靠%s" % [C_BODY, str(r.get("other_name", "?")),
+			_fmt_float(float(tom.get("has_food", 0.0))), _fmt_float(float(tom.get("generous", 0.0))), _fmt_float(float(tom.get("reliable", 0.0)))])
+	_set_rtl(pages["relations"], "\n".join(lines))
+
+## 记忆页：卡片 + 筛选（all/social/important/recent；day 与 importance 为推导）
+func _render_memory(sel: Dictionary) -> void:
+	var rows: Array = sel.get("memories", {}).get("rows", [])
+	var filtered: Array = []
+	match _memory_filter:
+		"social":
+			for r in rows:
+				if str(r.get("counterpart", "")) != "":
+					filtered.append(r)
+		"important":
+			for r in rows:
+				if absf(float(r.get("derived_importance", 0.0))) >= 0.5:
+					filtered.append(r)
+		"recent":
+			filtered = rows.slice(0, mini(5, rows.size()))
+		_:
+			filtered = rows
+	var lines: Array = []
+	if filtered.is_empty():
+		lines.append("[color=%s]该筛选下无记忆[/color]" % C_DIM)
+	for r in filtered:
+		var imp := float(r.get("derived_importance", 0.0))
+		var imp_col: String = C_ACTIVE if absf(imp) >= 0.5 else C_DIM
+		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
+		lines.append("  [color=%s]类型 %s [color=%s]重要度%.2f%s[/color][/color]" % [C_DIM, str(r.get("type", "")), imp_col, imp, _prov("derived")])
+	_set_rtl(memory_list, "\n".join(lines))
+
+## 社会页：承诺台账（只读过滤）+ 请求/持有者情报/社会事件（事件尾部派生）
+func _render_social(sel: Dictionary) -> void:
+	var social: Dictionary = sel.get("social", {})
+	var lines: Array = []
+	lines.append("[color=%s]── 承诺 / 亏欠 ──[/color] %s" % [C_GOLD, _prov("objective")])
+	var commitments: Array = social.get("commitments", [])
+	if commitments.is_empty():
+		lines.append("[color=%s]无未了承诺[/color]" % C_DIM)
+	for c in commitments:
+		lines.append("%s %s：%s×%d [%s] 到期tick %d" % [
+			str(c.get("direction", "")), str(c.get("counterpart_name", "?")),
+			str(c.get("object", "?")), int(c.get("quantity", 0)),
+			str(c.get("status", "")), int(c.get("due_tick", -1))])
+	var requests: Array = social.get("recent_requests", [])
+	lines.append("")
+	lines.append("[color=%s]── 最近物资请求 ──[/color] %s" % [C_GOLD, _prov("objective")])
+	if requests.is_empty():
+		lines.append("[color=%s]无（ViewModel gap: active_material_requests——仅事件派生）[/color]" % C_DIM)
+	for r in requests.slice(0, 6):
+		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
+	var holder: Array = social.get("holder_events", [])
+	lines.append("")
+	lines.append("[color=%s]── 持有者情报（信息目标事件）──[/color] %s" % [C_GOLD, _prov("objective")])
+	if holder.is_empty():
+		lines.append("[color=%s]无[/color]" % C_DIM)
+	for r in holder.slice(0, 6):
+		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
+	var events: Array = social.get("recent_social_events", [])
+	lines.append("")
+	lines.append("[color=%s]── 最近社会事件 ──[/color]" % C_GOLD)
+	if events.is_empty():
+		lines.append("[color=%s]无[/color]" % C_DIM)
+	for r in events.slice(0, 8):
+		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
+	_set_rtl(pages["social"], "\n".join(lines))
+
+# ————— 底部时间线（R1 语义保持） —————
 
 func _render_timeline(model: Dictionary) -> void:
-	# 事件页：编年史头 + 最近事件
 	var lines: Array = []
 	var chronicle: String = str(model.get("chronicle_text", ""))
 	if chronicle != "":
@@ -192,7 +490,6 @@ func _render_timeline(model: Dictionary) -> void:
 		lines.append("[color=#aabbcc]%d[/color] %s" % [int(e.get("seq", 0)), str(e.get("text", ""))])
 	events_label.clear()
 	events_label.append_text("\n".join(lines) if not lines.is_empty() else "[color=#8899aa]暂无事件[/color]")
-	# 故事页：ThreadEngine 线程优先，其次句子级编年史
 	var threads: Array = model.get("story_threads", [])
 	var s_lines: Array = []
 	if not threads.is_empty():
@@ -206,8 +503,8 @@ func _render_timeline(model: Dictionary) -> void:
 				s_lines.append(str(sn.get("text", "")))
 		else:
 			s_lines.append("[color=#8899aa]暂无故事线[/color]")
-	_fill_rtl(timeline_pages["stories"], s_lines)
-	# 对话页
+	_set_rtl(timeline_pages["stories"], "
+".join(s_lines))
 	var dialogue: Array = model.get("dialogue_transcript", [])
 	var d_lines: Array = []
 	if dialogue.is_empty():
@@ -216,8 +513,8 @@ func _render_timeline(model: Dictionary) -> void:
 		for dl in dialogue.slice(maxi(0, dialogue.size() - 8), dialogue.size()):
 			d_lines.append("[color=#c0d8e8]%s：[/color]%s [color=#667788](%s)[/color]" % [
 				str(dl.get("speaker", "")), str(dl.get("text", "")), str(dl.get("act", ""))])
-	_fill_rtl(timeline_pages["dialogue"], d_lines)
-	# 因果链页
+	_set_rtl(timeline_pages["dialogue"], "
+".join(d_lines))
 	var chains: Array = model.get("causal_chains", [])
 	var c_lines: Array = []
 	if chains.is_empty():
@@ -227,191 +524,11 @@ func _render_timeline(model: Dictionary) -> void:
 			c_lines.append("[color=#e8c170]%s[/color]" % str(chain.get("title", "链")))
 			for step in chain.get("steps", []):
 				c_lines.append("  %s" % str(step))
-	_fill_rtl(timeline_pages["causal"], c_lines)
-	# 首次渲染自动挑一个有内容的页；之后尊重用户选择
+	_set_rtl(timeline_pages["causal"], "
+".join(c_lines))
 	if not _timeline_autopicked:
 		_timeline_autopicked = true
 		if not events.is_empty():
 			_set_timeline_tab("events")
 		elif not threads.is_empty() or not (model.get("narrative_sentences", []) as Array).is_empty():
 			_set_timeline_tab("stories")
-
-func _placeholder(sel: Dictionary, key: String) -> String:
-	var v := str(sel.get(key, ""))
-	return v if v != "" else "—"
-
-func _inventory_text(sel: Dictionary) -> String:
-	if sel.has("inventory_items"):
-		var parts: Array = []
-		for item in sel.get("inventory_items", []):
-			var n: int = int(item.get("count", 0))
-			if n > 0:
-				parts.append("%s×%d" % [str(item.get("id", "?")), n])
-		return "、".join(parts) if not parts.is_empty() else "（空）"
-	var legacy := str(sel.get("inventory_text", ""))
-	return legacy if legacy != "" else "（空）"
-
-func _memory_bbcode(sel: Dictionary) -> String:
-	var mems: Array = sel.get("memory_items", [])
-	if mems.is_empty():
-		return "[color=#8899aa]暂无记忆[/color]"
-	var recent: Array = []
-	var important: Array = []
-	var social: Array = []
-	for i in range(mems.size() - 1, maxi(-1, mems.size() - 1 - MAX_MEMORIES), -1):
-		var m: Dictionary = mems[i]
-		var line := "[color=#e8c170]D%d[/color] %s" % [int(m.get("day", 0)), str(m.get("text", ""))]
-		recent.append(line)
-		if absf(float(m.get("importance", 0.0))) >= 0.5:
-			important.append(line)
-		if str(m.get("counterpart", "")) != "":
-			social.append("[color=#c0d8e8]%s[/color] %s" % [_short(str(m.get("counterpart", ""))), str(m.get("text", ""))])
-	var out := "[color=#e8c170]── 最近记忆 ──[/color]\n" + "\n".join(recent)
-	out += "\n[color=#e8c170]── 重要记忆 ──[/color]\n"
-	out += "\n".join(important) if not important.is_empty() else "[color=#8899aa]无[/color]"
-	out += "\n[color=#e8c170]── 社会记忆 ──[/color]\n"
-	out += "\n".join(social) if not social.is_empty() else "[color=#8899aa]无[/color]"
-	return out
-
-func _decision_bbcode(sel: Dictionary) -> String:
-	var decision: Dictionary = sel.get("decision", {})
-	if decision.is_empty():
-		return "[color=#8899aa]暂无决策数据[/color]"
-	var out := ""
-	out += "[color=#e8c170]当前计划[/color]：%s\n" % str(decision.get("plan", "—"))
-	out += "[color=#e8c170]当前步骤[/color]：%s\n" % str(decision.get("step", "—"))
-	out += "[color=#e8c170]理由[/color]：%s\n" % str(decision.get("reason", "—"))
-	out += "[color=#e8c170]阻塞[/color]：%s\n" % str(decision.get("blocker", "无"))
-	out += "[color=#e8c170]下一步意图[/color]：%s" % str(decision.get("next_step", "—"))
-	return out
-
-func _relations_bbcode(sel: Dictionary) -> String:
-	var rows: Array = sel.get("relationship_rows", [])
-	if rows.is_empty():
-		return "[color=#8899aa]暂无关系数据[/color]"
-	# 紧凑排版（v3.1 evidence）：视口仅容 ~9 逻辑行，名字并入维度行、
-	# 变化轨迹仅在非空时显示，保证【关系】与【ToM】两区可同屏取证
-	var out := "[color=#e8c170]── 关系（真实有向边）──[/color]
-"
-	for r in rows:
-		out += "[color=#c0d8e8]%s[/color] 信任%s 善意%s 可靠性%s
-" % [
-			str(r.get("other_name", "?")),
-			_sign(int(r.get("trust", 0))),
-			_sign(int(r.get("benevolence", 0))),
-			_sign(int(r.get("reliability", 0)))]
-		out += "  亏欠%s 畏惧%s" % [
-			_sign(int(r.get("obligation", 0))),
-			_sign(int(r.get("fear", 0)))]
-		var change := str(r.get("change", ""))
-		if change != "":
-			out += "  [color=#8899aa]变化：%s[/color]" % change
-		out += "
-"
-	out += "[color=#e8c170]── 我对他的判断（Theory of Mind）──[/color]
-"
-	for r in rows:
-		var tom: Dictionary = r.get("tom", {})
-		if tom.is_empty():
-			continue
-		out += "[color=#c0d8e8]%s[/color] [color=#8899aa]有食%+.1f 慷慨%+.1f 可靠%+.1f[/color]
-" % [
-			str(r.get("other_name", "?")),
-			float(tom.get("has_food", 0.0)), float(tom.get("generous", 0.0)), float(tom.get("reliable", 0.0))]
-	return out
-
-## 关系维度展示格式化（正数带 +，负数自带 -）
-func _sign(v: int) -> String:
-	return ("+" if v > 0 else "") + str(v)
-
-func _history_bbcode(sel: Dictionary) -> String:
-	var rows: Array = sel.get("history_rows", [])
-	var dialogue: Array = sel.get("history_dialogue_rows", [])
-	var chains: Array = sel.get("history_chain_rows", [])
-	if rows.is_empty() and dialogue.is_empty() and chains.is_empty():
-		return "[color=#8899aa]暂无历史数据[/color]"
-	var out := "[color=#e8c170]── 最近事件 ──[/color]\n"
-	if rows.is_empty():
-		out += "[color=#8899aa]无[/color]\n"
-	for r in rows:
-		out += "[color=#aabbcc]D%d E%d[/color] %s\n" % [int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))]
-	out += "\n[color=#e8c170]── 最近对话 ──[/color]\n"
-	if dialogue.is_empty():
-		out += "[color=#8899aa]无[/color]\n"
-	for dl in dialogue:
-		out += "[color=#c0d8e8]D%d %s：[/color]%s\n" % [int(dl.get("day", 0)), str(dl.get("speaker", "")), str(dl.get("text", ""))]
-	out += "\n[color=#e8c170]── 承诺 / 请求 / 行动链 ──[/color]\n"
-	if chains.is_empty():
-		out += "[color=#8899aa]无（等待 cause_seq 链数据）[/color]"
-	for step in chains:
-		out += "%s\n" % str(step)
-	return out
-
-func _personality_bbcode(sel: Dictionary) -> String:
-	var personality: Dictionary = sel.get("personality", {})
-	var traits: Array = personality.get("traits", [])
-	var by_key := {}
-	for t in traits:
-		by_key[str(t.get("key", ""))] = t
-	var out := ""
-	if traits.is_empty():
-		out += "[color=#8899aa]暂无特质数据\n[/color]"
-	var groups := [
-		["基础特质", ["resilience", "curiosity", "pragmatism"]],
-		["气质与风险偏好", ["action_bias", "caution", "expressiveness", "conflict_avoidance"]],
-		["社交倾向", ["empathy", "sociability", "altruism"]],
-	]
-	for group in groups:
-		out += "[color=#e8c170]── %s ──[/color]\n" % str(group[0])
-		for key in group[1]:
-			if by_key.has(key):
-				var t: Dictionary = by_key[key]
-				out += "%s %s %.2f\n" % [str(t.get("label", key)), _bar(float(t.get("value", 0.0))), float(t.get("value", 0.0))]
-		out += "\n"
-	out = out.substr(0, out.length() - 1)
-	var emotions: Array = personality.get("emotions", [])
-	out += "\n[color=#e8c170]── 情绪 ──[/color]\n"
-	if emotions.is_empty():
-		out += "[color=#8899aa]平稳[/color]"
-	else:
-		var parts: Array = []
-		for e in emotions:
-			var label := str(EMOTION_LABELS.get(str(e.get("key", "")), str(e.get("key", "?"))))
-			parts.append("%s%+.0f%%" % [label, float(e.get("value", 0.0)) * 100.0])
-		out += " ".join(parts)
-	var beliefs: Array = personality.get("beliefs", [])
-	out += "\n[color=#e8c170]── 信念 ──[/color]\n"
-	if beliefs.is_empty():
-		out += "[color=#8899aa]暂无数据[/color]"
-	else:
-		for b in beliefs:
-			out += "%s（%.1f）\n" % [str(b.get("text", "")), float(b.get("weight", 0.0))]
-	return out
-
-func _bar(value: float) -> String:
-	var filled := int(round(clampf(value, 0.0, 1.0) * 5.0))
-	var s := ""
-	for i in 5:
-		s += "▓" if i < filled else "·"
-	return s
-
-func _short(s: String) -> String:
-	return s.substr(0, 4) if s.length() > 4 else s
-
-## RichTextLabel 写 bbcode 必须走 append_text（.text 不解析标签）。
-func _set_rtl_bbcode(page, bbcode: String) -> void:
-	var rtl := page as RichTextLabel
-	if rtl == null:
-		return
-	rtl.clear()
-	rtl.append_text(bbcode)
-
-func _fill_rtl(page, lines: Array) -> void:
-	var rtl := page as RichTextLabel
-	if rtl == null:
-		return
-	rtl.clear()
-	if lines.is_empty():
-		rtl.append_text("[color=#8899aa]暂无数据[/color]")
-	else:
-		rtl.append_text("\n".join(lines))

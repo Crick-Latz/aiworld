@@ -4,7 +4,7 @@
 HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用）。HUD 不读取
 `island_sim` / `actor` / request tracker / commitments / 任何模拟内部对象。
 
-- 契约版本：`view_schema_version = "0.2"`（UI-R1 v2；Inspector 6 页制；0.1 为旧 3D HUD）
+- 契约版本：`view_schema_version = "0.3"`（UI-R2 七页大脑观察器；组装下沉 NpcBrainViewModel；0.2/0.1 为历史）
 - 文档分层：**CURRENT**（已组装并渲染）/ **OPTIONAL**（HUD 已渲染、模拟侧数据可能为空）/ **PLANNED**（壳已留、字段尚不存在）
 
 ## 顶层字段
@@ -29,31 +29,46 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | `world_facts_text` | String | OPTIONAL | 故事模式灯塔状态等（保留旧字段） |
 | `narrative_ir_claims` | Array | OPTIONAL | 叙事 IR claims（暂无 UI 消费） |
 
-## selected_actor（右侧 NPC Inspector）
+## selected_actor（右侧 NPC Inspector，UI-R2 七页：概览/决策/计划/认知/关系/记忆/社会）
 
-未选中时为 `null`，Inspector 显示"未选中 · 点击世界中的角色"占位。
+由 `game/src/presentation/npc_brain_view_model.gd::NpcBrainViewModel.build(sim, actor_id)`
+只读组装（observer_main 只调用不组装）。每个数据块带 `provenance`
+（objective/subjective/derived，HUD 渲染 [事实]/[主观]/[推导] 徽章）。
+字段级 provenance 详表见 `NPC_BRAIN_DATA_PROVENANCE.md`；真实 schema 依据
+`UI_R2_DATA_INVENTORY.md`。
 
-| 字段 | 类型 | 状态 | Inspector 位置 |
-|---|---|---|---|
-| `id` | String | CURRENT | — |
-| `display_name` | String | CURRENT | 头部名字 |
-| `status_text` | String | CURRENT | 头部状态小字（缺省回退 `activity_text`） |
-| `activity_text` | String | CURRENT | 0.1 兼容字段 |
-| `goal_text` | String | CURRENT | 概览·目标 |
-| `decision_text` | String | CURRENT | 概览·决策（= decision.reason 摘要） |
-| `location_text` | String | CURRENT | 概览·位置（逻辑格） |
-| `needs_text` | String | CURRENT | 概览·需求（饿/渴/累/孤独） |
-| `inventory_text` | String | CURRENT | 0.1 兼容字段 |
-| `inventory_items` | Array | CURRENT | 概览·物资：`{id, count}` |
-| `memory_items` | Array | CURRENT | 记忆页：`{day, tick, text, type, counterpart, importance}`（最近 ≤20） |
-| `personality.traits` | Array | CURRENT | 性格页·特质：`{key, label, value}`（10 项，中文标签） |
-| `personality.emotions` | Array | CURRENT | 性格页·情绪：`{key, value}`（|v|>0.05 才出现） |
-| `personality.beliefs` | Array | CURRENT | 性格页·信念：`{text, weight}` |
-| `decision` | Dictionary | CURRENT | 决策页：`{plan, step, reason, blocker, next_step}` |
-| `relationship_rows` | Array | CURRENT | 关系页（两层分离）：真实关系边 `{other_id, other_name, trust(综合), benevolence, reliability, obligation, fear, change}`（get_dim 四维）+ 主观判断 `tom:{has_food,generous,reliable}`——ToM 信念 ≠ 关系边，UI 分区展示 |
-| `history_rows` | Array | CURRENT | 历史页·最近事件：`{day, seq, text}`（该角色相关事件，倒序 ≤12） |
-| `history_dialogue_rows` | Array | CURRENT | 历史页·最近对话：该角色台词（≤6 条回溯） |
-| `history_chain_rows` | Array | CURRENT | 历史页·行动链：该角色自身 cause_seq 链步（无则空→占位） |
+### CURRENT（runtime 真实产出）
+
+| 字段 | 说明 |
+|---|---|
+| id / display_name / status_text / location_text | 身份（objective） |
+| state.activity / state.inventory_items[{id,count,provenance}] | 客观状态 |
+| needs.rows[{key,label,value,frac,provenance}] ×4 | hunger/thirst/social(objective) + **fatigue=1000-energy(derived，显式标注)**；按紧迫度降序 |
+| emotions.rows[{key,label,value}]×5 / emotions.dominant | signed -1..1 + 主导情绪聚合 |
+| personality.traits[{key,label,value}]×10 / personality.beliefs[{text,weight}] | 0..1 特质 / 信念（weight 真实 schema） |
+| decision.{chosen,reason,current_action,blocker,next_step,considered_count,dominant_interpretation,decision_tick} | 决策留痕（subjective；current_action 为 objective） |
+| decision.candidates[{action,utility,chosen}] | **真实 softmax 候选效用表**（trace.top_candidates；无决策 tick 时为空） |
+| plan.goal / plan.intention / plan.execution / plan.nodes[{kind,label,value,status,source_kind}] | 竖向计划流（agency_execution 单步留痕；状态图标 ACTIVE/BLOCKED/…） |
+| mind.open_questions[{about_name,kind,entropy,stakes,tick,source_event_ids}] | 未解之问 |
+| mind.tom_subjects[{other_name,rows[{predicate,label,value,confidence,last_evidence_tick}],last_seen}] | **动态谓词知识**（has_item:* 任意谓词，含 P7.2B holder evidence） |
+| mind.prediction_error | 心智模型预测误差 |
+| relationships.rows[{other_name,trust,benevolence,reliability,obligation,fear,change?,tom}] | 真实有向边（objective）+ ToM 三槽（subjective）两层分离 |
+| memories.rows[{seq,tick,day,text,type,counterpart,derived_importance,interpretation}] | 记忆卡片（day/derived_importance 为 derived） |
+| social.commitments[{direction,counterpart_name,object,quantity,status,due_tick,source_request_id}] | 承诺台账只读过滤（我欠/欠我） |
+| social.recent_requests / holder_events / recent_social_events | 事件尾部派生（≤300 扫描） |
+| why_chain[{label,provenance,source_kind,source_ref}] | 确定性解释链（无 LLM） |
+| 兼容字段 activity_text/goal_text/inventory_text/needs_text/decision_text/inventory_items | 0.2 兼容（wander/story 模式） |
+
+### DERIVED（presentation 推导，UI 显式标注）
+
+fatigue（=1000-energy）、needs 排序、emotions.dominant、memories.day（=tick/24+1）、
+memories.derived_importance（=abs(appraisal_goal_congruence)）、social 各事件分组、
+why_chain 的串联本身。
+
+### PLANNED（等模拟线 read-only API，见 UI_R2_VIEWMODEL_GAPS.md）
+
+active_plan_steps（步骤树）、active_material_requests（请求实时状态）、
+tom_evidence_of（证据明细）、relationship history、memory 原生 importance。
 
 ### PLANNED（Inspector 壳已留、字段尚不存在）
 

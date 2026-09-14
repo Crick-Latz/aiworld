@@ -6,7 +6,7 @@
 [sub_resource type="ButtonGroup" id="inspector_tab_group"]
 allow_unpress = false
 
-[sub_resource type="ButtonGroup" id="timeline_tab_group"]
+[sub_resource type="ButtonGroup" id="memory_filter_group"]
 allow_unpress = false
 
 [node name="ObserverHud" type="CanvasLayer"]
@@ -41,7 +41,7 @@ theme_override_constants/separation = 5
 [node name="WorldLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
-text = "灰雾港 · 观察模式"
+text = "荒岛 · 观察模式"
 
 [node name="TickLabel" type="Label" parent="Root/TopBar/TopMargin/TopHBox"]
 layout_mode = 2
@@ -137,26 +137,26 @@ button_pressed = true
 button_group = SubResource("inspector_tab_group")
 text = "概览"
 
-[node name="Memory" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-toggle_mode = true
-button_group = SubResource("inspector_tab_group")
-text = "记忆"
-
-[node name="Personality" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-toggle_mode = true
-button_group = SubResource("inspector_tab_group")
-text = "性格"
-
 [node name="Decision" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
 toggle_mode = true
 button_group = SubResource("inspector_tab_group")
 text = "决策"
+
+[node name="Plan" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "计划"
+
+[node name="Mind" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "认知"
 
 [node name="Relations" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
 layout_mode = 2
@@ -165,12 +165,19 @@ toggle_mode = true
 button_group = SubResource("inspector_tab_group")
 text = "关系"
 
-[node name="History" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+[node name="Memory" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
 toggle_mode = true
 button_group = SubResource("inspector_tab_group")
-text = "历史"
+text = "记忆"
+
+[node name="Social" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/TabGrid"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+toggle_mode = true
+button_group = SubResource("inspector_tab_group")
+text = "社会"
 
 [node name="PagesV" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox"]
 layout_mode = 2
@@ -188,42 +195,40 @@ theme_override_font_sizes/font_size = 7
 autowrap_mode = 3
 text = "目标：—"
 
-[node name="DecisionLineLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-autowrap_mode = 3
-text = "决策：—"
-
 [node name="LocationLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
 text = "位置：—"
 
-[node name="NeedsLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 7
-text = "需求：—"
-
 [node name="InventoryLabel" type="Label" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
 layout_mode = 2
-size_flags_vertical = 0
 theme_override_font_sizes/font_size = 7
 autowrap_mode = 3
 text = "物资：—"
 
-[node name="MemoryPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
-visible = false
+[node name="NeedsLabel" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
 layout_mode = 2
 size_flags_vertical = 3
 bbcode_enabled = true
 
-[node name="PersonalityPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
-visible = false
+[node name="WhyOverview" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/OverviewPage"]
 layout_mode = 2
-size_flags_vertical = 3
+size_flags_vertical = 6
 bbcode_enabled = true
 
 [node name="DecisionPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="PlanPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="MindPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
@@ -235,7 +240,51 @@ layout_mode = 2
 size_flags_vertical = 3
 bbcode_enabled = true
 
-[node name="HistoryPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+[node name="MemoryPage" type="VBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="MemoryFilterRow" type="HBoxContainer" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="FilterAll" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryFilterRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("memory_filter_group")
+text = "全部"
+
+[node name="FilterSocial" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryFilterRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+toggle_mode = true
+button_group = SubResource("memory_filter_group")
+text = "社会"
+
+[node name="FilterImportant" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryFilterRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+toggle_mode = true
+button_group = SubResource("memory_filter_group")
+text = "重要"
+
+[node name="FilterRecent" type="Button" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage/MemoryFilterRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+toggle_mode = true
+button_group = SubResource("memory_filter_group")
+text = "最近"
+
+[node name="MemoryList" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV/MemoryPage"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="SocialPage" type="RichTextLabel" parent="Root/InspectorPanel/InsMargin/InsVBox/PagesV"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
@@ -268,25 +317,21 @@ theme_override_constants/separation = 4
 layout_mode = 2
 toggle_mode = true
 button_pressed = true
-button_group = SubResource("timeline_tab_group")
 text = "事件"
 
 [node name="Stories" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
 layout_mode = 2
 toggle_mode = true
-button_group = SubResource("timeline_tab_group")
 text = "故事"
 
 [node name="Dialogue" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
 layout_mode = 2
 toggle_mode = true
-button_group = SubResource("timeline_tab_group")
 text = "对话"
 
 [node name="Causal" type="Button" parent="Root/BottomPanel/BotMargin/BotVBox/TabRow"]
 layout_mode = 2
 toggle_mode = true
-button_group = SubResource("timeline_tab_group")
 text = "因果链"
 
 [node name="PagesH" type="HBoxContainer" parent="Root/BottomPanel/BotMargin/BotVBox"]
