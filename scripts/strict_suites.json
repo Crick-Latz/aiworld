@@ -234,12 +234,12 @@
     {
       "name": "p7_2b_holder_evidence_hardening",
       "script": "res://test/p7_2b_holder_evidence_hardening.gd",
-      "expected": 27
+      "expected": 64
     },
     {
       "name": "p7_2b_runtime_chain",
       "script": "res://test/p7_2b_runtime_chain.gd",
-      "expected": 26
+      "expected": 38
     }
   ]
 }

@@ -93,19 +93,27 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 	if str(action.get("information_goal_id", "")) != str(goal.get("goal_id", "")):
 		return goal.duplicate(true)
 	var action_name := str(action.get("action", ""))
-	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder"]:
+	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder",
+			"seek_holder_person"]:
 		return goal.duplicate(true)
 
 	goal["attempts"] = int(goal.get("attempts", 0)) + 1
 	goal["last_attempt_tick"] = at_tick
 	goal["updated_tick"] = at_tick
-	if action_name == "search_resource_source":
-		var target = action.get("target", null)
-		if typeof(target) == TYPE_VECTOR2I:
-			_add_unique(goal["tried_tiles"], SpatialBeliefMap.key(target.x, target.y))
-	else:
-		goal["asks"] = int(goal.get("asks", 0)) + 1
-		_add_unique(goal["asked_actor_ids"], str(action.get("target_actor", "")))
+	match action_name:
+		"search_resource_source":
+			var target = action.get("target", null)
+			if typeof(target) == TYPE_VECTOR2I:
+				_add_unique(goal["tried_tiles"], SpatialBeliefMap.key(target.x, target.y))
+		"seek_holder_person":
+			# P7.2C-R1：seek 是找人不是询问——不得计入 asks/asked_actor_ids
+			#（否则找到的人会被 ask policy 排除，C1 链条断裂）。
+			# 字段首次真实 seek 完成时动态创建（flag-off 的旧 goal shape 不变）。
+			goal["seeks"] = int(goal.get("seeks", 0)) + 1
+			_add_unique(_dynamic_list(goal, "sought_actor_ids"), str(action.get("target_actor", "")))
+		_:
+			goal["asks"] = int(goal.get("asks", 0)) + 1
+			_add_unique(goal["asked_actor_ids"], str(action.get("target_actor", "")))
 
 	var result := "NO_EVIDENCE"
 	var evidence_refs: Array = []
@@ -150,6 +158,8 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 				goal["unknown_responses"] = int(goal.get("unknown_responses", 0)) + 1
 			"holder_information_self_absent": result = "HOLDER_SELF_ABSENT"
 			"holder_information_missed": result = "TARGET_MISSED"
+			"holder_seek_found_person": result = "SEEK_FOUND_PERSON"
+			"holder_seek_person_not_found": result = "SEEK_PERSON_MISSED"
 	for ref in evidence_refs:
 		_add_unique(goal["evidence_refs"], ref)
 	goal["last_result"] = result
@@ -185,6 +195,7 @@ func prepare_holder(actor_id: String, request: Dictionary, at_tick: int,
 				and str(current.get("source_request_id", "")) == str(request.get("request_id", "")):
 			current["excluded_target_ids"] = excluded_target_ids.duplicate()
 			current["request_urgency"] = clampf(request_urgency, 0.0, 1.0)
+			current["parent_blockedness"] = clampf(float(request.get("parent_blockedness", 0.5)), 0.0, 1.0)
 			current["updated_tick"] = at_tick
 			goals[actor_id] = current
 			return current.duplicate(true)
@@ -212,6 +223,7 @@ func prepare_holder(actor_id: String, request: Dictionary, at_tick: int,
 		"item_id": item_id,
 		"holder_predicate": TheoryOfMind.possession_predicate(item_id),
 		"request_urgency": clampf(request_urgency, 0.0, 1.0),
+		"parent_blockedness": clampf(float(request.get("parent_blockedness", 0.5)), 0.0, 1.0),
 		"created_tick": at_tick,
 		"updated_tick": at_tick,
 		"last_attempt_tick": -1,
@@ -415,6 +427,12 @@ func _trace(goal: Dictionary, event_name: String, at_tick: int, extra: Dictionar
 	for key in extra:
 		row[key] = extra[key]
 	traces.append(row)
+
+## P7.2C-R1：按需创建的动态数组字段（首用前不存在——旧 goal shape 保持逐位兼容）。
+static func _dynamic_list(goal: Dictionary, key: String) -> Array:
+	if not goal.has(key):
+		goal[key] = []
+	return goal[key]
 
 static func _add_unique(array: Array, value: String) -> void:
 	if value != "" and not array.has(value):
