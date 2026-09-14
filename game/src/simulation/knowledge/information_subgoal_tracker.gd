@@ -24,6 +24,12 @@ func prepare(actor_id: String, proposals: Array, ctx: Dictionary,
 		self_state: Dictionary, at_tick: int, items: ItemCatalog) -> Dictionary:
 	var current: Dictionary = goals.get(actor_id, {})
 	if not current.is_empty() and str(current.get("state", "")) == STATE_ACTIVE:
+		# P7.2B-R1：query-kind 分发。HOLDER 目标的生命周期只由 source material
+		# request 驱动（resolve_holder_goal / cancel_holder_goal / _holder_goals_sync_all），
+		# 普通 SOURCE prepare 不得用 _candidate_still_present（UNKNOWN_SOURCE 语义）
+		# 取消它——那曾把 507/556 个 HOLDER goal 以 PARENT_BLOCKER_REMOVED 误杀。
+		if str(current.get("query_kind", "SOURCE")) == "HOLDER":
+			return current.duplicate(true)
 		if _context_has_source(ctx, current.get("source_kinds", [])):
 			_resolve(current, at_tick, "SOURCE_BELIEF_AVAILABLE", _belief_refs(ctx, current.get("source_kinds", [])))
 			goals[actor_id] = current
@@ -87,7 +93,7 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 	if str(action.get("information_goal_id", "")) != str(goal.get("goal_id", "")):
 		return goal.duplicate(true)
 	var action_name := str(action.get("action", ""))
-	if action_name not in ["search_resource_source", "ask_resource_source"]:
+	if action_name not in ["search_resource_source", "ask_resource_source", "ask_item_holder"]:
 		return goal.duplicate(true)
 
 	goal["attempts"] = int(goal.get("attempts", 0)) + 1
@@ -130,6 +136,20 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 			"source_information_missed": result = "TARGET_MISSED"
 			"action_target_unreachable": result = "TARGET_UNREACHABLE"
 			"action_target_missed": result = "TARGET_MISSED"
+			# P7.2B-R1：HOLDER 询问结果落账（attempts/asks/asked_actor_ids 走通用路径，
+			# 此处补结果分类与各类计数）。
+			"holder_information_shared": result = "HOLDER_REPORT_SHARED"
+			"holder_information_refused":
+				result = "HOLDER_REPORT_REFUSED"
+				goal["refusals"] = int(goal.get("refusals", 0)) + 1
+			"holder_information_stale":
+				result = "HOLDER_REPORT_STALE"
+				goal["stale_reports"] = int(goal.get("stale_reports", 0)) + 1
+			"holder_information_unknown":
+				result = "HOLDER_REPORT_UNKNOWN"
+				goal["unknown_responses"] = int(goal.get("unknown_responses", 0)) + 1
+			"holder_information_self_absent": result = "HOLDER_SELF_ABSENT"
+			"holder_information_missed": result = "TARGET_MISSED"
 	for ref in evidence_refs:
 		_add_unique(goal["evidence_refs"], ref)
 	goal["last_result"] = result
@@ -139,7 +159,10 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 		for ref in refs:
 			_add_unique(goal["evidence_refs"], ref)
 		_resolve(goal, at_tick, result, goal["evidence_refs"])
-	elif int(goal.get("attempts", 0)) >= MAX_ATTEMPTS:
+	elif str(goal.get("query_kind", "SOURCE")) != "HOLDER" and int(goal.get("attempts", 0)) >= MAX_ATTEMPTS:
+		# P7.2B-R1.1：HOLDER 不因通用 MAX_ATTEMPTS 进 FAILED——终止权唯一归
+		# request/run/step/gap contract；问尽当前对象后保持 ACTIVE 等待环境变化。
+		# SOURCE 的 ATTEMPT_LIMIT 冷却语义逐位不变。
 		_transition(goal, STATE_FAILED, at_tick, "ATTEMPT_LIMIT")
 		goal["retry_after_tick"] = at_tick + RETRY_COOLDOWN_TICKS
 	else:
@@ -147,6 +170,111 @@ func on_action_complete(actor_id: String, action: Dictionary, event_segment: Arr
 			"event_refs": evidence_refs.duplicate()})
 	goals[actor_id] = goal
 	return goal.duplicate(true)
+
+# ── P7.2B：FIND_HOLDER 信息目标（绑定 source material request） ──
+
+## NO_SUBJECTIVE_TARGET → 创建/复用 HOLDER 目标。并发纪律：
+## A 同 source_request_id 的 ACTIVE HOLDER → 复用（不重建）；
+## B 同 parent_plan_id+item 的 ACTIVE SOURCE → 取消（MATERIAL_REQUEST_NEEDS_HOLDER）后切换；
+## C 其他 ACTIVE 目标 → 不覆盖（单目标纪律）。
+func prepare_holder(actor_id: String, request: Dictionary, at_tick: int,
+		excluded_target_ids: Array = [], request_urgency: float = 0.5) -> Dictionary:
+	var current: Dictionary = goals.get(actor_id, {})
+	if not current.is_empty() and str(current.get("state", "")) == STATE_ACTIVE:
+		if str(current.get("query_kind", "SOURCE")) == "HOLDER" \
+				and str(current.get("source_request_id", "")) == str(request.get("request_id", "")):
+			current["excluded_target_ids"] = excluded_target_ids.duplicate()
+			current["request_urgency"] = clampf(request_urgency, 0.0, 1.0)
+			current["updated_tick"] = at_tick
+			goals[actor_id] = current
+			return current.duplicate(true)
+		if str(current.get("query_kind", "SOURCE")) == "SOURCE" \
+				and str(current.get("parent_plan_id", "")) == str(request.get("parent_plan_id", "")) \
+				and str(current.get("item_id", "")) == str(request.get("item_id", "")):
+			_transition(current, STATE_CANCELLED, at_tick, "MATERIAL_REQUEST_NEEDS_HOLDER")
+		else:
+			return {}  # 情况 C：别的目标在身——不抢
+	var item_id := str(request.get("item_id", ""))
+	if item_id == "":
+		return {}
+	var serial := int(_serials.get(actor_id, 0)) + 1
+	_serials[actor_id] = serial
+	var goal := {
+		"goal_id": "INFO:HOLDER:%s:%d:%s" % [actor_id, serial, item_id],
+		"query_kind": "HOLDER",
+		"actor_id": actor_id,
+		"state": STATE_ACTIVE,
+		"source_request_id": str(request.get("request_id", "")),
+		"parent_plan_id": str(request.get("parent_plan_id", "")),
+		"parent_run_id": str(request.get("parent_run_id", "")),
+		"blocker_step_id": str(request.get("blocker_step_id", "")),
+		"root_goal": str(request.get("root_goal", "")),
+		"item_id": item_id,
+		"holder_predicate": TheoryOfMind.possession_predicate(item_id),
+		"request_urgency": clampf(request_urgency, 0.0, 1.0),
+		"created_tick": at_tick,
+		"updated_tick": at_tick,
+		"last_attempt_tick": -1,
+		"attempts": 0,
+		"asks": 0,
+		"refusals": 0,
+		"stale_reports": 0,
+		"unknown_responses": 0,
+		"asked_actor_ids": [],
+		"excluded_target_ids": excluded_target_ids.duplicate(),
+		"evidence_refs": [],
+		"last_result": "",
+		"retry_after_tick": -1,
+	}
+	goals[actor_id] = goal
+	_trace(goal, "HOLDER_GOAL_CREATED", at_tick, {
+		"source_request_id": goal["source_request_id"],
+		"parent_run_id": goal["parent_run_id"],
+		"blocker_step_id": goal["blocker_step_id"],
+	})
+	return goal.duplicate(true)
+
+## HOLDER 目标的唯一 RESOLVED 条件：同 source_request_id 的 material request
+## 真实发出了 MATERIAL_REQUEST_OFFERED（学到传闻 ≠ 找到可交互目标）。
+func resolve_holder_goal(actor_id: String, source_request_id: String, at_tick: int,
+		evidence_ref: String = "") -> Dictionary:
+	var goal: Dictionary = goals.get(actor_id, {})
+	if goal.is_empty() or str(goal.get("state", "")) != STATE_ACTIVE:
+		return {}
+	if str(goal.get("query_kind", "SOURCE")) != "HOLDER" \
+			or str(goal.get("source_request_id", "")) != source_request_id:
+		return {}
+	if evidence_ref != "":
+		_add_unique(goal["evidence_refs"], evidence_ref)
+	_resolve(goal, at_tick, "ACTIONABLE_HOLDER_ACQUIRED", goal["evidence_refs"])
+	_trace(goal, "HOLDER_GOAL_RESOLVED", at_tick, {"reason_code": "ACTIONABLE_HOLDER_ACQUIRED"})
+	goals[actor_id] = goal
+	return goal.duplicate(true)
+
+## source request 终局/身份漂移 → HOLDER 目标跟随取消（不得复活父请求）。
+func cancel_holder_goal(actor_id: String, reason: String, at_tick: int) -> Dictionary:
+	var goal: Dictionary = goals.get(actor_id, {})
+	if goal.is_empty() or str(goal.get("state", "")) != STATE_ACTIVE:
+		return {}
+	if str(goal.get("query_kind", "SOURCE")) != "HOLDER":
+		return {}
+	_transition(goal, STATE_CANCELLED, at_tick, reason)
+	_trace(goal, "HOLDER_GOAL_CANCELLED", at_tick, {"reason_code": reason})
+	goals[actor_id] = goal
+	return goal.duplicate(true)
+
+## 每周期同步：目标引用的 request 是否仍活着且仍缺货（由 sim 提供 mismatch 原因）。
+func holder_goal_still_valid(actor_id: String, mismatch_reason: String, current_gap: int) -> String:
+	var goal: Dictionary = goals.get(actor_id, {})
+	if goal.is_empty() or str(goal.get("state", "")) != STATE_ACTIVE:
+		return ""
+	if str(goal.get("query_kind", "SOURCE")) != "HOLDER":
+		return ""
+	if mismatch_reason != "":
+		return mismatch_reason  # PARENT_RUN_CHANGED / BLOCKER_CHANGED / REQUEST_GONE
+	if current_gap <= 0:
+		return "GAP_CLOSED"
+	return ""
 
 func current_goal(actor_id: String) -> Dictionary:
 	return (goals.get(actor_id, {}) as Dictionary).duplicate(true)
@@ -276,6 +404,14 @@ func _trace(goal: Dictionary, event_name: String, at_tick: int, extra: Dictionar
 		"state": str(goal.get("state", "")),
 		"attempts": int(goal.get("attempts", 0)),
 	}
+	# P7.2B-R1：HOLDER 行附身份字段（query_kind/source_request_id/parent_run_id/
+	# blocker_step_id），可按字段归属（goal_id 前缀为稳定后备）。SOURCE 行保持
+	# 旧形状逐字节不变——旧 profile 的 information trace 哈希不受影响。
+	if str(goal.get("query_kind", "SOURCE")) == "HOLDER":
+		row["query_kind"] = "HOLDER"
+		row["source_request_id"] = str(goal.get("source_request_id", ""))
+		row["parent_run_id"] = str(goal.get("parent_run_id", ""))
+		row["blocker_step_id"] = str(goal.get("blocker_step_id", ""))
 	for key in extra:
 		row[key] = extra[key]
 	traces.append(row)
@@ -283,3 +419,12 @@ func _trace(goal: Dictionary, event_name: String, at_tick: int, extra: Dictionar
 static func _add_unique(array: Array, value: String) -> void:
 	if value != "" and not array.has(value):
 		array.append(value)
+
+## P7.2B：报告应用/审计事件的附加 trace 行（由 sim 在证据写入时调用）。
+func trace_holder_report(actor_id: String, goal_id: String, row: Dictionary) -> void:
+	var entry := row.duplicate(true)
+	entry["actor_id"] = actor_id
+	entry["goal_id"] = goal_id
+	entry["query_kind"] = "HOLDER"
+	entry["state"] = str((goals.get(actor_id, {}) as Dictionary).get("state", ""))
+	traces.append(entry)

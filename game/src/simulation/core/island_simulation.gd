@@ -52,6 +52,12 @@ var _material_request_runtime: MaterialRequestRuntimeBridge = null
 # 默认 false，既有 profile 行为不变；权威台账仍是 obligations（单台账）。
 var agency_commitment_consequences_enabled := false
 var _commitment_runtime: CommitmentRuntimeBridge = null
+# P7.2B：NO_SUBJECTIVE_TARGET → FIND_HOLDER 信息目标 → 开放式询问 → 来源化持有证据
+# → 同一 material request 重新选目标。默认 false；旧 profile 行为不变。
+var agency_holder_evidence_reachability_enabled := false
+# P7.2B-R1.1：opportunity funnel 诊断计数——纯加性、只写不读、不参与任何行为/
+# RNG/排序决策；不进入 state 编码（audit 排除），仅随 summary 输出供分析器消费。
+var _holder_funnel_diag := {}
 # 信息交换使用独立随机流，避免一次询问消耗天气、捕鱼等世界随机序列。
 var _information_rngs := {}
 var _adoption_rngs := {}
@@ -280,6 +286,8 @@ func step() -> Array:
 		new_events.append_array(_material_requests_expire_due())
 	if agency_commitment_consequences_enabled:
 		_commitments_check_due()
+	if agency_holder_evidence_reachability_enabled:
+		_holder_goals_sync_all()
 
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
 	for id in actors:
@@ -419,6 +427,9 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_extra.has("information_goal"):
 		actor_view["information_subgoal"] = (agency_extra["information_goal"] as Dictionary).duplicate(true)
 	var decision: Dictionary = DecisionEngine.decide(actor_view, world, _rng, agency_extra)
+	if agency_holder_evidence_reachability_enabled \
+			and str(decision.get("action", "")) == "ask_item_holder":
+		_holder_diag_inc("holder_ask_actions_selected")
 	a["current_action"] = decision
 	a["action_ticks_left"] = int(decision.get("duration", 1))
 	a["action_travel_stall_ticks"] = 0
@@ -494,6 +505,33 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			{"needs": a["needs"].duplicate(true)}, tick, _item_catalog_if_any())
 		if not information_goal.is_empty():
 			out["information_goal"] = information_goal
+		# P7.2B-R1.1：opportunity funnel（只计数，不改变任何决策输入）。
+		if agency_holder_evidence_reachability_enabled \
+				and str(information_goal.get("query_kind", "SOURCE")) == "HOLDER" \
+				and str(information_goal.get("state", "")) == "ACTIVE":
+			_holder_diag_inc("holder_decision_ticks")
+			var diag_view := _build_actor_view(id, a)
+			var asked_ids: Array = information_goal.get("asked_actor_ids", [])
+			var excluded_ids: Array = information_goal.get("excluded_target_ids", [])
+			var visible_count := 0
+			var eligible_count := 0
+			for peer in (diag_view.get("others_visible", []) as Array):
+				visible_count += 1
+				var peer_id := str((peer as Dictionary).get("id", ""))
+				if asked_ids.has(peer_id):
+					_holder_diag_inc("holder_peer_excluded_already_asked")
+				elif excluded_ids.has(peer_id):
+					_holder_diag_inc("holder_peer_excluded_request_refused")
+				else:
+					eligible_count += 1
+			if visible_count > 0:
+				_holder_diag_inc("holder_ticks_with_visible_peers")
+			if eligible_count > 0:
+				_holder_diag_inc("holder_ticks_with_eligible_peers")
+			else:
+				_holder_diag_inc("holder_ticks_with_no_eligible_peer")
+			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
+			_holder_diag_inc("holder_ask_candidates_emitted", diag_candidates.size())
 	# P6.3B-1 §三/§五：仅 LIVE_BRIDGE + 显式开启时，当前执行步骤进入决策（其他模式只观察）
 	if agency_plan_execution_enabled and str(agency_mode) == "LIVE_BRIDGE":
 		var tracker := _execution_tracker()
@@ -705,6 +743,15 @@ func _material_requests_process_requester(
 			var offered := bridge.try_offer(str(request.get("request_id", "")), beliefs, tick)
 			if bool(offered.get("ok", false)):
 				_emit_material_request_event("MATERIAL_REQUEST_OFFERED", requester_id, offered.get("request", {}))
+				# P7.2B：同 source_request_id 的真实 OFFERED 是 HOLDER 目标的唯一完成条件。
+				if agency_holder_evidence_reachability_enabled:
+					_information_tracker().resolve_holder_goal(requester_id, str(request.get("request_id", "")), tick)
+			elif agency_holder_evidence_reachability_enabled \
+					and str(offered.get("reason", "")) == "NO_SUBJECTIVE_TARGET":
+				# 我不知道谁有 X——这本身就是向身边人打听的理由（开放询问入口）。
+				_information_tracker().prepare_holder(requester_id, request, tick,
+					bridge.excluded_targets_for(str(request.get("request_id", ""))),
+					clampf(float(request.get("urgency", 0.5)), 0.0, 1.0))
 		Contract.STATUS_WAITING_REQUESTER:
 			var current_gap := _material_request_current_gap(requester_id, a, request)
 			var counter: Dictionary = request.get("last_counter", {})
@@ -1035,6 +1082,12 @@ func _material_request_event_text(event_type: String, request: Dictionary) -> St
 	return "%s %s %s" % [event_type, str(request.get("requester_id", "")), str(request.get("item_id", ""))]
 
 # ── P7.2：条件承诺（权威台账 = obligations，单台账） ──
+
+func _holder_diag_inc(key: String, n: int = 1) -> void:
+	_holder_funnel_diag[key] = int(_holder_funnel_diag.get(key, 0)) + n
+
+func agency_holder_funnel_diagnostics() -> Dictionary:
+	return _holder_funnel_diag.duplicate(true)
 
 func _commitment_runtime_bridge() -> CommitmentRuntimeBridge:
 	if _commitment_runtime == null:
@@ -1404,6 +1457,9 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_search_resource_source(id, a, action, new_events)
 		"ask_resource_source":
 			_do_ask_resource_source(id, a, action, new_events)
+		"ask_item_holder":
+			_holder_diag_inc("holder_ask_actions_completed")
+			_do_ask_item_holder(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
 		"observe_person":
@@ -2119,6 +2175,143 @@ func _do_ask_resource_source(id: String, a: Dictionary, action: Dictionary, ev: 
 			_emit("source_information_stale", target_id, "%s 只记得一条过时线索" % target["display_name"], common)
 		_:
 			_emit("source_information_unknown", target_id, "%s 也不知道来源" % target["display_name"], common)
+
+## P7.2B：开放式持有询问执行。回答方只用两类合法信息源——自己的库存自知、
+## 自己 ToM 的第三方持有证据；报告带 observed/received 双时间与 reporter 来源，
+## 请求者以 claim 证据写入自己的 ToM（绝不直读对方库存）。
+func _do_ask_item_holder(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var target_id := str(action.get("target_actor", ""))
+	var goal_id := str(action.get("information_goal_id", ""))
+	var item_id := str(action.get("item_id", ""))
+	if not actors.has(target_id) or not _is_nearby(a["tile"], actors[target_id]["tile"]):
+		_holder_diag_inc("holder_ask_target_missed")
+		_emit("holder_information_missed", id, "%s 没能找到想打听的人" % a["display_name"], {
+			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+			"item_id": item_id, "target_id": target_id,
+		})
+		return
+	var target: Dictionary = actors[target_id]
+	_holder_diag_inc("holder_ask_actions_started")
+	_holder_diag_inc("holder_queries_received")
+	if int(target.get("inventory", {}).get(item_id, 0)) > 0:
+		_holder_diag_inc("holder_responder_self_holder_at_query")
+	var responder_tom: TheoryOfMind = target.get("tom", null)
+	if responder_tom != null:
+		var _rows := responder_tom.subjects_with_evidence(TheoryOfMind.possession_predicate(item_id))
+		var _fresh := false
+		var _stale := false
+		for _row in _rows:
+			var _pid := str((_row as Dictionary).get("actor_id", ""))
+			if _pid == "" or _pid == id or _pid == target_id:
+				continue
+			if float((_row as Dictionary).get("belief", 0.0)) <= 0.0:
+				continue
+			var _pt := int((_row as Dictionary).get("positive_evidence_tick", -1))
+			if _pt >= 0 and tick - _pt <= InformationExchangePolicy.MAX_REPORT_AGE_TICKS:
+				_fresh = true
+			else:
+				_stale = true
+		if _fresh:
+			_holder_diag_inc("holder_responder_fresh_third_party_available")
+		elif _stale:
+			_holder_diag_inc("holder_responder_stale_third_party_available")
+	_emit("holder_information_requested", id,
+		"%s 向 %s 打听：你或你知道的人有%s吗？" % [a["display_name"], target["display_name"], item_id], {
+			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+			"parent_plan_id": str(action.get("parent_plan_id", "")),
+			"item_id": item_id, "target_id": target_id, "to_id": target_id,
+			"holder_predicate": str(action.get("holder_predicate", "")),
+		})
+	var response := InformationExchangePolicy.evaluate_holder_query(target, id, item_id,
+		relationships.composite_trust(target_id, id), tick, _information_rng(target_id))
+	var kind := str(response.get("response", InformationExchangePolicy.HOLDER_UNKNOWN))
+	var reported_holder := str(response.get("reported_holder_id", ""))
+	var common := {
+		"information_goal_id": goal_id,
+		"source_request_id": str(action.get("source_request_id", "")),
+		"parent_plan_id": str(action.get("parent_plan_id", "")),
+		"item_id": item_id,
+		"to_id": id, "target_id": id,
+		"reporter_id": str(response.get("reporter_id", target_id)),
+		"reported_holder_id": reported_holder,
+		"observed_tick": int(response.get("observed_tick", -1)),
+		"received_tick": tick,
+		"confidence": float(response.get("confidence", 0.0)),
+		"evidence_kind": str(response.get("evidence_kind", "")),
+		"reason_code": str(response.get("reason_code", "")),
+		"holder_predicate": str(action.get("holder_predicate", "")),
+	}
+	_holder_diag_inc("holder_response_" + kind)
+	var event_type: String = {
+		InformationExchangePolicy.HOLDER_SHARE: "holder_information_shared",
+		InformationExchangePolicy.HOLDER_REFUSE: "holder_information_refused",
+		InformationExchangePolicy.HOLDER_STALE: "holder_information_stale",
+		InformationExchangePolicy.HOLDER_SELF_ABSENT: "holder_information_self_absent",
+	}.get(kind, "holder_information_unknown")
+	var text := "%s 回答 %s" % [target["display_name"], a["display_name"]]
+	var seq := _emit(event_type, target_id, text, common)
+	# 请求者认知写入：SHARE=正向 claim；SELF_ABSENT=关于回答者的负向 claim。
+	if kind == InformationExchangePolicy.HOLDER_SHARE and reported_holder != "":
+		var weight := _holder_report_weight(id, target_id,
+			float(response.get("confidence", 0.0)))
+		(a["tom"] as TheoryOfMind).add_reported_evidence(reported_holder,
+			TheoryOfMind.possession_predicate(item_id), 1.0, weight, seq,
+			int(response.get("observed_tick", tick)), tick, target_id)
+		_information_tracker().trace_holder_report(id, goal_id, {
+			"event": "HOLDER_EVIDENCE_APPLIED", "positive": true,
+			"reporter_id": target_id, "reported_holder_id": reported_holder,
+			"item_id": item_id, "observed_tick": int(response.get("observed_tick", -1)),
+			"received_tick": tick, "confidence": float(response.get("confidence", 0.0)),
+			"weight": weight, "evidence_kind": str(response.get("evidence_kind", "")),
+			"evidence_ref": "event:%d" % seq,
+		})
+	elif kind == InformationExchangePolicy.HOLDER_SELF_ABSENT:
+		var neg_weight := _holder_report_weight(id, target_id, 1.0)
+		(a["tom"] as TheoryOfMind).add_reported_evidence(target_id,
+			TheoryOfMind.possession_predicate(item_id), -1.0, neg_weight, seq,
+			tick, tick, target_id)
+		_information_tracker().trace_holder_report(id, goal_id, {
+			"event": "HOLDER_EVIDENCE_APPLIED", "positive": false,
+			"reporter_id": target_id, "reported_holder_id": target_id,
+			"item_id": item_id, "observed_tick": tick, "received_tick": tick,
+			"confidence": 1.0, "weight": neg_weight, "evidence_kind": "SELF_REPORT",
+			"evidence_ref": "event:%d" % seq,
+		})
+
+## 报告可信度 = 报告内容置信度 × 请求者对报告者的主观可信度（关系+ToM reliable）。
+## 单调：对 reporter 越信任，同一份报告的 evidence weight 不下降。
+func _holder_report_weight(requester_id: String, reporter_id: String, report_confidence: float) -> float:
+	var trust := relationships.composite_trust(requester_id, reporter_id)
+	var trust_prob := clampf((float(trust) + 1000.0) / 2000.0, 0.0, 1.0)
+	var tom: TheoryOfMind = actors[requester_id].get("tom", null)
+	var reliable := 0.5
+	if tom != null:
+		reliable = clampf((tom.belief_about(reporter_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+	var credibility := clampf(trust_prob * 0.5 + reliable * 0.5, 0.05, 1.0)
+	return clampf(report_confidence * credibility, 0.0, 1.0)
+
+## 每周期校准：active HOLDER 目标引用的 request 是否仍活着、身份是否漂移、缺口是否仍在。
+func _holder_goals_sync_all() -> void:
+	var tracker := _information_tracker()
+	for actor_id in actors.keys():
+		var goal := tracker.current_goal(str(actor_id))
+		if goal.is_empty() or str(goal.get("state", "")) != "ACTIVE" \
+				or str(goal.get("query_kind", "SOURCE")) != "HOLDER":
+			continue
+		var requester_id := str(actor_id)
+		var request := _material_request_runtime_bridge().request(str(goal.get("source_request_id", "")))
+		var mismatch := ""
+		if request.is_empty() or Contract.is_terminal(str(request.get("status", ""))):
+			mismatch = "SOURCE_REQUEST_TERMINAL"
+		else:
+			mismatch = _material_request_run_mismatch_reason(requester_id, request)
+		var gap := 0
+		if mismatch == "" and actors.has(requester_id):
+			gap = _material_request_current_gap(requester_id, actors[requester_id], request)
+		_holder_diag_inc("holder_active_ticks")
+		var invalid_reason := tracker.holder_goal_still_valid(requester_id, mismatch, gap)
+		if invalid_reason != "":
+			tracker.cancel_holder_goal(requester_id, invalid_reason, tick)
 
 ## 火边休憩：恢复精力、缓解恐惧、降低孤独（营地效应）
 func _do_sit_by_fire(id: String, a: Dictionary, ev: Array) -> void:
