@@ -25,8 +25,13 @@ HUD 用颜色徽章渲染：[事实]=金 / [主观]=蓝 / [推导]=灰。真实 
 | decision.dominant_interpretation | trace.candidate_interpretations | subjective | — | yes | — |
 | plan.goal | trace.active_goal/goal_desc（enrich） | subjective | — | yes | — |
 | plan.intention | intentions.current_intention | subjective | — | yes | — |
-| plan.execution / nodes | trace.agency_execution（单步留痕，非步骤树→GAP-1） | subjective | — | yes | 状态图标为展示 |
+| plan.execution / decision_snapshot | trace.agency_execution（决策时单步留痕快照） | subjective | — | yes | 状态图标为展示 |
+| plan.live_run | sim.agency_plan_run（公开只读 accessor；run_id/state/current_step_id/steps） | subjective（actor 的计划，引擎簿记） | yes（run 本体） | — | steps 非当前步标 UNKNOWN（GAP-1a）；run state/reason_code 原样 |
+| plan.live_information_goal | sim.agency_information_goal（公开只读；字段 **state**） | subjective | yes | — | LIVE 语义；决策时刻另存 decision_snapshot.agency_information_goal |
 | mind.open_questions | actor.open_questions{about,kind,entropy,stakes,tick} | subjective | — | yes | — |
+| mind.primary_question | open_questions 按 stakes 降序→tick 降序选出的当前最重要问题 | derived（选择为聚合） | — | — | yes |
+| emotions.rows | personality.emotions 原始值 | subjective | — | yes | — |
+| emotions.dominant | max(abs(value)) 聚合选择 | derived（HUD 主导情绪徽章） | — | — | yes |
 | mind.tom_subjects[].rows.value | tom.snapshot()/belief_about（动态谓词含 has_item:*） | subjective | — | yes | — |
 | mind.tom_subjects[].rows.confidence | tom.confidence_of | subjective | — | yes | — |
 | mind.tom_subjects[].rows.last_evidence_tick | tom.last_evidence_tick | subjective | — | yes | — |
@@ -39,13 +44,17 @@ HUD 用颜色徽章渲染：[事实]=金 / [主观]=蓝 / [推导]=灰。真实 
 | memories.rows.day | tick/24+1 | derived（显式标注） | — | — | yes |
 | memories.rows.derived_importance | abs(appraisal_goal_congruence) | derived（HUD 标注，非模拟字段→GAP-5） | — | — | yes |
 | social.commitments | island_sim.obligations 只读过滤（debtor/creditor==selected） | objective | yes | — | 过滤为展示 |
-| social.recent_requests / holder_events / recent_social_events | island_sim.events 尾部 ≤300 扫描派生 | objective（事件流为事实） | yes | — | 分组/截断为展示 |
-| why_chain | presentation 串联真实节点（needs/trace/intention/activity） | mixed | 节点各随其源 | 节点各随其源 | 串联本身 derived；无 LLM |
+| social.recent_requests / holder_events / recent_social_events | island_sim.events 尾部 ≤300 扫描派生，**仅收选中 NPC 直接参与的事件**（_event_relevant_to_actor：actor_id/requester_id/target_id/to_id/debtor_id/creditor_id/reporter_id/actor_ids 命中；reported_holder_id 不算参与） | objective（事件流为事实） | yes | — | 分组/截断/相关性过滤为展示 |
+| why | {provenance: derived, decision_reason, nodes[], links[], context[]}——因果箭头只连 decision trace / live accessor 支持的节点；末端→activity 显式 derived link；需求/情绪只进 context（无箭头） | 整体 derived；节点各随其源 | — | — | 串联本身 derived；无 LLM |
 
 ## 硬规则落点
 
 1. 真实库存（Overview，[事实]）与 ToM 对他人库存的判断（认知页，[主观]）物理分区，
    永不同区显示（BRAIN_TRUTH_VS_SUBJECTIVE fixture + brain-subjective-vs-truth 截图为验收）。
 2. 主观区域绝不显示对方真实 inventory/坐标——last_seen 显示"我最后看到的（可能过时）"。
-3. derived_importance / fatigue / day 等 presentation 换算一律 [推导] 徽章 + 注释说明公式。
-4. why_chain 每节点带 provenance + source_kind + source_ref；确定性生成，不调用 LLM。
+3. derived_importance / fatigue / day / dominant 情绪选择 / primary_question 选择 /
+   why 串联等 presentation 换算或聚合一律 [推导] 徽章 + 注释说明。
+4. why 每节点/链接带 provenance + source_kind + source_ref；确定性生成，不调用 LLM；
+   无 delta/trend 数据禁止"升高/下降"措辞；无证据的 need→action 关联不画箭头（fail-closed）。
+5. 事件相关性：无关两人之间的请求/情报事件不得进入选中 NPC 的社会页；
+   被谈论者（reported_holder_id）不算事件参与方。

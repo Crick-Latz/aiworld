@@ -11,7 +11,7 @@ const FIXTURES := ["DEFAULT", "NPC_SELECTED", "NO_SELECTION", "LONG_EVENT_LOG", 
 	"BRAIN_OVERVIEW_FULL", "BRAIN_DECISION_FULL", "BRAIN_DECISION_NO_TRACE",
 	"BRAIN_PLAN_BLOCKED", "BRAIN_TOM_HOLDER_EVIDENCE", "BRAIN_RELATION_ASYMMETRIC",
 	"BRAIN_MEMORY_LONG", "BRAIN_SOCIAL_COMMITMENT", "BRAIN_NO_SOCIAL_DATA",
-	"BRAIN_OPEN_QUESTIONS", "BRAIN_TRUTH_VS_SUBJECTIVE"]
+	"BRAIN_OPEN_QUESTIONS", "BRAIN_TRUTH_VS_SUBJECTIVE", "BRAIN_SOCIAL_UNRELATED_FILTER"]
 
 func _ready() -> void:
 	get_tree().root.content_scale_size = Vector2i(480, 270) # 与正式观察同一像素画布
@@ -92,6 +92,13 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 					"target": Vector2i(21, 34), "desc": "在林地砍伐木头"},
 				"execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
 					"blocker_reason": "缺少 wood ×2", "selected": false, "decision_tick": 312},
+				"live_run": {},
+				"live_information_goal": {"query_kind": "HOLDER", "state": "ACTIVE",
+					"item_id": "wood", "information_goal_id": "info_w3"},
+				"decision_snapshot": {
+					"agency_execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
+						"blocker_reason": "缺少 wood ×2", "selected": false, "decision_tick": 312},
+					"agency_information_goal": {}},
 				"nodes": [
 					{"kind": "ROOT_GOAL", "label": "建造庇护所", "value": "优先级 0.78", "status": "ACTIVE",
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
@@ -101,8 +108,9 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
 					{"kind": "BLOCKER", "label": "缺少 wood ×2", "value": "", "status": "BLOCKED",
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-					{"kind": "SUBGOAL", "label": "信息目标 FIND_HOLDER", "value": "状态 ACTIVE", "status": "ACTIVE",
-						"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
+					{"kind": "SUBGOAL", "label": "信息目标 HOLDER", "value": "状态 ACTIVE", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "LIVE_ACCESSOR",
+						"source_ref": "agency_information_goal"}],
 				"provenance": "subjective"}
 			model["selected_actor"] = sel5
 		"BRAIN_TOM_HOLDER_EVIDENCE":
@@ -151,7 +159,7 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 					{"day": 2, "seq": 44, "type": "MATERIAL_REQUEST_OFFERED", "text": "薇拉 向 卡德加 请求 shell×2 已提出"},
 					{"day": 2, "seq": 41, "type": "MATERIAL_REQUEST_ACCEPTED", "text": "卡德加 接受 薇拉 的请求"}],
 				"holder_events": [
-					{"day": 2, "seq": 46, "type": "INFORMATION_HOLDER_REPORTED", "text": "薇拉 得到报告：卡德加 可能持有 shell"}],
+					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
 				"recent_social_events": [
 					{"day": 2, "seq": 47, "type": "COMMITMENT_CREATED", "text": "薇拉 承诺：交付 卡德加 shell×2"},
 					{"day": 1, "seq": 30, "type": "shared_food", "text": "卡德加 主动分给 薇拉 一份烤鱼"}],
@@ -169,6 +177,10 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 					"stakes": 0.6, "tick": 260, "source_event_ids": [38], "provenance": "subjective"},
 				{"about": "wood", "about_name": "wood", "kind": "where_to_find", "entropy": 0.5,
 					"stakes": 0.9, "tick": 240, "source_event_ids": [22], "provenance": "subjective"}]
+			# primary_question：stakes 0.9 的 wood 疑问胜出（排序是 presentation 聚合 → derived）
+			sel11["mind"]["primary_question"] = {
+				"about": "wood", "about_name": "wood", "kind": "where_to_find", "entropy": 0.5,
+				"stakes": 0.9, "tick": 240, "source_event_ids": [22], "provenance": "derived"}
 			model["selected_actor"] = sel11
 		"BRAIN_TRUTH_VS_SUBJECTIVE":
 			# §51 关键语义测试：世界事实（自己库存 wood×2，无 shells）vs 主观信念（认为卡德加可能有 shells）
@@ -184,7 +196,28 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 			sel12["mind"]["open_questions"] = [
 				{"about": "shells", "about_name": "shells", "kind": "who_has", "entropy": 0.7,
 					"stakes": 0.8, "tick": 250, "source_event_ids": [40], "provenance": "subjective"}]
+			sel12["mind"]["primary_question"] = {
+				"about": "shells", "about_name": "shells", "kind": "who_has", "entropy": 0.7,
+				"stakes": 0.8, "tick": 250, "source_event_ids": [40], "provenance": "derived"}
 			model["selected_actor"] = sel12
+		"BRAIN_SOCIAL_UNRELATED_FILTER":
+			# §K15/K5 语义演示：世界事件流里有“欧恩→卡德加”的无关请求，
+			# 但薇拉的社会页只显示她直接参与的事件（过滤发生在 ViewModel _event_relevant_to_actor）。
+			var sel13 := _brain_full()
+			sel13["social"] = {
+				"commitments": [],
+				"recent_requests": [
+					{"day": 2, "seq": 45, "type": "MATERIAL_REQUEST_CREATED", "text": "薇拉 向 卡德加 请求 wood×1 已提出"}],
+				"holder_events": [
+					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
+				"recent_social_events": [
+					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"},
+					{"day": 2, "seq": 45, "type": "MATERIAL_REQUEST_CREATED", "text": "薇拉 向 卡德加 请求 wood×1 已提出"}],
+				"display_name": "薇拉", "provenance": "objective"}
+			model["selected_actor"] = sel13
+			model["recent_events"] = [
+				{"seq": 49, "text": "欧恩 向 卡德加 请求 shell×1（与薇拉无关——不进她的社会页）", "cause_seq": 0, "actor_ids": ["npc_oun", "npc_kadga"]},
+				{"seq": 46, "text": "卡德加 回答 薇拉 的持有询问", "cause_seq": 0, "actor_ids": ["npc_kadga", "npc_weila"]}]
 		_:
 			pass
 	return model
@@ -227,10 +260,13 @@ static func _brain_full() -> Dictionary:
 				"derived_note": "fatigue = 1000 - energy"}],
 			"provenance": "objective"},
 		"emotions": {"rows": [
-			{"key": "joy", "label": "喜悦", "value": 0.10}, {"key": "fear", "label": "担忧", "value": 0.62},
-			{"key": "anger", "label": "愤怒", "value": 0.05}, {"key": "sadness", "label": "悲伤", "value": 0.21},
-			{"key": "guilt", "label": "内疚", "value": 0.0}],
-			"dominant": {"label": "担忧", "value": 0.62}, "provenance": "subjective"},
+			{"key": "joy", "label": "喜悦", "value": 0.10, "provenance": "subjective"},
+			{"key": "fear", "label": "担忧", "value": 0.62, "provenance": "subjective"},
+			{"key": "anger", "label": "愤怒", "value": 0.05, "provenance": "subjective"},
+			{"key": "sadness", "label": "悲伤", "value": 0.21, "provenance": "subjective"},
+			{"key": "guilt", "label": "内疚", "value": 0.0, "provenance": "subjective"}],
+			"dominant": {"label": "担忧", "value": 0.62, "provenance": "derived",
+				"derived_note": "max(|value|) 聚合选择"}, "provenance": "subjective"},
 		"personality": {"traits": [
 			{"key": "resilience", "label": "韧性", "value": 0.85, "provenance": "objective"},
 			{"key": "expressiveness", "label": "表达", "value": 0.85, "provenance": "objective"},
@@ -262,6 +298,12 @@ static func _brain_full() -> Dictionary:
 				"target": Vector2i(21, 34), "desc": "在林地砍伐木头"},
 			"execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
 				"blocker_reason": "", "selected": true, "decision_tick": 312},
+			"live_run": {},
+			"live_information_goal": {},
+			"decision_snapshot": {
+				"agency_execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
+					"blocker_reason": "", "selected": true, "decision_tick": 312},
+				"agency_information_goal": {}},
 			"nodes": [
 				{"kind": "ROOT_GOAL", "label": "建造庇护所", "value": "优先级 0.78", "status": "ACTIVE",
 					"provenance": "subjective", "source_kind": "DECISION_TRACE"},
@@ -270,7 +312,7 @@ static func _brain_full() -> Dictionary:
 				{"kind": "STEP", "label": "步骤 step_2：获得木头", "value": "", "status": "ACTIVE",
 					"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
 			"provenance": "subjective"},
-		"mind": {"open_questions": [], "tom_subjects": [
+		"mind": {"open_questions": [], "primary_question": {}, "tom_subjects": [
 			{"other_id": "npc_kadga", "other_name": "卡德加", "provenance": "subjective",
 				"last_seen": {"tile": Vector2i(15, 22), "tick": 310},
 				"rows": [
@@ -298,16 +340,28 @@ static func _brain_full() -> Dictionary:
 			"recent_requests": [
 				{"day": 2, "seq": 44, "type": "MATERIAL_REQUEST_OFFERED", "text": "薇拉 向 卡德加 请求 shell×2 已提出"}],
 			"holder_events": [
-				{"day": 2, "seq": 46, "type": "INFORMATION_HOLDER_REPORTED", "text": "薇拉 得到报告：卡德加 可能持有 shell"}],
+				{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
 			"recent_social_events": [
 				{"day": 1, "seq": 30, "type": "shared_food", "text": "卡德加 主动分给 薇拉 一份烤鱼"}],
 			"display_name": "薇拉", "provenance": "objective"},
-		"why_chain": [
-			{"label": "饥饿升高（720）", "provenance": "objective", "source_kind": "ACTOR_NEED", "source_ref": "needs.hunger"},
-			{"label": "当前目标：建造庇护所", "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.goal_desc"},
-			{"label": "意图：在林地砍伐木头（承诺度 82%）", "provenance": "subjective", "source_kind": "INTENTION", "source_ref": "intentions.current_intention"},
-			{"label": "步骤：step_2", "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.agency_execution.step_id"},
-			{"label": "当前行动：砍伐树木", "provenance": "objective", "source_kind": "ACTOR_STATE", "source_ref": "activity"}],
+		"why": {
+			"provenance": "derived",
+			"derived_note": "因果链由 presentation 从决策留痕/公开状态确定性串联",
+			"decision_reason": {"text": "夜里会下雨，露宿会消耗体力并提高生病风险",
+				"provenance": "subjective", "source_kind": "DECISION_TRACE",
+				"source_ref": "last_decision_trace.reason"},
+			"nodes": [
+				{"label": "当前目标：建造庇护所", "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.goal_desc"},
+				{"label": "意图：在林地砍伐木头（承诺度 82%）", "provenance": "subjective", "source_kind": "INTENTION", "source_ref": "intentions.current_intention"},
+				{"label": "步骤：step_2", "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.agency_execution.step_id"},
+				{"label": "当前行动：砍伐树木", "provenance": "objective", "source_kind": "ACTOR_STATE", "source_ref": "activity"}],
+			"links": [
+				{"from": 0, "to": 1, "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.selected"},
+				{"from": 1, "to": 2, "provenance": "subjective", "source_kind": "DECISION_TRACE", "source_ref": "last_decision_trace.agency_execution"},
+				{"from": 2, "to": 3, "provenance": "derived", "source_kind": "PRESENTATION_LINK",
+					"source_ref": "activity（执行系统维护，Presentation 无直接 trace 字段）"}],
+			"context": [
+				{"label": "当前需求：饥饿 720", "provenance": "objective", "source_kind": "ACTOR_NEED", "source_ref": "needs.hunger"}]},
 		"activity_text": "砍伐树木", "goal_text": "建造庇护所",
 		"inventory_text": "food×1、wood×2",
 		"inventory_items": [{"id": "food", "count": 1, "provenance": "objective"},

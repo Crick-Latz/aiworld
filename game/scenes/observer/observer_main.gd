@@ -480,7 +480,7 @@ func _find_spawn_near(poi_id: String) -> Vector2i:
 
 func _refresh_hud() -> void:
 	var model := {
-		"view_schema_version": "0.2",
+		"view_schema_version": "0.3",
 		"state_revision": island_sim.tick if island_sim != null else 0,
 		"paused": sim_paused,
 		"speed_multiplier": speed_multiplier,
@@ -615,7 +615,7 @@ func _island_goal_text(a: Dictionary) -> String:
 	return "思考中..."
 
 ## UI-R1：island 选中角色的结构化 ViewModel（presentation adapter 组装，HUD 只渲染）。
-## 字段定义见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.2）。
+## 字段定义见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.3）。
 func _build_island_selected(a: Dictionary) -> Dictionary:
 	# UI-R2：大脑 ViewModel 组装下沉到 presentation builder（只读、无副作用、带 provenance）。
 	# observer_main 只负责调用与传参——不再在此膨胀组装逻辑。

@@ -1,5 +1,36 @@
 # UI-R2 NPC 大脑观察器 —— 本地验证记录
 
+## R1 Semantic Hardening（2026-09-15，GPT 复审返修轮）
+
+GPT 代码级复审判 UI_R2_CODE_REVIEW_NEEDS_FIX（架构/边界/守卫/ToM 展示 PASS，
+四个语义 blocker）。全部修复：
+
+1. **runtime schema 0.3**：observer_main.gd 真实运行时从 0.2 → 0.3（文档/preview/HUD
+   原已 0.3）；新增测试 runtime_schema_03 源码扫描 + preview_schema_03。
+2. **LIVE / DECISION-TIME SNAPSHOT 分离**：计划页/Why 改用公开只读 accessor
+   `sim.agency_plan_run(actor_id)`（run_id/plan_id/state/current_step_id/steps；
+   非当前步标 UNKNOWN 不虚构终态）与 `sim.agency_information_goal(actor_id)`；
+   `last_decision_trace.agency_execution / agency_information.goal` 降为决策时刻快照
+   （plan.decision_snapshot）。**goal 生命周期字段是 `state` 不是 `status`**（真实
+   InformationSubgoalTracker schema；fixture 兼容 status 回退保留）。
+3. **Social 页相关性过滤 + 真实事件命名**：`_event_relevant_to_actor` 只收选中 NPC
+   直接参与的事件（actor_id/requester_id/target_id/to_id/debtor_id/creditor_id/
+   reporter_id/actor_ids；reported_holder_id 被谈论者不算参与）；holder/source 信息事件
+   按真实全小写 `holder_information_*` / `source_information_*` 分类（删除虚构的
+   INFORMATION_HOLDER_REPORTED fixture，新增 BRAIN_SOCIAL_UNRELATED_FILTER）。
+4. **Why fail-closed causality**：整体 `[推导]`；`trace.reason` 以"决策理由"优先展示；
+   因果箭头只连 decision trace / live accessor 支持的节点（末端→activity 显式
+   PRESENTATION_LINK [推导]）；最高需求只进"当前上下文"（无箭头）；无 delta 数据
+   禁止"升高"措辞（原"饥饿升高（202）"→"当前需求：饥饿 202"）。
+5. **小语义**：当前最重要问题 = open_questions 按 stakes 降序→tick 降序选出
+   （mind.primary_question，[推导]）；主导情绪 = max(|value|) 聚合选择（[推导]，
+   原始情绪行仍 [主观]）。
+6. **Gap 修订**：GAP-3 关闭（agency_information_goal 已存在并使用）；GAP-1 收窄为
+   GAP-1a per_step_terminal_status_history（agency_plan_run 存在，run.steps 无逐步终态）。
+   gap 数 6 → 5。
+7. Targeted 断言 33 → **54**（新增 live accessor/state 字段/事件过滤四例/why 五例/
+   primary question/dominant emotion/schema 0.3）；fixtures 20 → **21**。
+
 ## 顶层状态
 
 - 分支：`work/ui-r2-npc-brain-inspector`（基线 main `21236b1`；push: NO / PR: NO，等待 GPT UI review）

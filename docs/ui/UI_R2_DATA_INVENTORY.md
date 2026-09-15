@@ -109,17 +109,32 @@ debtor_id==selected 或 creditor_id==selected。
 ## 10. island_sim.agency_information_goal(actor_id)（OBJECTIVE 调用入口 / SUBJECTIVE 数据）
 
 公开方法（island_simulation.gd:576）→ tracker.current_goal：FIND_HOLDER/UNKNOWN_SOURCE
-目标的当前状态（goal_id/kind/status/source_request_id/parent 三元组等）。
-**这是 holder goal 当前状态的合法公开读取路径**（不读 _information_tracker_state 本体）。
+目标的当前状态。**R1 勘察更正**：goal 生命周期字段是 **`state`**（STATE_ACTIVE 等），
+不是 status——InformationSubgoalTracker 全部读 `goal.get("state", ...)`。
+**这是 holder goal 当前状态的合法公开读取路径**（不读 _information_tracker_state 本体）；
+UI-R2 R1 起作为 LIVE goal 正式接入（决策时刻快照另走 trace.agency_information.goal）。
+
+## 10a. island_sim.agency_plan_run(actor_id)（OBJECTIVE 调用入口 / SUBJECTIVE 数据）
+
+公开方法（island_simulation.gd:608）→ `_plan_tracker.runs.get(actor_id, {}).duplicate(true)`：
+当前 PlanExecution run 的完整快照——`{run_id, actor_id, plan_id, root_goal, plan_snapshot,
+steps[], current_step_id, state(ACTIVE/SUSPENDED/终态), started_tick, last_progress_tick,
+reason_code, ...}`。UI-R2 R1 起作为 LIVE run 正式接入（计划页）；**run.steps 不保存每步
+独立终态**，故非 current 步骤 UI 标 UNKNOWN（残余缺口 GAP-1a）。
 
 ## 11. island_sim.events（OBJECTIVE 事件流）
 
 `{seq, tick, day, type, actor_id, text, ...payload}`；社交流派生只扫尾部 ≤300 条。
-Material/holder/commitment 事件 type 前缀：MATERIAL_REQUEST_*、COMMITMENT_*、
-INFORMATION_*（HOLD 报告类）等——按真实 type 命名渲染。
+**R1 勘察更正（真实事件命名）**：material/commitment 系为全大写
+`MATERIAL_REQUEST_* / MATERIAL_COUNTER_* / COMMITMENT_*`；P7.0/P7.2B 信息事件为
+**全小写** `holder_information_shared / _refused / _stale / _unknown / _self_absent /
+_missed / _requested` 与 `source_information_*`。不存在大写 INFORMATION_*/HOLDER_* 事件。
+参与方字段（相关性判定）：`actor_id`（_emit 主角）、material 系 `requester_id/target_id`、
+commitment 系 `debtor_id/to_id(=creditor)`、holder 系 `actor_id(=回答者)/to_id(=询问者)/
+reporter_id`；`reported_holder_id` 是被谈论者，**不算直接参与**。
 
 ## 12. 明确的私有禁区（不读）
 
 `_plan_tracker` / `_information_tracker_state` / `_material_request_runtime` /
-`_commitment_runtime` / 任何 `_private`。当前信息目标与执行步骤留痕经 last_decision_trace
-与公开方法覆盖；其余缺口登记 GAPS。
+`_commitment_runtime` / 任何 `_private`。当前信息目标与执行留痕经公开方法
+`agency_information_goal` / `agency_plan_run` + `last_decision_trace` 覆盖；其余缺口登记 GAPS。

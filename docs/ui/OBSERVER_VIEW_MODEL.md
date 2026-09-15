@@ -48,27 +48,34 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | personality.traits[{key,label,value}]×10 / personality.beliefs[{text,weight}] | 0..1 特质 / 信念（weight 真实 schema） |
 | decision.{chosen,reason,current_action,blocker,next_step,considered_count,dominant_interpretation,decision_tick} | 决策留痕（subjective；current_action 为 objective） |
 | decision.candidates[{action,utility,chosen}] | **真实 softmax 候选效用表**（trace.top_candidates；无决策 tick 时为空） |
-| plan.goal / plan.intention / plan.execution / plan.nodes[{kind,label,value,status,source_kind}] | 竖向计划流（agency_execution 单步留痕；状态图标 ACTIVE/BLOCKED/…） |
+| plan.goal / plan.intention / plan.nodes[{kind,label,value,status,source_kind}] | 竖向计划流；kind 含 RUN/STEP（LIVE）/PLAN/BLOCKER/SUBGOAL（决策快照）；状态含 CURRENT/UNKNOWN（run.steps 不保存每步终态） |
+| plan.live_run{run_id,plan_id,root_goal,state,reason_code,current_step_id,steps[{step_id,order,is_current,status}]} | **LIVE**：`sim.agency_plan_run(actor_id)` 公开只读 accessor（他现在正在执行什么） |
+| plan.live_information_goal / plan.decision_snapshot | LIVE 信息目标（`sim.agency_information_goal`，字段 **state**）与决策时刻快照（trace.agency_execution / trace.agency_information.goal）两时间语义分离 |
 | mind.open_questions[{about_name,kind,entropy,stakes,tick,source_event_ids}] | 未解之问 |
+| mind.primary_question{...} | 按 stakes 降序→tick 降序选出的当前最重要问题（选择为 derived） |
 | mind.tom_subjects[{other_name,rows[{predicate,label,value,confidence,last_evidence_tick}],last_seen}] | **动态谓词知识**（has_item:* 任意谓词，含 P7.2B holder evidence） |
 | mind.prediction_error | 心智模型预测误差 |
 | relationships.rows[{other_name,trust,benevolence,reliability,obligation,fear,change?,tom}] | 真实有向边（objective）+ ToM 三槽（subjective）两层分离 |
 | memories.rows[{seq,tick,day,text,type,counterpart,derived_importance,interpretation}] | 记忆卡片（day/derived_importance 为 derived） |
 | social.commitments[{direction,counterpart_name,object,quantity,status,due_tick,source_request_id}] | 承诺台账只读过滤（我欠/欠我） |
-| social.recent_requests / holder_events / recent_social_events | 事件尾部派生（≤300 扫描） |
-| why_chain[{label,provenance,source_kind,source_ref}] | 确定性解释链（无 LLM） |
+| social.recent_requests / holder_events / recent_social_events | 事件尾部派生（≤300 扫描；**仅选中 NPC 直接参与的事件**，真实小写 holder_information_*/source_information_* 命名） |
+| why{provenance:derived, decision_reason, nodes[], links[], context[]} | **fail-closed 因果链**（无 LLM）：决策理由（trace.reason）优先；箭头只连 trace/live 支持节点（末端→activity 显式 derived link）；需求/情绪只进 context（无箭头）；无 delta 数据禁止"升高"措辞 |
 | 兼容字段 activity_text/goal_text/inventory_text/needs_text/decision_text/inventory_items | 0.2 兼容（wander/story 模式） |
 
 ### DERIVED（presentation 推导，UI 显式标注）
 
-fatigue（=1000-energy）、needs 排序、emotions.dominant、memories.day（=tick/24+1）、
-memories.derived_importance（=abs(appraisal_goal_congruence)）、social 各事件分组、
-why_chain 的串联本身。
+fatigue（=1000-energy）、needs 排序、emotions.dominant（max(|value|) 聚合选择）、
+memories.day（=tick/24+1）、memories.derived_importance（=abs(appraisal_goal_congruence)）、
+mind.primary_question（stakes/tick 排序选择）、social 各事件分组与相关性过滤、
+why 的串联本身（含 links）。
 
 ### PLANNED（等模拟线 read-only API，见 UI_R2_VIEWMODEL_GAPS.md）
 
-active_plan_steps（步骤树）、active_material_requests（请求实时状态）、
-tom_evidence_of（证据明细）、relationship history、memory 原生 importance。
+per_step_terminal_status_history（GAP-1a）、active_material_requests（请求实时状态，
+GAP-2）、tom_evidence_of（证据明细，GAP-4）、relationship history（GAP-6）、
+memory 原生 importance（GAP-5）。
+~~active_information_goal 直读~~（GAP-3 已关闭：公开 accessor
+`agency_information_goal` 存在并被使用）。
 
 ### PLANNED（Inspector 壳已留、字段尚不存在）
 
@@ -77,7 +84,6 @@ tom_evidence_of（证据明细）、relationship history、memory 原生 importa
 | `selected_actor.memory_items[].source_event_ids` | 记忆 → 事件溯源下钻 | 认知层记忆未带稳定事件引用（仅 seq） |
 | `selected_actor.personality.temperament` | 气质独立数据源 | UI 已按三组展示（基础特质/气质与风险偏好/社交倾向），数据仍来自同一 traits 表 |
 | `selected_actor.personality.social_tendencies` | 社交倾向独立分组 | 同上（暂以共情/社交/利他三项近似） |
-| `selected_actor.decision.candidates` | 决策候选与打分（决策可解释性） | decision trace 无候选列表，仅 reason |
 | `selected_actor.decision.blocker`（结构化） | 当前为文本"无"/描述 | P6 blocker 结构未暴露到 trace |
 | `selected_actor.relationship_rows[].last_interaction` | 最近互动事件 | RelationshipStore 无时间索引 |
 | `selected_actor.plans[].steps[].state` | 多步计划逐格状态 | 计划步执行状态在 Registry，未投影 |

@@ -140,22 +140,24 @@ func _run_all_tests() -> void:
 	_check("commitment_filtered_by_actor", found_commitment)
 	sim.obligations.erase(sim.obligations[sim.obligations.size() - 1])
 
-	# —— 7. why chain provenance ——
-	var chain: Array = brain3["why_chain"]
-	_check("why_chain_not_empty", not chain.is_empty())
-	var all_sourced := true
-	for node in chain:
+	# —— 7. why（fail-closed：整体 derived；决策理由优先；无“升高”措辞）——
+	var why: Dictionary = brain3["why"]
+	_check("why_overall_derived", str(why.get("provenance", "")) == "derived")
+	_check("why_not_empty", not (why.get("nodes", []) as Array).is_empty())
+	var why_all_sourced := true
+	for node in why.get("nodes", []):
 		if not (node.has("provenance") and node.has("source_kind") and node.has("source_ref")):
-			all_sourced = false
-	_check("why_chain_nodes_sourced", all_sourced)
-	var has_objective := false
-	var has_subjective := false
-	for node in chain:
-		if str(node["provenance"]) == "objective":
-			has_objective = true
-		if str(node["provenance"]) == "subjective":
-			has_subjective = true
-	_check("why_chain_mixed_provenance", has_objective and has_subjective)
+			why_all_sourced = false
+	for link in why.get("links", []):
+		if not (link.has("provenance") and link.has("source_kind") and str(link.get("source_ref", "")) != ""):
+			why_all_sourced = false
+	_check("why_nodes_and_links_sourced", why_all_sourced)
+	_check("why_no_fake_rising_word", not JSON.stringify(why).contains("升高"))
+	var live_reason: String = str((a.get("last_decision_trace", {}) as Dictionary).get("reason", ""))
+	if live_reason != "":
+		_check("why_uses_trace_reason", str((why.get("decision_reason", {}) as Dictionary).get("text", "")) == live_reason)
+	else:
+		_check("why_reason_absent_when_trace_lacks_it", (why.get("decision_reason", {}) as Dictionary).is_empty())
 
 	# —— 8. 缺失可选字段 fail-soft（清空 trace 的 actor）——
 	var saved_trace: Dictionary = a.get("last_decision_trace", {}).duplicate(true)
@@ -179,6 +181,131 @@ func _run_all_tests() -> void:
 		_check("live_candidates_chosen_marked", any_chosen)
 	else:
 		_check("live_candidates_gap_when_empty", true) # 空留痕 → 空候选为合法
+
+	# —— 9b. runtime schema 0.3（真实 observer runtime + preview 一致）——
+	var main_src := FileAccess.get_file_as_string("res://scenes/observer/observer_main.gd")
+	_check("runtime_schema_03",
+		main_src.contains('"view_schema_version": "0.3"') and not main_src.contains('"view_schema_version": "0.2"'))
+	var pv_script: GDScript = load("res://scenes/ui/ui_preview.gd")
+	_check("preview_schema_03", str(pv_script.fixture_model()["view_schema_version"]) == "0.3")
+
+	# —— 9c. LIVE plan / info goal：公开 accessor（FakeSim shim 受控验证）——
+	var fs := FakeSim.new()
+	fs.plan_run = {"run_id": "npc_weila#1", "actor_id": "npc_weila", "plan_id": "plan_2",
+		"root_goal": "SHELTER", "plan_snapshot": {},
+		"steps": [{"step_id": "s1"}, {"step_id": "s2"}, {"step_id": "s3"}],
+		"current_step_id": "s2", "state": "ACTIVE", "started_tick": 10,
+		"last_progress_tick": 12, "reason_code": ""}
+	fs.info_goal = {"query_kind": "HOLDER", "state": "ACTIVE", "item_id": "wood",
+		"information_goal_id": "g1"}
+	var fb := NpcBrainViewModel.build(fs, "npc_weila")
+	var lr: Dictionary = fb["plan"]["live_run"]
+	_check("live_plan_uses_public_agency_plan_run",
+		str(lr.get("run_id", "")) == "npc_weila#1" and str(lr.get("current_step_id", "")) == "s2"
+		and str(lr.get("state", "")) == "ACTIVE")
+	var srows: Array = lr.get("steps", [])
+	_check("live_plan_steps_current_and_unknown",
+		srows.size() == 3 and bool(srows[1].get("is_current", false))
+		and str(srows[0].get("status", "")) == "UNKNOWN" and str(srows[2].get("status", "")) == "UNKNOWN")
+	var node_kinds: Array = []
+	for n in fb["plan"]["nodes"]:
+		node_kinds.append(str(n["kind"]))
+	_check("live_plan_nodes_present", node_kinds.has("RUN") and node_kinds.count("STEP") == 3)
+	# live 信息目标：真实字段 state（无 status 字段也必须读出 ACTIVE）
+	var subgoal := {}
+	for n in fb["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL":
+			subgoal = n
+	_check("live_information_goal_uses_public_accessor",
+		not subgoal.is_empty() and str(subgoal.get("source_kind", "")) == "LIVE_ACCESSOR"
+		and str(subgoal.get("status", "")) == "ACTIVE" and str(subgoal.get("label", "")).contains("HOLDER"))
+	_check("holder_goal_state_reads_state_not_status",
+		not fs.info_goal.has("status") and str(subgoal.get("value", "")) == "状态 ACTIVE")
+	_check("why_live_info_goal_state", str((fb["why"]["nodes"] as Array).filter(func(n): return str(n.get("label", "")).contains("信息目标"))[0].get("label", "")).contains("ACTIVE"))
+
+	# —— 9d. fixture 兼容回退：goal 只有 status（旧 mock）时仍可读 ——
+	var fs2 := FakeSim.new()
+	fs2.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "守夜", "reason": "营地需要警戒",
+		"tick": 40, "agency_information": {"goal": {"kind": "SOURCE", "status": "ACTIVE"}}}
+	var fb2 := NpcBrainViewModel.build(fs2, "npc_weila")
+	var sub2 := {}
+	for n in fb2["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL":
+			sub2 = n
+	_check("fixture_goal_status_fallback", not sub2.is_empty() and str(sub2.get("status", "")) == "ACTIVE")
+
+	# —— 9e. why fail-closed（FakeSim：hunger=900 但 trace 不涉及 hunger）——
+	var fs3 := FakeSim.new()
+	fs3.actors["npc_weila"]["needs"] = {"hunger": 900, "thirst": 100, "energy": 950, "social": 50}
+	fs3.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "守夜", "reason": "营地需要警戒",
+		"tick": 40, "agency_execution": {"step_id": "s9", "blocker_reason": "", "decision_tick": 40}}
+	var fb3 := NpcBrainViewModel.build(fs3, "npc_weila")
+	var need_in_chain := false
+	for n in fb3["why"]["nodes"]:
+		if str(n.get("source_ref", "")).begins_with("needs."):
+			need_in_chain = true
+	for l in fb3["why"]["links"]:
+		if str(l.get("source_ref", "")).begins_with("needs."):
+			need_in_chain = true
+	_check("why_no_fake_need_causality", not need_in_chain)
+	var ctx_has_need := false
+	for row in fb3["why"]["context"]:
+		if str(row.get("label", "")).contains("饥饿 900"):
+			ctx_has_need = true
+	_check("why_need_lives_in_context_only", ctx_has_need)
+	_check("why_fake_sim_reason_used",
+		str((fb3["why"]["decision_reason"] as Dictionary).get("text", "")) == "营地需要警戒")
+
+	# —— 9f. primary question / dominant emotion ——
+	var fs4 := FakeSim.new()
+	fs4.actors["npc_weila"]["open_questions"] = [
+		{"about": "npc_kadga", "kind": "why_refused", "entropy": 0.8, "stakes": 0.3,
+			"tick": 260, "source_event_ids": [38]},
+		{"about": "wood", "kind": "where_to_find", "entropy": 0.5, "stakes": 0.9,
+			"tick": 240, "source_event_ids": [22]}]
+	var fb4 := NpcBrainViewModel.build(fs4, "npc_weila")
+	var pq: Dictionary = fb4["mind"]["primary_question"]
+	_check("primary_question_semantics",
+		str(pq.get("about", "")) == "wood" and str(pq.get("provenance", "")) == "derived")
+	_check("dominant_emotion_derived",
+		str(brain3["emotions"]["dominant"]["provenance"]) == "derived")
+
+	# —— 9g. 社会页事件过滤（真实 sim 注入事件后 build）——
+	var ev_base: int = sim.events.size()
+	sim.events.append({"seq": 900001, "tick": sim.tick, "day": 2, "type": "MATERIAL_REQUEST_CREATED",
+		"actor_id": "npc_oun", "requester_id": "npc_oun", "target_id": "npc_kadga",
+		"text": "欧恩 向 卡德加 请求（与薇拉无关）", "request_id": "rA"})
+	sim.events.append({"seq": 900002, "tick": sim.tick, "day": 2, "type": "holder_information_shared",
+		"actor_id": "npc_kadga", "to_id": "npc_weila", "target_id": "npc_weila", "reporter_id": "npc_kadga",
+		"reported_holder_id": "npc_oun", "text": "卡德加 回答 薇拉 的持有询问"})
+	sim.events.append({"seq": 900003, "tick": sim.tick, "day": 2, "type": "holder_information_shared",
+		"actor_id": "npc_kadga", "to_id": "npc_oun", "target_id": "npc_oun", "reporter_id": "npc_kadga",
+		"reported_holder_id": "npc_weila", "text": "卡德加 回答 欧恩（谈论薇拉，她未参与）"})
+	sim.events.append({"seq": 900004, "tick": sim.tick, "day": 2, "type": "MATERIAL_REQUEST_CREATED",
+		"actor_id": "npc_weila", "requester_id": "npc_weila", "target_id": "npc_kadga",
+		"text": "薇拉 向 卡德加 请求", "request_id": "rD1"})
+	sim.events.append({"seq": 900005, "tick": sim.tick, "day": 2, "type": "COMMITMENT_CREATED",
+		"actor_id": "npc_oun", "debtor_id": "npc_weila", "to_id": "npc_kadga",
+		"text": "薇拉 的承诺事件", "commitment_id": "cD2"})
+	var fsocial := NpcBrainViewModel.build(sim, actor_id)
+	var req_seqs: Array = []
+	var holder_seqs: Array = []
+	var all_seqs: Array = []
+	for row in fsocial["social"]["recent_requests"]:
+		req_seqs.append(int(row["seq"]))
+	for row in fsocial["social"]["holder_events"]:
+		holder_seqs.append(int(row["seq"]))
+	for bucket in ["recent_requests", "holder_events", "recent_social_events"]:
+		for row in fsocial["social"][bucket]:
+			all_seqs.append(int(row["seq"]))
+	_check("unrelated_social_event_filtered", not all_seqs.has(900001))
+	_check("selected_target_social_event_included", holder_seqs.has(900002))
+	_check("lowercase_holder_information_recognized",
+		holder_seqs.has(900002) and holder_seqs.has(900002))
+	_check("reported_holder_alone_not_direct_participant", not all_seqs.has(900003))
+	_check("social_relevance_fields_recognized",
+		req_seqs.has(900004) and all_seqs.has(900005))
+	sim.events.resize(ev_base)
 
 	# —— 10. 守卫扫描：私有 tracker 访问（§57）——
 	var guard_dirs := ["res://src/presentation/", "res://scenes/ui/", "res://scenes/observer/observer_hud.gd"]
@@ -251,3 +378,38 @@ func _list_gd_recursive(dir_path: String) -> Array:
 		name = dir.get_next()
 	dir.list_dir_end()
 	return out
+
+## FakeSim：受控 shim——只暴露 NpcBrainViewModel.build 需要的公开面（含 live accessors）。
+## 测试通过直接改 actors["npc_weila"] / plan_run / info_goal 控制场景。
+class FakeSim:
+	extends RefCounted
+	var actors := {}
+	var events: Array = []
+	var obligations: Array = []
+	var relationships: FakeRels = null
+	var plan_run := {}
+	var info_goal := {}
+
+	func _init() -> void:
+		relationships = FakeRels.new()
+		actors = {"npc_weila": {
+			"display_name": "薇拉", "tile": Vector2i(7, 37), "activity": "砍伐树木",
+			"inventory": {"wood": 2},
+			"needs": {"hunger": 200, "thirst": 150, "energy": 800, "social": 50},
+			"memories": [], "open_questions": [],
+			"personality": null, "intentions": null, "tom": null,
+			"last_decision_trace": {}}}
+
+	func agency_plan_run(_actor_id: String) -> Dictionary:
+		return plan_run.duplicate(true)
+
+	func agency_information_goal(_actor_id: String) -> Dictionary:
+		return info_goal.duplicate(true)
+
+class FakeRels:
+	extends RefCounted
+	func get_trust(_a: String, _b: String) -> int:
+		return 0
+
+	func get_dim(_a: String, _b: String, _dim: String) -> int:
+		return 0

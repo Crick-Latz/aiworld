@@ -31,6 +31,8 @@ const PLAN_STATUS := {
 	"DONE": {"icon": "✓", "color": C_POS}, "ACTIVE": {"icon": "▶", "color": C_ACTIVE},
 	"BLOCKED": {"icon": "!", "color": C_BLOCK}, "PENDING": {"icon": "…", "color": C_DIM},
 	"FAILED": {"icon": "×", "color": C_NEG}, "CANCELLED": {"icon": "–", "color": C_DIM},
+	"SUSPENDED": {"icon": "!", "color": C_BLOCK}, "CURRENT": {"icon": "▶", "color": C_ACTIVE},
+	"UNKNOWN": {"icon": "?", "color": C_DIM},
 }
 
 var _inspector_tab := "overview"
@@ -263,16 +265,19 @@ func _render_needs(sel: Dictionary) -> void:
 	var emotions: Dictionary = sel.get("emotions", {})
 	var dominant: Dictionary = emotions.get("dominant", {})
 	lines.append("")
-	lines.append("[color=%s]── 情绪 ──[/color] 主导：%s %s %s" % [C_GOLD, str(dominant.get("label", "平静")), _fmt_float(float(dominant.get("value", 0.0))), _prov("subjective")])
+	lines.append("[color=%s]── 情绪 ──[/color] 主导：%s %s %s" % [C_GOLD, str(dominant.get("label", "平静")),
+		_fmt_float(float(dominant.get("value", 0.0))),
+		_prov(str(dominant.get("provenance", "derived")))])
 	for e in emotions.get("rows", []):
 		lines.append("%s %s %+.2f" % [str(e.get("label", "?")), _bar(absf(float(e.get("value", 0.0)))), float(e.get("value", 0.0))])
-	var questions: Array = sel.get("mind", {}).get("open_questions", [])
+	var pq: Dictionary = sel.get("mind", {}).get("primary_question", {})
 	lines.append("")
-	if questions.is_empty():
+	if pq.is_empty():
 		lines.append("[color=%s]当前最重要问题：[/color]无明确疑问" % C_GOLD)
 	else:
-		var q: Dictionary = questions[0]
-		lines.append("[color=%s]当前最重要问题：[/color]%s %s" % [C_GOLD, _question_text(q), _prov("subjective")])
+		# 问题内容是角色主观；“哪条最重要”是 presentation 按 stakes/tick 排序 → [推导]
+		lines.append("[color=%s]当前最重要问题：[/color]%s %s" % [C_GOLD, _question_text(pq),
+			_prov(str(pq.get("provenance", "derived")))])
 	lines.append("")
 	lines.append(_why_bbcode(sel))
 	_set_rtl(needs_label, "\n".join(lines))
@@ -284,17 +289,41 @@ func _question_text(q: Dictionary) -> String:
 	return "关于 %s 的疑问（%s）" % [str(q.get("about_name", str(q.get("about", "")))), str(q.get("kind", ""))]
 
 ## Why chain（确定性；节点带 provenance；LLM 不参与）
+## Why（fail-closed）：整体 [推导]；决策理由（trace.reason）优先；
+## 因果箭头只出现在 decision trace / live accessor 支持的节点之间；
+## 需求/情绪只进“当前上下文”（无箭头，不冒充原因）。
 func _why_bbcode(sel: Dictionary) -> String:
-	var chain: Array = sel.get("why_chain", [])
-	if chain.is_empty():
-		return "[color=%s]── 为什么这样做？──[/color]\n[color=%s]暂无链（等待决策留痕）[/color]" % [C_GOLD, C_DIM]
-	var lines: Array = ["[color=%s]── 为什么这样做？──[/color]" % C_GOLD]
-	for i in range(chain.size()):
-		var node: Dictionary = chain[i]
+	var why: Dictionary = sel.get("why", {})
+	var lines: Array = ["[color=%s]── 为什么这样做？──[/color] %s" % [C_GOLD, _prov(str(why.get("provenance", "derived")))]]
+	var reason: Dictionary = why.get("decision_reason", {})
+	if not reason.is_empty():
+		lines.append("[color=%s]决策理由：[/color]%s %s" % [C_GOLD, str(reason.get("text", "")),
+			_prov(str(reason.get("provenance", "subjective")))])
+	var nodes: Array = why.get("nodes", [])
+	if nodes.is_empty():
+		lines.append("[color=%s]暂无因果链（等待决策留痕）[/color]" % C_DIM)
+	for i in range(nodes.size()):
+		var node: Dictionary = nodes[i]
 		lines.append("%s %s" % [str(node.get("label", "")), _prov(str(node.get("provenance", "subjective")))])
-		if i < chain.size() - 1:
-			lines.append("[color=%s]  ↓[/color]" % C_DIM)
+		if i < nodes.size() - 1:
+			lines.append("[color=%s]  ↓[/color] %s" % [C_DIM, _link_mark(why, i)])
+	var context: Array = why.get("context", [])
+	if not context.is_empty():
+		lines.append("")
+		lines.append("[color=%s]── 当前上下文 ──[/color] %s" % [C_GRAY, _prov("derived")])
+		for row in context:
+			lines.append("%s %s" % [str(row.get("label", "")), _prov(str(row.get("provenance", "derived")))])
 	return "\n".join(lines)
+
+## 链接标注：记录级链接[主观]不显示文字；显式 [推导] 链接标 (推导)
+func _link_mark(why: Dictionary, index: int) -> String:
+	var links: Array = why.get("links", [])
+	if index >= links.size():
+		return ""
+	var link: Dictionary = links[index]
+	if str(link.get("provenance", "")) == "derived":
+		return "[color=%s](推导)[/color]" % C_GRAY
+	return ""
 
 ## 决策页：当前决定/为什么/行动/阻塞/下一步 + 真实候选效用表 + Raw 节选
 func _render_decision(sel: Dictionary) -> void:
@@ -329,7 +358,7 @@ func _render_plan(sel: Dictionary) -> void:
 	var nodes: Array = p.get("nodes", [])
 	var lines: Array = ["[color=%s]── 计划流 ──[/color] %s" % [C_GOLD, _prov("subjective")]]
 	if nodes.is_empty():
-		lines.append("[color=%s]暂无计划留痕（ViewModel gap: active_plan_steps——只有 trace 内当前步骤）[/color]" % C_DIM)
+		lines.append("[color=%s]暂无计划/执行留痕（无 live run，也无 decision trace）[/color]" % C_DIM)
 	for i in range(nodes.size()):
 		var n: Dictionary = nodes[i]
 		var status := str(n.get("status", "PENDING"))
@@ -342,12 +371,18 @@ func _render_plan(sel: Dictionary) -> void:
 		if i < nodes.size() - 1:
 			lines.append("[color=%s]  ↓[/color]" % C_DIM)
 	lines.append("")
-	lines.append("[color=%s]图例：[/color][color=%s]✓完成[/color] [color=%s]▶进行[/color] [color=%s]!阻塞[/color] [color=%s]…待定[/color] [color=%s]×失败[/color] [color=%s]–取消[/color]" % [
-		C_DIM, C_POS, C_ACTIVE, C_BLOCK, C_DIM, C_NEG, C_DIM])
+	lines.append("[color=%s]图例：[/color][color=%s]✓完成[/color] [color=%s]▶进行[/color] [color=%s]!阻塞[/color] [color=%s]…待定[/color] [color=%s]×失败[/color] [color=%s]–取消[/color] [color=%s]?未知[/color]" % [
+		C_DIM, C_POS, C_ACTIVE, C_BLOCK, C_DIM, C_NEG, C_DIM, C_DIM])
+	var lr: Dictionary = p.get("live_run", {})
+	if not lr.is_empty():
+		lines.append("")
+		lines.append("[color=%s]▸ LIVE run（公开 accessor agency_plan_run）[/color] %s" % [C_GRAY,
+			_raw_snippet({"run_id": lr.get("run_id", ""), "plan_id": lr.get("plan_id", ""),
+				"state": lr.get("state", ""), "current_step_id": lr.get("current_step_id", "")})])
 	var ex: Dictionary = p.get("execution", {})
 	if not ex.is_empty():
 		lines.append("")
-		lines.append("[color=%s]▸ Raw（执行留痕节选）[/color] %s" % [C_GRAY, _raw_snippet(ex)])
+		lines.append("[color=%s]▸ Raw（决策时执行留痕节选）[/color] %s" % [C_GRAY, _raw_snippet(ex)])
 	_set_rtl(pages["plan"], "\n".join(lines))
 
 ## 认知页：特质 bars + 信念(weight) + 未解之问 + ToM 动态谓词知识 + last seen
