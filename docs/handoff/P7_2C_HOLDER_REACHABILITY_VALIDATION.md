@@ -280,3 +280,93 @@ compat2:  ALL_SIX_COMPATIBLE（vs d693a2f / R1.1 逐位）
 natural2: 40/40 replay verified，指纹与 R1.1 natural 一致
 hardening: 73/73（+3 r2r12 K4 polarity；r2r11 为真实双候选竞争）
 ```
+
+---
+
+# P7.2C-R2-R1.3 Visual Knowledge Source Coverage（纯诊断轮，零行为修改）
+
+GPT R1.2 复审 PASS 后授权：区分"NPC 在 request 前很少视觉碰见真 holder"（原因 A）
+与"碰见了但 event-gated observation 没写入"（原因 B）。本轮禁一切行为修改。
+
+## 实现（全部 diagnostic-only，audit 排除，行为零读取）
+
+- **A 决策 tick 视觉覆盖**：actual_holder_exists / visual_to_requester /
+  visual_to_any_peer / visual_to_any_nonholder_peer——严格
+  SpatialPerception.can_see（视野+LOS），禁 distance<=3/spatial/audible。
+- **B encounter episode 去重**：observer×holder×item，false→true 转换记
+  episode start（持续看见同一 episode）；per shells/wood；carriage 同款
+  tick 扫描（感知后、行动前采样；_emit 观察在事件时刻——窗口归属分类，
+  顺序无关）。
+- **C 观察转化**：episode 闭合时按"窗口内是否有 K1 visual possession 观察"
+  分类 with/without + conversion rate；episode 外观察单独计数
+  （tick 内采样时点差的 gap 证据）。不主动写 evidence，只观察现有机制。
+- **D pre-request 回溯**：HOLDER goal 新建时（created_tick==tick 区分复用），
+  按 actor+item 键控历史 ∩ 当前真实持有者集——曾看过后来消费掉材料的
+  actor 不计入。4 个布尔计数（requester/any × saw/observation）。
+- **I 顺手修**：r2r11 场景 1 的 ordinary explore 从硬编码 0.35 改为正式
+  ActionRegistry 候选（普通需求 actor，_pick_unvisited 确定性），断言
+  blocked ask > 真实 explore 候选 utility。
+- 新 probe/history 4 个状态变量加 simulation_audit _encode 排除；
+  fingerprint() 导出时 censored 闭合开放 episode（residence 同纪律）。
+- hardening +12 r1r3 断言 +1 explore 生成断言：73→86；strict_suites 1426→1439。
+
+## 验证
+
+```text
+strict6:  STRICT_REGRESSION PASS 45/1439/27  source_unchanged=true
+          （--timeout 1200 = LOCAL VALIDATION OPERATIONAL OVERRIDE，
+           断言门槛/manifest 未变；p3_narrative 正常区间）
+compat3:  六组 FINGERPRINT-IDENTICAL（4 legacy vs d693a2f + 2 holder vs R1.1）
+natural3: 40/40 replay verified，events+state 与 R1.2 natural2 逐 seed 全一致
+          → 本轮零行为改动再次成立
+hardening: 86/86（defs=calls=21 全接线）
+```
+
+## E 知识源漏斗（10 seed 池化）
+
+```text
+                                reach   possess  arbitr   ecolog
+decision ticks                   804      804      624      624
+actual holder exists             111(13.8%) 111   111(17.8%) 111
+holder visual to REQUESTER         0        0        0        0
+holder visual to any peer          6        6        6        6
+encounter actor-ticks           4599     4599     4833     4833
+encounter episodes (sh/wood)   252(106/146) 252  314(106/208) 314
+unique observer-holder pairs      19       19       24       24
+K1 obs writes                      0     1498        0     1382
+episodes with obs                  0      173        0      200
+episodes without obs             252       79      314      114
+conversion rate                    -    68.7%       -    63.7%
+obs outside episode                0       38        0       47
+pre-request creations             69       69       55       55
+pre-req requester saw holder       0        0        0        0
+pre-req any actor saw holder       1        1        1        1
+pre-req requester observation      0        0        0        0
+network knows actual               0        7        0        7
+carrier visible / last_seen        0/0    0/0       0/0     0/0
+```
+
+## F 方向判定数据（按 GPT R1.3 §F 规则）
+
+- **requester 视觉覆盖极低**：0/111 决策 tick、0/69 pre-request——
+  视觉 encounter 存在（252）但观察者几乎从不是未来 requester。
+- **observation conversion 高**：68.7%/63.7%（possess/ecology）——
+  event-gating 不是瓶颈，排除原因 B（无需 Perception-Driven 修复）。
+- **network knowledge 不明显**：7/804（0.9%）——relay 仍无授权条件。
+
+**结论：原因 A（requester 层面）成立 → 下一阶段正式 Encounter Ecology**
+（共同地点/会合/营地共处/主观 last_seen 找人；仍禁真实 holder 神谕定位）。
+
+## H 仲裁压缩归一化表（SIDE EFFECT UNDER OBSERVATION，未修）
+
+```text
+                        reach/possess      arbitr/ecolog
+goals / material req        1.00               1.00
+decision ticks / goal       11.7               11.3
+eligible ticks / goal        3.0                1.6   ← 仲裁轨迹使可见同伴减半
+ask win on eligible        7.8%              11.6%   ← 条件胜率升（R1.2 已见）
+terminal: HOLDER GOAL RESOLVED=0（全臂）；CANCELLED:PARENT_RUN_CHANGED ~71%
+material request lifetime   ~26.9 ticks（n=68/55） ← 知识使用窗口本身很窄
+```
+压缩来源=goals 69→55（非 decision/goal 下降）；主导终止原因是父计划变更。
+附加信号：即使知识存在，~27 tick 的 request 生命周期也是硬窗口。

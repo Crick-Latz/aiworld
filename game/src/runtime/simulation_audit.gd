@@ -8,6 +8,8 @@ static func fingerprint(sim: IslandSimulation) -> Dictionary:
 	# P7.2C-R1 B3：导出前闭合残留 residence episode（标 censored——纯诊断，
 	# 不改 authoritative state；已在 _encode 排除表中）。
 	sim._censor_open_residence_episodes()
+	# P7.2C-R2-R1.3：encounter episode 同纪律闭合（censored 分类）。
+	sim._censor_open_visual_encounters()
 	return {
 		"events_sha256": AgencyMeasure.canon(sim.events).sha256_text(),
 		"execution_sha256": AgencyMeasure.canon(sim.agency_execution_trace()).sha256_text(),
@@ -97,6 +99,10 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 						or key == "_holder_arbitration_probe" \
 						or key == "_holder_seek_arbitration_probe" \
 						or key == "_material_residence_probe" \
+					or key == "_visual_encounter_probe" \
+					or key == "_visual_encounter_history" \
+					or key == "_possession_observation_last_tick" \
+					or key == "_possession_observation_history" \
 						or key == "agency_holder_reachability_enabled" \
 						or key == "agency_holder_possession_observation_enabled" \
 						or key == "agency_holder_causal_arbitration_enabled" \

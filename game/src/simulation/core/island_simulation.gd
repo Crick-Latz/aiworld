@@ -71,6 +71,15 @@ var _holder_arbitration_probe: Dictionary = {}
 var _holder_seek_arbitration_probe: Dictionary = {}
 # P7.2C-R1 B3：material residence episode probe（纯诊断；audit 排除）。
 var _material_residence_probe := {}
+# P7.2C-R2-R1.3：visual knowledge source coverage 诊断（write-only；audit 排除）。
+# encounter probe：pair "observer|holder|item" -> {"start_tick"}（开放 episode）。
+# history：pair -> {"first_tick","last_tick","episodes"}（pre-request 回溯用）。
+# observation last-tick/history：K1 visual possession 观察写入的时刻与计数
+# （conversion 分类 + pre-request 观察回溯用）。行为系统绝不读取。
+var _visual_encounter_probe := {}
+var _visual_encounter_history := {}
+var _possession_observation_last_tick := {}
+var _possession_observation_history := {}
 
 # P7.2B-R1.1：opportunity funnel 诊断计数——纯加性、只写不读、不参与任何行为/
 # RNG/排序决策；不进入 state 编码（audit 排除），仅随 summary 输出供分析器消费。
@@ -318,6 +327,13 @@ func step() -> Array:
 	# P5：感知先行——视野（昼夜/天气/LOS）→ 空间信念 + last_seen；决策只看信念
 	for id in actors:
 		SpatialPerception.perceive(self, actors[id])
+
+	# P7.2C-R2-R1.3：视觉接触 episode 诊断（write-only）。采样点=感知后、行动前
+	#（决策时的视觉状态）；_emit 的 K1 观察在事件时刻（行动后）另行判定——两者
+	# 是同一视觉条件在 tick 内不同时点的采样，转化分类用窗口归属（obs_tick >=
+	# episode start）保持顺序无关。
+	if agency_holder_reachability_enabled:
+		_record_visual_holder_encounter_ticks()
 
 	for id in _ordered_ids():
 		var a: Dictionary = actors[id]
@@ -723,6 +739,41 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 						break
 			_holder_diag_inc("requester_belief_points_at_actual_holder_ticks",
 				1 if req_belief_hits_actual else 0)
+			# P7.2C-R2-R1.3 A：actual-holder 视觉覆盖——严格 SpatialPerception.can_see
+			#（视野+LOS；禁 distance<=3 / spatial / audible）。区分"没碰见"与
+			# "碰见了但 event-gated 观察没写入"。any_peer 含 requester；nonholder
+			# 按"当前不持有该 item"定义。objective 读仅限诊断层。
+			var holder_visual_to_requester := false
+			var holder_visual_to_any_peer := false
+			var holder_visual_to_any_nonholder_peer := false
+			if not actual_holders.is_empty() and actors.has(id):
+				var vis_hour := int(world_time.get("hour", 12))
+				var vis_weather := str(world.get("weather", "clear"))
+				var req_tile_now: Vector2i = actors[id]["tile"]
+				for hid in actual_holders:
+					if not actors.has(hid):
+						continue
+					var holder_tile_now: Vector2i = actors[hid]["tile"]
+					if SpatialPerception.can_see(map_query, vis_hour, vis_weather,
+							req_tile_now, holder_tile_now):
+						holder_visual_to_requester = true
+					for observer_id in actors:
+						var obid := str(observer_id)
+						if obid == str(hid):
+							continue
+						if SpatialPerception.can_see(map_query, vis_hour, vis_weather,
+								actors[observer_id]["tile"], holder_tile_now):
+							holder_visual_to_any_peer = true
+							if int(actors[observer_id].get("inventory", {}).get(item_id_str, 0)) <= 0:
+								holder_visual_to_any_nonholder_peer = true
+			_holder_diag_inc("actual_holder_exists_ticks",
+				1 if not actual_holders.is_empty() else 0)
+			_holder_diag_inc("actual_holder_visual_to_requester_ticks",
+				1 if holder_visual_to_requester else 0)
+			_holder_diag_inc("actual_holder_visual_to_any_nonholder_peer_ticks",
+				1 if holder_visual_to_any_nonholder_peer else 0)
+			_holder_diag_inc("actual_holder_visual_to_any_peer_ticks",
+				1 if holder_visual_to_any_peer else 0)
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
 			# P7.2C-R1：诊断层按 action 字段拆分 ask / seek——seek 绝不
 			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
@@ -1009,9 +1060,14 @@ func _material_requests_process_requester(
 				if not _run_for_block.is_empty() and str(_run_for_block.get("state", "")) == "BLOCKED":
 					_blocked_ticks = clampf(float(tick - int(_run_for_block.get("updated_tick", tick))) / 48.0 + 0.5, 0.0, 1.0)
 				request["parent_blockedness"] = _blocked_ticks
-				_information_tracker().prepare_holder(requester_id, request, tick,
+				var new_holder_goal: Dictionary = _information_tracker().prepare_holder(requester_id, request, tick,
 					bridge.excluded_targets_for(str(request.get("request_id", ""))),
 					clampf(float(request.get("urgency", 0.5)), 0.0, 1.0))
+				# P7.2C-R2-R1.3 D：HOLDER goal 新建时点的 pre-request 历史回溯
+				#（诊断）。created_tick==tick 区分新建与复用（复用不重记）。
+				if agency_holder_reachability_enabled and not new_holder_goal.is_empty() \
+						and int(new_holder_goal.get("created_tick", -1)) == tick:
+					_record_pre_request_visual_history(requester_id, str(request.get("item_id", "")))
 		Contract.STATUS_WAITING_REQUESTER:
 			var current_gap := _material_request_current_gap(requester_id, a, request)
 			var counter: Dictionary = request.get("last_counter", {})
@@ -1532,6 +1588,129 @@ func _append_residence_sample(item_id: String, duration: int) -> void:
 	if not _objective_material_audit.has(key):
 		_objective_material_audit[key] = []
 	(_objective_material_audit[key] as Array).append(duration)
+
+# ── P7.2C-R2-R1.3：visual knowledge source coverage（纯诊断，write-only）──
+
+## 每 tick：observer × 当前真实 holder（wood/shells）的视觉判定。
+## 严格 SpatialPerception.can_see（视野+LOS）——不用 distance<=3 / spatial /
+## audible。episode 定义：observer 对 holder 上一 tick visual=false、当前 tick
+## visual=true → episode start；持续看见同一 episode；离开后重见开新 episode。
+func _record_visual_holder_encounter_ticks() -> void:
+	var hour := int(world_time.get("hour", 12))
+	var weather := str(world.get("weather", "clear"))
+	for item_id in ["wood", "shells"]:
+		for holder_id in actors:
+			if int(actors[holder_id].get("inventory", {}).get(item_id, 0)) <= 0:
+				continue
+			var hid := str(holder_id)
+			var holder_tile: Vector2i = actors[holder_id]["tile"]
+			for observer_id in actors:
+				var oid := str(observer_id)
+				if oid == hid:
+					continue
+				var visual := SpatialPerception.can_see(map_query, hour, weather,
+					actors[observer_id]["tile"], holder_tile)
+				_visual_pair_tick(oid, hid, item_id, visual)
+
+func _visual_pair_tick(observer_id: String, holder_id: String, item_id: String, visual: bool) -> void:
+	var pair := observer_id + "|" + holder_id + "|" + item_id
+	var probe: Dictionary = _visual_encounter_probe.get(pair, {})
+	if visual:
+		_obj_inc("visual_holder_encounter_ticks_" + item_id)
+	if visual and probe.is_empty():
+		_visual_encounter_probe[pair] = {"start_tick": tick}
+		_obj_inc("visual_holder_encounter_episode_started_" + item_id)
+		var hist: Dictionary = _visual_encounter_history.get(pair, {})
+		if hist.is_empty():
+			_obj_inc("unique_visual_observer_holder_pairs_" + item_id)
+			_visual_encounter_history[pair] = {"first_tick": tick, "last_tick": tick, "episodes": 1}
+		else:
+			hist["last_tick"] = tick
+			hist["episodes"] = int(hist.get("episodes", 0)) + 1
+	elif not visual and not probe.is_empty():
+		_close_visual_encounter_episode(pair, item_id, false)
+	elif visual and not probe.is_empty():
+		var hist2: Dictionary = _visual_encounter_history.get(pair, {})
+		if not hist2.is_empty():
+			hist2["last_tick"] = tick
+
+## episode 闭合：按窗口归属分类——episode 起点以来该 pair 是否有 K1 visual
+## possession 观察写入（obs_tick >= start_tick）。顺序无关（观察可在 tick 内
+## 晚于采样的时点发生）。censored=true 为 run 结束导出时的强制闭合。
+func _close_visual_encounter_episode(pair: String, item_id: String, censored: bool) -> void:
+	var probe: Dictionary = _visual_encounter_probe.get(pair, {})
+	if probe.is_empty():
+		return
+	var start_tick := int(probe.get("start_tick", tick))
+	if int(_possession_observation_last_tick.get(pair, -1)) >= start_tick:
+		_obj_inc("visual_encounter_with_possession_observation_" + item_id)
+	else:
+		_obj_inc("visual_encounter_without_possession_observation_" + item_id)
+	if censored:
+		_obj_inc("visual_holder_encounter_censored_" + item_id)
+	_obj_inc("visual_encounter_duration_sum_" + item_id, tick - start_tick)
+	_visual_encounter_probe.erase(pair)
+
+## R1.3-C：K1 visual possession 观察写入时的机制记账（诊断；不得写 evidence，
+## 只观察现有机制）。观察发生在事件时刻，可能与本 tick 的 encounter 采样存在
+## 时点差——episode 未开放时的观察单独计数（sampling-gap 证据）。
+func _record_possession_observation(observer_id: String, holder_id: String, item_id: String) -> void:
+	var pair := observer_id + "|" + holder_id + "|" + item_id
+	_possession_observation_last_tick[pair] = tick
+	var hist: Dictionary = _possession_observation_history.get(pair, {})
+	if hist.is_empty():
+		_possession_observation_history[pair] = {"first_tick": tick, "last_tick": tick, "count": 1}
+	else:
+		hist["last_tick"] = tick
+		hist["count"] = int(hist.get("count", 0)) + 1
+	if not _visual_encounter_probe.has(pair):
+		_obj_inc("possession_observation_outside_visual_episode_" + item_id)
+
+## R1.3-D：HOLDER goal 新建时点的 pre-request 历史回溯（诊断）。
+## 历史按 actor+item 键控；只统计"当前真实持有者"作为被观察对象——曾看过
+## 后来消费掉材料的 actor 不计入（除非其当前仍持有该 item）。
+func _record_pre_request_visual_history(requester_id: String, item_id: String) -> void:
+	if item_id == "":
+		return
+	_holder_diag_inc("pre_request_goal_creations")
+	var req_saw := false
+	var any_saw := false
+	var req_obs := false
+	var any_obs := false
+	for holder_id in actors:
+		var hid := str(holder_id)
+		if hid == requester_id or int(actors[holder_id].get("inventory", {}).get(item_id, 0)) <= 0:
+			continue
+		if _visual_encounter_history.has(requester_id + "|" + hid + "|" + item_id):
+			req_saw = true
+		if _possession_observation_history.has(requester_id + "|" + hid + "|" + item_id):
+			req_obs = true
+		for observer_id in actors:
+			var oid := str(observer_id)
+			if oid == hid:
+				continue
+			if _visual_encounter_history.has(oid + "|" + hid + "|" + item_id):
+				any_saw = true
+			if _possession_observation_history.has(oid + "|" + hid + "|" + item_id):
+				any_obs = true
+	if req_saw:
+		_holder_diag_inc("requester_pre_request_ever_saw_current_holder")
+	if any_saw:
+		_holder_diag_inc("any_actor_pre_request_ever_saw_current_holder")
+	if req_obs:
+		_holder_diag_inc("requester_pre_request_possession_observation")
+	if any_obs:
+		_holder_diag_inc("any_actor_pre_request_possession_observation")
+
+## R1.3：run 结束/诊断导出时闭合残留 encounter episode（标 censored，同
+## residence 的处理纪律——不假装自然闭合）。
+func _censor_open_visual_encounters() -> void:
+	for pair in _visual_encounter_probe.keys():
+		var parts := str(pair).split("|")
+		if parts.size() != 3:
+			continue
+		_close_visual_encounter_episode(str(pair), str(parts[2]), true)
+
 
 ## P7.2C-R1.1-D：item material flow ledger——write-only per-sink consumption audit。
 ## shelter=-2 wood / fire=-1 wood / craft=recipe 各消耗；纯计数，不改库存操作。
@@ -3329,6 +3508,8 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 								1.0, 0.55, int(e.get("seq", -1)), tick)
 							if agency_holder_reachability_enabled:
 								_holder_diag_inc("direct_possession_observation_" + obs_item)
+								# R1.3-C：观察转化机制记账（诊断；不写 evidence，只记录）。
+								_record_possession_observation(str(id), event_actor, obs_item)
 		# P2.1.1：遵守观察链（独立于执法链）——目击贡献/违规 → descriptive_compliance
 		var evt_rule := str(e.get("rule_id", ""))
 		if evt_rule != "" and id != actor_id:
