@@ -10,7 +10,10 @@
       "information_subgoals": false,
       "material_requests": false,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "execution": {
       "agency_mode": "LIVE_BRIDGE",
@@ -20,7 +23,10 @@
       "information_subgoals": false,
       "material_requests": false,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "causal": {
       "agency_mode": "LIVE_BRIDGE",
@@ -30,7 +36,10 @@
       "information_subgoals": false,
       "material_requests": false,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "framework": {
       "agency_mode": "LIVE_BRIDGE",
@@ -40,7 +49,10 @@
       "information_subgoals": false,
       "material_requests": false,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "information": {
       "agency_mode": "LIVE_BRIDGE",
@@ -50,7 +62,10 @@
       "information_subgoals": true,
       "material_requests": false,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "material_request": {
       "agency_mode": "LIVE_BRIDGE",
@@ -60,7 +75,10 @@
       "information_subgoals": true,
       "material_requests": true,
       "commitment_consequences": false,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "commitment": {
       "agency_mode": "LIVE_BRIDGE",
@@ -70,7 +88,10 @@
       "information_subgoals": true,
       "material_requests": true,
       "commitment_consequences": true,
-      "holder_evidence_reachability": false
+      "holder_evidence_reachability": false,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
     },
     "holder_evidence": {
       "agency_mode": "LIVE_BRIDGE",
@@ -80,7 +101,90 @@
       "information_subgoals": true,
       "material_requests": true,
       "commitment_consequences": true,
-      "holder_evidence_reachability": true
+      "holder_evidence_reachability": true,
+      "holder_reachability": false,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
+    },
+    "holder_reachability": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": false
+    },
+    "holder_possession": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": false
+    },
+    "holder_arbitration": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": false,
+      "holder_causal_arbitration": true
+    },
+    "holder_ecology": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": true
+    },
+    "holder_encounter": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": false,
+      "holder_encounter_ecology": true
+    },
+    "holder_full_ecology": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": true,
+      "holder_encounter_ecology": true
     }
   }
 }

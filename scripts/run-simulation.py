@@ -13,7 +13,7 @@ def main() -> int:
     parser.add_argument("--godot")
     parser.add_argument("--ticks", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=61000)
-    parser.add_argument("--profile", choices=["legacy", "execution", "causal", "framework", "information", "material_request", "commitment", "holder_evidence"], default="framework")
+    parser.add_argument("--profile", choices=["legacy", "execution", "causal", "framework", "information", "material_request", "commitment", "holder_evidence", "holder_reachability", "holder_possession", "holder_arbitration", "holder_ecology", "holder_encounter", "holder_full_ecology"], default="framework")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--verify-replay", action="store_true")
     parser.add_argument("--skip-import", action="store_true", help="Only use after importing this exact source tree.")

@@ -5,6 +5,11 @@ extends RefCounted
 ## RNG seed/state are strings so 64-bit values survive JSON consumers exactly.
 
 static func fingerprint(sim: IslandSimulation) -> Dictionary:
+	# P7.2C-R1 B3：导出前闭合残留 residence episode（标 censored——纯诊断，
+	# 不改 authoritative state；已在 _encode 排除表中）。
+	sim._censor_open_residence_episodes()
+	# P7.2C-R2-R1.3：encounter episode 同纪律闭合（censored 分类）。
+	sim._censor_open_visual_encounters()
 	return {
 		"events_sha256": AgencyMeasure.canon(sim.events).sha256_text(),
 		"execution_sha256": AgencyMeasure.canon(sim.agency_execution_trace()).sha256_text(),
@@ -43,7 +48,8 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 	for row in sim.agency_material_request_trace():
 		var material_event := str(row.get("event", ""))
 		material_requests[material_event] = int(material_requests.get(material_event, 0)) + 1
-	var holder_funnel := sim.agency_holder_funnel_diagnostics()
+	var holder_funnel: Dictionary = sim.agency_holder_funnel_diagnostics()
+	var objective_audit: Dictionary = sim.agency_objective_material_audit()
 	var commitments := {}
 	for row in sim.agency_commitment_trace():
 		var commitment_event := str(row.get("event", ""))
@@ -53,6 +59,7 @@ static func summary(sim: IslandSimulation) -> Dictionary:
 		"information_counts": information, "material_request_counts": material_requests,
 		"commitment_counts": commitments,
 		"holder_funnel": holder_funnel,
+		"objective_material_audit": objective_audit,
 		"planner_calls": sim.agency_planner_calls, "planner_cache_hits": sim.agency_cache_hits}
 
 static func _encode(value: Variant, active: Dictionary) -> Variant:
@@ -88,6 +95,18 @@ static func _encode(value: Variant, active: Dictionary) -> Variant:
 						or key == "agency_commitment_consequences_enabled" \
 						or key == "agency_holder_evidence_reachability_enabled" \
 						or key == "_holder_funnel_diag" \
+						or key == "_objective_material_audit" \
+						or key == "_holder_arbitration_probe" \
+						or key == "_holder_seek_arbitration_probe" \
+						or key == "_material_residence_probe" \
+					or key == "_visual_encounter_probe" \
+					or key == "_visual_encounter_history" \
+					or key == "_possession_observation_last_tick" \
+					or key == "_possession_observation_history" \
+						or key == "agency_holder_reachability_enabled" \
+						or key == "agency_holder_possession_observation_enabled" \
+						or key == "agency_holder_causal_arbitration_enabled" \
+					or key == "agency_holder_encounter_ecology_enabled" \
 						or (int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 					continue
 				object["state"][key] = _encode(value.get(key), active)

@@ -155,6 +155,32 @@ static func _direction_quadrant(origin: Vector2i, tile: Vector2i, rotation: int)
 		base = 2 if delta.y >= 0 else 3
 	return (base - rotation) % 4
 
+## P7.2C-R2 C2：统一的 blocker 解除价值——ask 与 seek 共用同一语义。
+## parent blockedness、request urgency、goal age、trust/reliability 的函数；
+## 不用两套魔法常量；causal flag 开启时取代旧的直接 utility 公式。
+## P7.2C-R2-R1 K2：possession_support 是 candidate-local 参数（调用方按 peer
+## 独立判断）——不写回 goal dict（旧写法会把 B 的 boost 泄漏给后续 C/D）。
+static func holder_resolution_value(goal: Dictionary, actor: Dictionary,
+		peer_id: String, base_pressure: float,
+		possession_support: bool = false) -> float:
+	var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
+	var urgency := clampf(float(goal.get("request_urgency", 0.5)), 0.0, 1.0)
+	var goal_age := clampf(float(int(actor.get("now_tick", 0)) - int(goal.get("created_tick", 0))) / 120.0, 0.0, 1.0)
+	var trust_norm := clampf((float(actor.get("trust_of", {}).get(peer_id, 0.0)) + 1000.0) / 2000.0, 0.0, 1.0)
+	var tom: TheoryOfMind = actor.get("tom", null)
+	var reliable := 0.5
+	if tom != null:
+		reliable = clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+	return clampf(
+		0.16
+		+ blockedness * 0.26
+		+ maxf(urgency, base_pressure) * 0.24
+		+ goal_age * 0.06
+		+ trust_norm * 0.14
+		+ reliable * 0.10
+		+ (0.06 if possession_support else 0.0),
+		0.06, 0.95)
+
 ## P7.2B：开放式持有询问。"我不知道谁有 X"本身就是向身边人打听的理由——
 ## 不要求预先相信对方"知道答案"；候选=当前可见、非自己、本轮未问过、未被本次
 ## material request 拒绝过。排序只用 A 自己的信任/ToM/人格/距离，不读任何真值。
@@ -173,10 +199,12 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 	var urgency := clampf(float(goal.get("request_urgency", 0.5)), 0.0, 1.0)
 	var peers: Array = (actor.get("others_visible", []) as Array).duplicate(true)
 	peers.sort_custom(func(a, b): return str(a.get("id", "")) < str(b.get("id", "")))
+	var eligible_peers: Array = []
 	for peer in peers:
 		var peer_id := str(peer.get("id", ""))
 		if peer_id == "" or peer_id == str(actor.get("id", "")) or asked.has(peer_id) or excluded.has(peer_id):
 			continue
+		eligible_peers.append(peer)
 		var trust_raw := float(actor.get("trust_of", {}).get(peer_id, 0.0))
 		var trust_norm := clampf((trust_raw + 1000.0) / 2000.0, 0.0, 1.0)
 		var reliable := clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
@@ -185,8 +213,18 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 		var peer_tile: Vector2i = peer.get("tile", actor.get("tile", Vector2i.ZERO))
 		var actor_tile: Vector2i = actor.get("tile", Vector2i.ZERO)
 		var distance := absi(peer_tile.x - actor_tile.x) + absi(peer_tile.y - actor_tile.y)
-		var utility := clampf(0.18 + maxf(pressure, urgency) * 0.32 + trust_norm * 0.14
-			+ reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.92)
+		# P7.2C-R2-R1 K2：candidate-local possession support——只对当前 peer
+		# 判断（不再写回 goal dict，B 的 boost 不会泄漏给 C/D）。
+		var utility: float
+		if bool(goal.get("causal_arbitration_enabled", false)):
+			var possession_support := tom.belief_about(peer_id,
+				TheoryOfMind.possession_predicate(item_id)) > 0.05
+			utility = holder_resolution_value(goal, actor, peer_id,
+				maxf(pressure, urgency), possession_support)
+		else:
+			var blockedness := clampf(float(goal.get("parent_blockedness", 0.5)), 0.0, 1.0)
+			utility = clampf(0.14 + maxf(pressure, urgency) * 0.26 + blockedness * 0.22
+				+ trust_norm * 0.14 + reliable * 0.10 + sociability * 0.10 - conflict * 0.06, 0.06, 0.95)
 		out.append({
 			"action": "ask_item_holder",
 			"target": peer_tile,
@@ -204,4 +242,150 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 			"source_request_id": str(goal.get("source_request_id", "")),
 			"peer_reliability_belief": reliable,
 		})
+	# P7.2C C1：身边没有可问的人时，基于自己的主观信息去找一个可能知道答案的人。
+	# 合法信息源只有自己的 ToM last_seen / trust / reliability / 距离信念——
+	# 不读真实库存、不读真实坐标、无神谕追踪；扑空是真实结果（seek 既有语义）。
+	if not eligible_peers.is_empty() or not bool(goal.get("holder_reachability_enabled", false)):
+		return out
+	var seek := _build_seek_holder(actor, goal, pressure, urgency)
+	if not seek.is_empty():
+		out.append(seek)
+		return out
+	# P7.2C Round3 E2：request-time social fallback——无可问的人、也没有任何
+	# last_seen 目标可找时，去自己【见过】的社会锚点（火堆营地）碰运气。
+	# 只读主观 known_resources；远锚点不生成（26-27 tick 请求窗口内不现实）；
+	# 到场不是 goal 终态——之后 others_visible 自然驱动 ask；营地没人则自然失败。
+	if bool(goal.get("encounter_ecology_enabled", false)):
+		var anchor_seek := _build_seek_social_anchor(actor, goal, maxf(pressure, urgency))
+		if not anchor_seek.is_empty():
+			out.append(anchor_seek)
 	return out
+
+## Round3 E2：找社会锚点候选——目标 = 请求者自己见过的最近火堆（主观
+## known_resources["fires"]，key "x,y"）。utility 是 fallback 档（低于
+## blocked ask 与 known-holder seek，与普通探索竞争）。
+static func _build_seek_social_anchor(actor: Dictionary, goal: Dictionary,
+		pressure_urgency: float) -> Dictionary:
+	var kr: Dictionary = actor.get("known_resources", {})
+	if not kr.has("fires"):
+		return {}
+	var fires: Dictionary = kr["fires"]
+	if fires.is_empty():
+		return {}
+	var origin: Vector2i = actor.get("tile", Vector2i.ZERO)
+	var anchor := Vector2i(-1, -1)
+	var best_d := -1
+	var keys: Array = fires.keys()
+	keys.sort()
+	for key in keys:
+		var parts: Array = str(key).replace("(", "").replace(")", "").split(",")
+		if parts.size() != 2:
+			continue
+		var ft := Vector2i(int(str(parts[0]).strip_edges()), int(str(parts[1]).strip_edges()))
+		var d := absi(ft.x - origin.x) + absi(ft.y - origin.y)
+		if best_d < 0 or d < best_d:
+			best_d = d
+			anchor = ft
+	if anchor.x < 0 or best_d < 0:
+		return {}
+	if best_d > 30:
+		return {}
+	var p: PersonalityProfile = actor.get("personality", null)
+	var sociability := 0.5
+	if p != null:
+		sociability = p.effective_trait("sociability", actor.get("needs", {}))
+	var utility := clampf(0.10 + pressure_urgency * 0.22 + sociability * 0.10, 0.06, 0.75)
+	return {
+		"action": "seek_social_anchor",
+		"target": anchor,
+		"target_anchor": "fire",
+		"utility": utility,
+		"duration": maxi(1, best_d - 8),
+		"desc": "回营地碰碰运气——也许有人知道谁有%s" % str(goal.get("item_id", "")),
+		"information_goal_id": str(goal.get("goal_id", "")),
+		"information_action": true,
+		"information_kind": "SEEK_ANCHOR",
+		"query_kind": "HOLDER",
+		"parent_plan_id": str(goal.get("parent_plan_id", "")),
+		"item_id": str(goal.get("item_id", "")),
+		"holder_predicate": TheoryOfMind.possession_predicate(str(goal.get("item_id", ""))),
+		"source_request_id": str(goal.get("source_request_id", "")),
+	}
+
+## P7.2C C1：找人候选——目标从请求者自己的 ToM last_seen 记忆里选（主观），
+## 排序用 trust/reliability/sociability/last_seen 新鲜度/距离信念/请求紧迫度。
+## 允许扑空：last_seen 陈旧时世界执行层会真实扑空（seek_person 既有语义）。
+static func _build_seek_holder(actor: Dictionary, goal: Dictionary,
+		pressure: float, urgency: float) -> Dictionary:
+	var tom: TheoryOfMind = actor.get("tom", null)
+	if tom == null:
+		return {}
+	var p: PersonalityProfile = actor.get("personality", null)
+	if p == null:
+		return {}
+	var origin: Vector2i = actor.get("tile", Vector2i.ZERO)
+	var asked: Array = goal.get("asked_actor_ids", [])
+	var excluded: Array = goal.get("excluded_target_ids", [])
+	# P7.2C-R1：本轮已找过的人不再重复找（stale last_seen 扑空后换目标）；
+	# 找到的人只进 sought——不排除后续 ask（ask 只看 asked/excluded）。
+	var sought: Array = goal.get("sought_actor_ids", [])
+	var best_id := ""
+	var best_score := 0.0
+	var best_seen := {}
+	var now := int(actor.get("now_tick", 0))
+	for other_id in actor.get("trust_of", {}):
+		var peer_id := str(other_id)
+		if peer_id == "" or peer_id == str(actor.get("id", "")) \
+				or asked.has(peer_id) or excluded.has(peer_id) or sought.has(peer_id):
+			continue
+		var seen := tom.last_seen_of(peer_id)
+		if seen.is_empty():
+			continue
+		var trust_norm := clampf((float(actor.get("trust_of", {}).get(peer_id, 0.0)) + 1000.0) / 2000.0, 0.0, 1.0)
+		var reliable := clampf((tom.belief_about(peer_id, "reliable") + 1.0) * 0.5, 0.0, 1.0)
+		var sociability := p.effective_trait("sociability", actor.get("needs", {}))
+		var seen_tick := int(seen.get("tick", -1))
+		var freshness := clampf(1.0 / (1.0 + float(maxi(0, now - seen_tick)) / 120.0), 0.1, 1.0)
+		var tile: Vector2i = seen.get("tile", origin)
+		var distance := absi(tile.x - origin.x) + absi(tile.y - origin.y)
+		var distance_belief := clampf(1.0 / (1.0 + float(distance) / 30.0), 0.1, 1.0)
+		var score := trust_norm * 0.28 + reliable * 0.22 + sociability * 0.12 \
+			+ freshness * 0.18 + distance_belief * 0.10 + clampf(maxf(pressure, urgency), 0.0, 1.0) * 0.10
+		# P7.2C-R2 C3b-4：请求者对目标已有 positive has_item:X belief → 更高优先。
+		if tom.belief_about(peer_id, TheoryOfMind.possession_predicate(str(goal.get("item_id", "")))) > 0.05:
+			score += 0.20
+		if score > best_score:
+			best_score = score
+			best_id = peer_id
+			best_seen = seen
+	if best_id == "":
+		return {}
+	var seek_tile: Vector2i = best_seen.get("tile", origin)
+	var utility: float
+	if bool(goal.get("causal_arbitration_enabled", false)):
+		# P7.2C-R2-R1 K2：candidate-local——possession_support 只对 best_id 判断。
+		var seek_possession := tom.belief_about(best_id,
+			TheoryOfMind.possession_predicate(str(goal.get("item_id", "")))) > 0.05
+		utility = holder_resolution_value(goal, actor, best_id,
+			maxf(pressure, urgency), seek_possession)
+		# C3b-4：known-holder 额外加分（主观 belief，非真实库存）。
+		if seek_possession:
+			utility = clampf(utility + 0.12, 0.06, 0.95)
+	else:
+		utility = clampf(0.14 + maxf(pressure, urgency) * 0.30 + best_score * 0.42, 0.06, 0.92)
+	return {
+		"action": "seek_holder_person",
+		"target": seek_tile,
+		"target_actor": best_id,
+		"utility": utility,
+		"duration": maxi(1, absi(seek_tile.x - origin.x) + absi(seek_tile.y - origin.y) - 8),
+		"desc": "去找%s——也许他知道谁有%s" % [best_id, str(goal.get("item_id", ""))],
+		"information_goal_id": str(goal.get("goal_id", "")),
+		"information_action": true,
+		"information_kind": "SEEK_HOLDER",
+		"query_kind": "HOLDER",
+		"parent_plan_id": str(goal.get("parent_plan_id", "")),
+		"item_id": str(goal.get("item_id", "")),
+		"holder_predicate": TheoryOfMind.possession_predicate(str(goal.get("item_id", ""))),
+		"source_request_id": str(goal.get("source_request_id", "")),
+	}
