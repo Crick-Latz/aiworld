@@ -86,31 +86,54 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 			model["selected_actor"] = sel4
 		"BRAIN_PLAN_BLOCKED":
 			var sel5 := _brain_full()
+			# R1.1：LIVE 与决策快照真分区演示——live root=SHELTER，快照 root=觅食（不同目标），
+			# live 信息目标 parent_run_id/blocker_step_id 与 run 身份匹配（附着在 run 流内）
 			sel5["plan"] = {
-				"goal": {"desc": "建造庇护所", "priority": 0.78, "provenance": "subjective"},
+				"goal": {"desc": "觅食", "priority": 0.55, "provenance": "subjective"},
 				"intention": {"action": "chop_wood", "commitment": 0.82, "started_tick": 300,
 					"target": Vector2i(21, 34), "desc": "在林地砍伐木头"},
-				"execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
-					"blocker_reason": "缺少 wood ×2", "selected": false, "decision_tick": 312},
-				"live_run": {},
+				"execution": {"run_id": "run_31", "plan_id": "plan_4", "step_id": "step_1",
+					"blocker_reason": "缺少 food ×1", "selected": false, "decision_tick": 300},
+				"live": {
+					"root_goal": "SHELTER",
+					"run": {"run_id": "run_42", "plan_id": "plan_9", "state": "ACTIVE",
+						"reason_code": "", "current_step_id": "s2"},
+					"steps": [
+						{"step_id": "s1", "order": 0, "is_current": false, "status": "UNKNOWN", "provenance": "subjective"},
+						{"step_id": "s2", "order": 1, "is_current": true, "status": "CURRENT", "provenance": "subjective"},
+						{"step_id": "s3", "order": 2, "is_current": false, "status": "UNKNOWN", "provenance": "subjective"}],
+					"attached_information_goal": {"query_kind": "HOLDER", "state": "ACTIVE",
+						"item_id": "wood", "parent_run_id": "run_42", "blocker_step_id": "s2"},
+					"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run"},
+				"live_run": {"run_id": "run_42", "plan_id": "plan_9", "state": "ACTIVE",
+					"reason_code": "", "current_step_id": "s2"},
 				"live_information_goal": {"query_kind": "HOLDER", "state": "ACTIVE",
-					"item_id": "wood", "information_goal_id": "info_w3"},
+					"item_id": "wood", "parent_run_id": "run_42", "blocker_step_id": "s2"},
 				"decision_snapshot": {
-					"agency_execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
-						"blocker_reason": "缺少 wood ×2", "selected": false, "decision_tick": 312},
-					"agency_information_goal": {}},
+					"goal": {"desc": "觅食", "priority": 0.55},
+					"execution": {"run_id": "run_31", "plan_id": "plan_4", "step_id": "step_1",
+						"blocker_reason": "缺少 food ×1", "selected": false, "decision_tick": 300},
+					"information_goal": {}},
 				"nodes": [
-					{"kind": "ROOT_GOAL", "label": "建造庇护所", "value": "优先级 0.78", "status": "ACTIVE",
+					{"kind": "ROOT_GOAL", "section": "live", "label": "SHELTER", "value": "run run_42", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run.root_goal"},
+					{"kind": "RUN", "section": "live", "label": "执行 run_42", "value": "计划 plan_9 · ACTIVE", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run"},
+					{"kind": "STEP", "section": "live", "label": "步骤 s1", "value": "", "status": "UNKNOWN",
+						"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run.steps"},
+					{"kind": "STEP", "section": "live", "label": "步骤 s2", "value": "当前", "status": "CURRENT",
+						"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run.steps"},
+					{"kind": "STEP", "section": "live", "label": "步骤 s3", "value": "", "status": "UNKNOWN",
+						"provenance": "subjective", "source_kind": "LIVE_RUN", "source_ref": "agency_plan_run.steps"},
+					{"kind": "SUBGOAL", "section": "live", "no_arrow_in": false, "label": "信息目标 HOLDER",
+						"value": "状态 ACTIVE", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "LIVE_ACCESSOR", "source_ref": "agency_information_goal"},
+					{"kind": "ROOT_GOAL", "section": "snapshot", "label": "觅食", "value": "优先级 0.55", "status": "ACTIVE",
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-					{"kind": "PLAN", "label": "计划 plan_9", "value": "运行 run_17", "status": "ACTIVE",
+					{"kind": "STEP", "section": "snapshot", "label": "步骤 step_1", "value": "缺少 food ×1", "status": "BLOCKED",
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-					{"kind": "STEP", "label": "步骤 step_2：获得木头", "value": "缺少 wood ×2", "status": "BLOCKED",
-						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-					{"kind": "BLOCKER", "label": "缺少 wood ×2", "value": "", "status": "BLOCKED",
-						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-					{"kind": "SUBGOAL", "label": "信息目标 HOLDER", "value": "状态 ACTIVE", "status": "ACTIVE",
-						"provenance": "subjective", "source_kind": "LIVE_ACCESSOR",
-						"source_ref": "agency_information_goal"}],
+					{"kind": "BLOCKER", "section": "snapshot", "label": "缺少 food ×1", "value": "", "status": "BLOCKED",
+						"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
 				"provenance": "subjective"}
 			model["selected_actor"] = sel5
 		"BRAIN_TOM_HOLDER_EVIDENCE":
@@ -168,6 +191,7 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 		"BRAIN_NO_SOCIAL_DATA":
 			var sel10 := _brain_full()
 			sel10["social"] = {"commitments": [], "recent_requests": [], "holder_events": [],
+				"source_information_events": [],
 				"recent_social_events": [], "display_name": "薇拉", "provenance": "objective"}
 			model["selected_actor"] = sel10
 		"BRAIN_OPEN_QUESTIONS":
@@ -210,6 +234,7 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 					{"day": 2, "seq": 45, "type": "MATERIAL_REQUEST_CREATED", "text": "薇拉 向 卡德加 请求 wood×1 已提出"}],
 				"holder_events": [
 					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
+				"source_information_events": [],
 				"recent_social_events": [
 					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"},
 					{"day": 2, "seq": 45, "type": "MATERIAL_REQUEST_CREATED", "text": "薇拉 向 卡德加 请求 wood×1 已提出"}],
@@ -298,18 +323,20 @@ static func _brain_full() -> Dictionary:
 				"target": Vector2i(21, 34), "desc": "在林地砍伐木头"},
 			"execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
 				"blocker_reason": "", "selected": true, "decision_tick": 312},
+			"live": {},
 			"live_run": {},
 			"live_information_goal": {},
 			"decision_snapshot": {
-				"agency_execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
+				"goal": {"desc": "建造庇护所", "priority": 0.78},
+				"execution": {"run_id": "run_17", "plan_id": "plan_9", "step_id": "step_2",
 					"blocker_reason": "", "selected": true, "decision_tick": 312},
-				"agency_information_goal": {}},
+				"information_goal": {}},
 			"nodes": [
-				{"kind": "ROOT_GOAL", "label": "建造庇护所", "value": "优先级 0.78", "status": "ACTIVE",
+				{"kind": "ROOT_GOAL", "section": "snapshot", "label": "建造庇护所", "value": "优先级 0.78", "status": "ACTIVE",
 					"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-				{"kind": "PLAN", "label": "计划 plan_9", "value": "运行 run_17", "status": "ACTIVE",
+				{"kind": "PLAN", "section": "snapshot", "label": "计划 plan_9", "value": "运行 run_17", "status": "ACTIVE",
 					"provenance": "subjective", "source_kind": "DECISION_TRACE"},
-				{"kind": "STEP", "label": "步骤 step_2：获得木头", "value": "", "status": "ACTIVE",
+				{"kind": "STEP", "section": "snapshot", "label": "步骤 step_2：获得木头", "value": "", "status": "ACTIVE",
 					"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
 			"provenance": "subjective"},
 		"mind": {"open_questions": [], "primary_question": {}, "tom_subjects": [
@@ -341,6 +368,8 @@ static func _brain_full() -> Dictionary:
 				{"day": 2, "seq": 44, "type": "MATERIAL_REQUEST_OFFERED", "text": "薇拉 向 卡德加 请求 shell×2 已提出"}],
 			"holder_events": [
 				{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
+			"source_information_events": [
+				{"day": 2, "seq": 48, "type": "source_information_shared", "text": "欧恩 告诉 薇拉：北滩有浮木来源"}],
 			"recent_social_events": [
 				{"day": 1, "seq": 30, "type": "shared_food", "text": "卡德加 主动分给 薇拉 一份烤鱼"}],
 			"display_name": "薇拉", "provenance": "objective"},

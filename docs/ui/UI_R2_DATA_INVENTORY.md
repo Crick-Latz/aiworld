@@ -59,8 +59,9 @@
 | intention / commitment | String/float | 意图快照（enrich） | subjective | 否 | YES |
 | beliefs / emotions / memory_count | Dict/Dict/int | 快照（enrich） | subjective | 否 | YES |
 
-结论：**runtime candidates 可用**（top_candidates 真实存在）；active plan run 的"当前步骤 + 阻塞"可用
-（agency_execution），但**完整步骤树无公开数据**（见 GAPS）。
+结论：**runtime candidates 可用**（top_candidates 真实存在）；trace.agency_execution 提供"当前步骤 +
+阻塞"的单步决策快照。完整步骤顺序与 current_step_id 已由公开 accessor `agency_plan_run()`
+提供（§10a）；缺少的是每个步骤独立的终态历史（per-step terminal status history，GAP-1a）。
 
 ## 5. actor.memories（SUBJECTIVE，上限 20 条）
 

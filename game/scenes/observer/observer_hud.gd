@@ -325,6 +325,10 @@ func _link_mark(why: Dictionary, index: int) -> String:
 		return "[color=%s](推导)[/color]" % C_GRAY
 	return ""
 
+## 计划流内相邻节点的 ↓ 是 presentation 排列（无显式因果证据字段）→ [推导]
+func _link_mark_plan() -> String:
+	return "[color=%s](推导)[/color]" % C_GRAY
+
 ## 决策页：当前决定/为什么/行动/阻塞/下一步 + 真实候选效用表 + Raw 节选
 func _render_decision(sel: Dictionary) -> void:
 	var d: Dictionary = sel.get("decision", {})
@@ -359,8 +363,20 @@ func _render_plan(sel: Dictionary) -> void:
 	var lines: Array = ["[color=%s]── 计划流 ──[/color] %s" % [C_GOLD, _prov("subjective")]]
 	if nodes.is_empty():
 		lines.append("[color=%s]暂无计划/执行留痕（无 live run，也无 decision trace）[/color]" % C_DIM)
+	var current_section := ""
 	for i in range(nodes.size()):
 		var n: Dictionary = nodes[i]
+		var section := str(n.get("section", ""))
+		if section != current_section:
+			if section != "":
+				lines.append("")
+				if section == "live":
+					lines.append("[color=%s]── 当前执行 LIVE ──[/color] %s" % [C_ACTIVE, _prov("subjective")])
+				elif section == "snapshot":
+					lines.append("[color=%s]── 上次决策快照 ──[/color] %s" % [C_GRAY, _prov("subjective")])
+			current_section = section
+		elif not bool(n.get("no_arrow_in", false)) and str(nodes[i - 1].get("section", "")) == section:
+			lines.append("[color=%s]  ↓[/color] %s" % [C_DIM, _link_mark_plan()])
 		var status := str(n.get("status", "PENDING"))
 		var style: Dictionary = PLAN_STATUS.get(status, PLAN_STATUS["PENDING"])
 		var value := str(n.get("value", ""))
@@ -368,8 +384,6 @@ func _render_plan(sel: Dictionary) -> void:
 		if value != "":
 			line += " [color=%s]%s[/color]" % [C_DIM, value]
 		lines.append(line)
-		if i < nodes.size() - 1:
-			lines.append("[color=%s]  ↓[/color]" % C_DIM)
 	lines.append("")
 	lines.append("[color=%s]图例：[/color][color=%s]✓完成[/color] [color=%s]▶进行[/color] [color=%s]!阻塞[/color] [color=%s]…待定[/color] [color=%s]×失败[/color] [color=%s]–取消[/color] [color=%s]?未知[/color]" % [
 		C_DIM, C_POS, C_ACTIVE, C_BLOCK, C_DIM, C_NEG, C_DIM, C_DIM])
@@ -497,10 +511,17 @@ func _render_social(sel: Dictionary) -> void:
 		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
 	var holder: Array = social.get("holder_events", [])
 	lines.append("")
-	lines.append("[color=%s]── 持有者情报（信息目标事件）──[/color] %s" % [C_GOLD, _prov("objective")])
+	lines.append("[color=%s]── 持有者情报 ──[/color] %s" % [C_GOLD, _prov("objective")])
 	if holder.is_empty():
 		lines.append("[color=%s]无[/color]" % C_DIM)
 	for r in holder.slice(0, 6):
+		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
+	var source_info: Array = social.get("source_information_events", [])
+	lines.append("")
+	lines.append("[color=%s]── 资源来源情报 ──[/color] %s" % [C_GOLD, _prov("objective")])
+	if source_info.is_empty():
+		lines.append("[color=%s]无[/color]" % C_DIM)
+	for r in source_info.slice(0, 6):
 		lines.append("[color=%s]D%d E%d[/color] %s" % [C_DIM, int(r.get("day", 0)), int(r.get("seq", 0)), str(r.get("text", ""))])
 	var events: Array = social.get("recent_social_events", [])
 	lines.append("")

@@ -1,5 +1,28 @@
 # UI-R2 NPC 大脑观察器 —— 本地验证记录
 
+## R1.1 Semantic Closeout（2026-09-16，GPT R1 复审返修补轮）
+
+R1 复审判 UI_R2_SEMANTIC_CLOSEOUT_NEEDS_FIX（原四 blocker 关闭），三个收尾 blocker 全修：
+
+1. **Plan 页 LIVE / 决策快照真分区**：nodes 带 section（live/snapshot）；有 live run 时
+   LIVE 区 root goal 只来自 `live_run.root_goal`（trace.goal_desc 禁入 LIVE 流，
+   只出现在快照区）；无 live run 时快照作为主计划。HUD 分区渲染
+   （── 当前执行 LIVE ── / ── 上次决策快照 ──）。
+2. **live 信息目标身份校验**：仅 `parent_run_id == live_run.run_id`（且 blocker_step_id
+   存在时 `== current_step_id`）才附着在 run 流内；否则独立显示「当前信息目标」
+   （no_arrow_in，不接箭头）。
+3. **Why 边全 derived**：Presentation 按排列自建的一切箭头一律
+   `[推导] PRESENTATION_LINK`（helper `_make_derived_link`，source_ref 必填）——
+   节点同屏存在不构成记录级因果证据；`trace.reason` 决策理由保持 [主观]。
+4. **holder/source 情报分桶**：HOLDER_EVENT_PREFIXES 只含 holder_information_*；
+   新增 source_information_* 独立桶 `source_information_events`；HUD 两区显示
+   （持有者情报 / 资源来源情报）；两者仍并入综合社会事件。
+5. 证据卫生：manifest 全 40-hex SHA（base/previous/final/validated + 机器校验
+   final==validated）；INVENTORY 旧句更正（agency_plan_run 已公开 steps 顺序/
+   current_step_id，缺的是 per-step 终态历史）。
+
+Targeted 断言 54 → **62**（plan 分区 ×4 / why 边 ×2 / social 分桶 ×2）；fixtures 仍 21。
+
 ## R1 Semantic Hardening（2026-09-15，GPT 复审返修轮）
 
 GPT 代码级复审判 UI_R2_CODE_REVIEW_NEEDS_FIX（架构/边界/守卫/ToM 展示 PASS，

@@ -48,8 +48,8 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | personality.traits[{key,label,value}]×10 / personality.beliefs[{text,weight}] | 0..1 特质 / 信念（weight 真实 schema） |
 | decision.{chosen,reason,current_action,blocker,next_step,considered_count,dominant_interpretation,decision_tick} | 决策留痕（subjective；current_action 为 objective） |
 | decision.candidates[{action,utility,chosen}] | **真实 softmax 候选效用表**（trace.top_candidates；无决策 tick 时为空） |
-| plan.goal / plan.intention / plan.nodes[{kind,label,value,status,source_kind}] | 竖向计划流；kind 含 RUN/STEP（LIVE）/PLAN/BLOCKER/SUBGOAL（决策快照）；状态含 CURRENT/UNKNOWN（run.steps 不保存每步终态） |
-| plan.live_run{run_id,plan_id,root_goal,state,reason_code,current_step_id,steps[{step_id,order,is_current,status}]} | **LIVE**：`sim.agency_plan_run(actor_id)` 公开只读 accessor（他现在正在执行什么） |
+| plan.nodes[{kind,label,value,status,source_kind,section,no_arrow_in?}] | 计划流真分区（R1.1）：section=live（当前执行 LIVE，root goal 只来自 live_run.root_goal，trace.goal_desc 禁入）/snapshot（上次决策快照）；live 信息目标仅 parent_run_id==run_id（blocker_step_id 存在时还需==current_step_id）时附着，否则 no_arrow_in 独立显示 |
+| plan.live{root_goal,run{run_id,plan_id,state,reason_code,current_step_id},steps[],attached_information_goal?}（兼容平铺键 live_run） | **LIVE**：`sim.agency_plan_run(actor_id)` 公开只读 accessor（他现在正在执行什么） |
 | plan.live_information_goal / plan.decision_snapshot | LIVE 信息目标（`sim.agency_information_goal`，字段 **state**）与决策时刻快照（trace.agency_execution / trace.agency_information.goal）两时间语义分离 |
 | mind.open_questions[{about_name,kind,entropy,stakes,tick,source_event_ids}] | 未解之问 |
 | mind.primary_question{...} | 按 stakes 降序→tick 降序选出的当前最重要问题（选择为 derived） |
@@ -58,8 +58,8 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | relationships.rows[{other_name,trust,benevolence,reliability,obligation,fear,change?,tom}] | 真实有向边（objective）+ ToM 三槽（subjective）两层分离 |
 | memories.rows[{seq,tick,day,text,type,counterpart,derived_importance,interpretation}] | 记忆卡片（day/derived_importance 为 derived） |
 | social.commitments[{direction,counterpart_name,object,quantity,status,due_tick,source_request_id}] | 承诺台账只读过滤（我欠/欠我） |
-| social.recent_requests / holder_events / recent_social_events | 事件尾部派生（≤300 扫描；**仅选中 NPC 直接参与的事件**，真实小写 holder_information_*/source_information_* 命名） |
-| why{provenance:derived, decision_reason, nodes[], links[], context[]} | **fail-closed 因果链**（无 LLM）：决策理由（trace.reason）优先；箭头只连 trace/live 支持节点（末端→activity 显式 derived link）；需求/情绪只进 context（无箭头）；无 delta 数据禁止"升高"措辞 |
+| social.recent_requests / holder_events / source_information_events / recent_social_events | 事件尾部派生（≤300 扫描；**仅选中 NPC 直接参与的事件**）；holder_information_*（谁持有 X）与 source_information_*（哪里有 X）**分桶显示** |
+| why{provenance:derived, decision_reason, nodes[], links[], context[]} | **fail-closed 因果链**（无 LLM）：决策理由（trace.reason，[主观]）优先；**节点间箭头全部为 presentation 自建 [推导] PRESENTATION_LINK**（节点同屏存在不构成记录级因果证据）；需求/情绪只进 context（无箭头）；无 delta 数据禁止"升高"措辞 |
 | 兼容字段 activity_text/goal_text/inventory_text/needs_text/decision_text/inventory_items | 0.2 兼容（wander/story 模式） |
 
 ### DERIVED（presentation 推导，UI 显式标注）

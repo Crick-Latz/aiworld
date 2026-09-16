@@ -27,8 +27,10 @@ const NEED_LABELS := {"hunger": "饥饿", "thirst": "口渴", "fatigue": "疲劳
 
 ## 社会页事件类型前缀（按真实 type 命名，见 INVENTORY §11）：
 ## material/commitment 系为全大写（MATERIAL_REQUEST_* / MATERIAL_COUNTER_* / COMMITMENT_*）；
-## P7.0/P7.2B 信息事件为全小写（holder_information_* / source_information_*）。
-const HOLDER_EVENT_PREFIXES := ["holder_information_", "source_information_"]
+## P7.0/P7.2B 信息事件为全小写。持有者情报（holder_information_*，谁持有 X）与
+## 资源来源情报（source_information_*，哪里有 X）认知语义不同——分桶显示（R1.1）。
+const HOLDER_EVENT_PREFIXES := ["holder_information_"]
+const SOURCE_INFORMATION_EVENT_PREFIXES := ["source_information_"]
 const SOCIAL_EVENT_PREFIXES := ["MATERIAL_REQUEST", "MATERIAL_COUNTER", "MATERIAL_TRANSFER", "COMMITMENT",
 	"holder_information_", "source_information_", "shared_food", "food_request", "promise", "PROMISE",
 	"transfer", "TRANSFER"]
@@ -166,9 +168,12 @@ static func _decision(sim, a: Dictionary) -> Dictionary:
 		"provenance": PROV_SUBJECTIVE,
 	}
 
-# ————— plan：LIVE（公开 accessor）与 DECISION-TIME SNAPSHOT（trace）分离 —————
-# LIVE：sim.agency_plan_run(actor_id) / sim.agency_information_goal(actor_id)——只读公开 API。
-# SNAPSHOT：actor.last_decision_trace（他上一次做决定时怎么看）。
+# ————— plan：LIVE / DECISION-TIME SNAPSHOT 真分区（R1.1） —————
+# LIVE：sim.agency_plan_run / sim.agency_information_goal（只读公开 API）。
+#   live 区 root goal 只来自 live_run.root_goal——trace.goal_desc 禁止混入 LIVE 流。
+#   live 信息目标仅在身份匹配（parent_run_id==run_id；blocker_step_id 存在时还需
+#   ==current_step_id）时附着在 run 流内，否则独立显示【当前信息目标】。
+# SNAPSHOT：last_decision_trace（他上一次做决定时怎么看）。无 live run 时才作为主计划。
 # run.steps 不保存每步独立终态：非 current 步骤一律 UNKNOWN，不虚构 COMPLETED。
 
 static func _plan(sim, a: Dictionary, actor_id: String) -> Dictionary:
@@ -180,21 +185,14 @@ static func _plan(sim, a: Dictionary, actor_id: String) -> Dictionary:
 	var live_goal: Dictionary = {}
 	if sim != null and sim.has_method("agency_information_goal"):
 		live_goal = sim.agency_information_goal(actor_id)
+	var snapshot: Dictionary = {
+		"goal": {"desc": str(trace.get("goal_desc", "")), "priority": float(trace.get("goal_priority", 0.0))},
+		"execution": trace.get("agency_execution", {}),
+		"information_goal": (trace.get("agency_information", {}) as Dictionary).get("goal", {})}
 	var nodes: Array = []
-	# ROOT GOAL（决策时快照）
-	if trace.has("active_goal"):
-		nodes.append({"kind": "ROOT_GOAL", "label": str(trace.get("goal_desc", trace["active_goal"])),
-			"value": "优先级 %.2f" % float(trace.get("goal_priority", 0.0)),
-			"status": "ACTIVE", "provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
-	var live_summary: Dictionary = {}
+	var live: Dictionary = {}
 	if not live_run.is_empty():
-		# LIVE RUN：当前真实 run（run_id/plan_id/state/reason_code/current_step_id 全只读）
 		var run_state := str(live_run.get("state", ""))
-		nodes.append({"kind": "RUN", "label": "执行 %s" % str(live_run.get("run_id", "")),
-			"value": "计划 %s · %s" % [str(live_run.get("plan_id", "")), run_state],
-			"status": run_state if run_state != "" else "PENDING",
-			"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
-			"source_ref": "agency_plan_run"})
 		var cur := str(live_run.get("current_step_id", ""))
 		var step_rows: Array = []
 		var steps: Array = live_run.get("steps", [])
@@ -204,55 +202,49 @@ static func _plan(sim, a: Dictionary, actor_id: String) -> Dictionary:
 			step_rows.append({"step_id": sid, "order": i, "is_current": sid == cur,
 				"status": "CURRENT" if sid == cur else "UNKNOWN",
 				"provenance": PROV_SUBJECTIVE})
+		var attached := _goal_attached_to_run(live_goal, live_run)
+		live = {
+			"root_goal": str(live_run.get("root_goal", "")),
+			"run": {"run_id": str(live_run.get("run_id", "")), "plan_id": str(live_run.get("plan_id", "")),
+				"state": run_state, "reason_code": str(live_run.get("reason_code", "")),
+				"current_step_id": cur},
+			"steps": step_rows,
+			"attached_information_goal": attached,
+			"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
+			"source_ref": "agency_plan_run"}
+		# —— LIVE 区节点：root goal 只来自 live_run ——
+		nodes.append({"kind": "ROOT_GOAL", "section": "live",
+			"label": str(live_run.get("root_goal", "（无根目标）")),
+			"value": "run %s" % str(live_run.get("run_id", "")),
+			"status": run_state if run_state != "" else "PENDING",
+			"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
+			"source_ref": "agency_plan_run.root_goal"})
+		nodes.append({"kind": "RUN", "section": "live",
+			"label": "执行 %s" % str(live_run.get("run_id", "")),
+			"value": "计划 %s · %s" % [str(live_run.get("plan_id", "")), run_state],
+			"status": run_state if run_state != "" else "PENDING",
+			"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
+			"source_ref": "agency_plan_run"})
 		for srow in step_rows:
-			nodes.append({"kind": "STEP", "label": "步骤 %s" % str(srow["step_id"]),
+			nodes.append({"kind": "STEP", "section": "live",
+				"label": "步骤 %s" % str(srow["step_id"]),
 				"value": "当前" if bool(srow["is_current"]) else "",
 				"status": str(srow["status"]),
 				"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
 				"source_ref": "agency_plan_run.steps"})
-		live_summary = {
-			"run_id": str(live_run.get("run_id", "")),
-			"plan_id": str(live_run.get("plan_id", "")),
-			"root_goal": str(live_run.get("root_goal", "")),
-			"state": run_state,
-			"reason_code": str(live_run.get("reason_code", "")),
-			"current_step_id": cur,
-			"steps": step_rows,
-			"provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
-			"source_ref": "agency_plan_run"}
-	elif trace.has("agency_execution"):
-		# 决策时快照兜底（live run 不存在时才使用）
-		var ex: Dictionary = trace["agency_execution"]
-		if str(ex.get("plan_id", "")) != "":
-			nodes.append({"kind": "PLAN", "label": "计划 %s" % str(ex["plan_id"]),
-				"value": "运行 %s" % str(ex.get("run_id", "")),
-				"status": "ACTIVE" if bool(ex.get("selected", false)) else "PENDING",
-				"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
-		if str(ex.get("step_id", "")) != "":
-			var blocked := str(ex.get("blocker_reason", "")) != ""
-			nodes.append({"kind": "STEP", "label": "步骤 %s" % str(ex["step_id"]),
-				"value": str(ex.get("blocker_reason", "")),
-				"status": "BLOCKED" if blocked else "ACTIVE",
-				"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
-		if str(trace["agency_execution"].get("blocker_reason", "")) != "":
-			nodes.append({"kind": "BLOCKER", "label": str(trace["agency_execution"]["blocker_reason"]),
-				"value": "", "status": "BLOCKED",
-				"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
-	# 信息目标：LIVE 优先（真实字段 state；fixture 兼容 status 回退），否则决策快照
-	var goal_dict: Dictionary = live_goal
-	var goal_source := "LIVE_ACCESSOR"
-	if goal_dict.is_empty():
-		goal_dict = (trace.get("agency_information", {}) as Dictionary).get("goal", {})
-		goal_source = "DECISION_TRACE"
-	if not goal_dict.is_empty():
-		var g_state := str(goal_dict.get("state", goal_dict.get("status", "")))
-		nodes.append({"kind": "SUBGOAL",
-			"label": "信息目标 %s" % str(goal_dict.get("query_kind", goal_dict.get("kind", ""))),
-			"value": "状态 %s" % g_state,
-			"status": g_state if g_state != "" else "PENDING",
-			"provenance": PROV_SUBJECTIVE, "source_kind": goal_source,
-			"source_ref": "agency_information_goal" if goal_source == "LIVE_ACCESSOR" else "last_decision_trace.agency_information.goal"})
-	# 意图兜底
+		if not attached.is_empty():
+			nodes.append(_subgoal_node(live_goal, "live", false, "LIVE_ACCESSOR"))
+		# —— 快照区（与 LIVE 并列显示，独立 section）——
+		_append_snapshot_nodes(nodes, snapshot)
+		# —— 未附着身份的 live 信息目标：独立显示，不接 run 流 ——
+		if not live_goal.is_empty() and attached.is_empty():
+			nodes.append(_subgoal_node(live_goal, "live", true, "LIVE_ACCESSOR"))
+	else:
+		# —— 无 live run：决策快照作为主计划（fallback） ——
+		_append_snapshot_nodes(nodes, snapshot)
+		if not live_goal.is_empty():
+			nodes.append(_subgoal_node(live_goal, "snapshot", false, "LIVE_ACCESSOR"))
+	# 意图兜底（两者皆空）
 	if nodes.is_empty() and not intention.is_empty():
 		nodes.append({"kind": "INTENTION", "label": str(intention.get("desc", intention.get("action", ""))),
 			"value": "承诺度 %.0f%%" % (float(intention.get("commitment", 0.0)) * 100.0),
@@ -262,14 +254,79 @@ static func _plan(sim, a: Dictionary, actor_id: String) -> Dictionary:
 			"provenance": PROV_SUBJECTIVE},
 		"intention": intention,
 		"execution": trace.get("agency_execution", {}),
-		"live_run": live_summary,
+		"live": live,
+		"live_run": _live_run_flat(live),
 		"live_information_goal": live_goal,
-		"decision_snapshot": {
-			"agency_execution": trace.get("agency_execution", {}),
-			"agency_information_goal": (trace.get("agency_information", {}) as Dictionary).get("goal", {})},
+		"decision_snapshot": snapshot,
 		"nodes": nodes,
 		"provenance": PROV_SUBJECTIVE,
 	}
+
+## 兼容平铺 live_run 摘要（R1 键形：run_id/plan_id/root_goal/state/.../steps）
+static func _live_run_flat(live: Dictionary) -> Dictionary:
+	if live.is_empty():
+		return {}
+	var r: Dictionary = live["run"]
+	return {"run_id": r["run_id"], "plan_id": r["plan_id"], "root_goal": live["root_goal"],
+		"state": r["state"], "reason_code": r["reason_code"], "current_step_id": r["current_step_id"],
+		"steps": live["steps"], "provenance": PROV_SUBJECTIVE, "source_kind": "LIVE_RUN",
+		"source_ref": "agency_plan_run"}
+
+## live 信息目标身份校验：parent_run_id 必须等于当前 run_id；
+## blocker_step_id 存在时还必须等于 current_step_id。无法证明即不附着。
+static func _goal_attached_to_run(goal: Dictionary, run: Dictionary) -> Dictionary:
+	if goal.is_empty():
+		return {}
+	var parent_run := str(goal.get("parent_run_id", ""))
+	var run_id := str(run.get("run_id", ""))
+	if parent_run == "" or run_id == "" or parent_run != run_id:
+		return {}
+	var blocker_sid := str(goal.get("blocker_step_id", ""))
+	if blocker_sid != "" and blocker_sid != str(run.get("current_step_id", "")):
+		return {}
+	return goal.duplicate()
+
+## 信息目标节点（attached=false 时 no_arrow_in：独立显示，不接箭头）
+static func _subgoal_node(goal: Dictionary, section: String, independent: bool, source_kind: String) -> Dictionary:
+	var g_state := str(goal.get("state", goal.get("status", "")))
+	var prefix := "当前信息目标" if independent else "信息目标"
+	return {"kind": "SUBGOAL", "section": section, "no_arrow_in": independent,
+		"label": "%s %s" % [prefix, str(goal.get("query_kind", goal.get("kind", "")))],
+		"value": "状态 %s" % g_state,
+		"status": g_state if g_state != "" else "PENDING",
+		"provenance": PROV_SUBJECTIVE, "source_kind": source_kind,
+		"source_ref": "agency_information_goal" if source_kind == "LIVE_ACCESSOR"
+			else "last_decision_trace.agency_information.goal"}
+
+static func _append_snapshot_nodes(nodes: Array, snapshot: Dictionary) -> void:
+	var goal: Dictionary = snapshot["goal"]
+	if str(goal.get("desc", "")) != "":
+		nodes.append({"kind": "ROOT_GOAL", "section": "snapshot",
+			"label": str(goal["desc"]),
+			"value": "优先级 %.2f" % float(goal.get("priority", 0.0)),
+			"status": "ACTIVE", "provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE",
+			"source_ref": "last_decision_trace.goal_desc"})
+	var ex: Dictionary = snapshot["execution"]
+	if str(ex.get("plan_id", "")) != "":
+		nodes.append({"kind": "PLAN", "section": "snapshot",
+			"label": "计划 %s" % str(ex["plan_id"]),
+			"value": "运行 %s" % str(ex.get("run_id", "")),
+			"status": "ACTIVE" if bool(ex.get("selected", false)) else "PENDING",
+			"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
+	if str(ex.get("step_id", "")) != "":
+		var blocked := str(ex.get("blocker_reason", "")) != ""
+		nodes.append({"kind": "STEP", "section": "snapshot",
+			"label": "步骤 %s" % str(ex["step_id"]),
+			"value": str(ex.get("blocker_reason", "")),
+			"status": "BLOCKED" if blocked else "ACTIVE",
+			"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
+		if blocked:
+			nodes.append({"kind": "BLOCKER", "section": "snapshot",
+				"label": str(ex["blocker_reason"]), "value": "", "status": "BLOCKED",
+				"provenance": PROV_SUBJECTIVE, "source_kind": "DECISION_TRACE"})
+	var sg: Dictionary = snapshot["information_goal"]
+	if not sg.is_empty():
+		nodes.append(_subgoal_node(sg, "snapshot", false, "DECISION_TRACE"))
 
 static func _current_intention(a: Dictionary) -> Dictionary:
 	var im: IntentionManager = a.get("intentions", null)
@@ -443,8 +500,10 @@ static func _social(sim, actor_id: String) -> Dictionary:
 			"provenance": PROV_OBJECTIVE})
 	# 事件尾部派生（≤EVENT_SCAN_LIMIT，从尾部直到够数即停）；
 	# 只收选中 NPC 直接参与的事件——无关两人之间的请求/情报不进他的社会页。
+	# holder（谁持有 X）与 source（哪里有 X）情报分桶；两者都计入综合社会事件。
 	var requests: Array = []
 	var holder_events: Array = []
+	var source_information_events: Array = []
 	var social_events: Array = []
 	var events: Array = sim.events
 	for i in range(events.size() - 1, maxi(-1, events.size() - 1 - EVENT_SCAN_LIMIT), -1):
@@ -458,25 +517,31 @@ static func _social(sim, actor_id: String) -> Dictionary:
 			requests.append(row)
 		elif _event_in_family(etype, HOLDER_EVENT_PREFIXES) and holder_events.size() < MAX_SOCIAL_EVENTS:
 			holder_events.append(row)
+		elif _event_in_family(etype, SOURCE_INFORMATION_EVENT_PREFIXES) and source_information_events.size() < MAX_SOCIAL_EVENTS:
+			source_information_events.append(row)
 		if _event_in_family(etype, SOCIAL_EVENT_PREFIXES) and social_events.size() < MAX_SOCIAL_EVENTS:
 			social_events.append(row)
 		if requests.size() >= MAX_SOCIAL_EVENTS and social_events.size() >= MAX_SOCIAL_EVENTS \
-				and holder_events.size() >= MAX_SOCIAL_EVENTS:
+				and holder_events.size() >= MAX_SOCIAL_EVENTS \
+				and source_information_events.size() >= MAX_SOCIAL_EVENTS:
 			break
 	return {
 		"commitments": commitments,
 		"recent_requests": requests,
 		"holder_events": holder_events,
+		"source_information_events": source_information_events,
 		"recent_social_events": social_events,
 		"display_name": display_name,
 		"provenance": PROV_OBJECTIVE}
 
 # ————— why（fail-closed 因果；整体是 presentation 串联 → [推导]） —————
-# 规则（UI-R2 R1 Semantic Hardening）：
-#   1. 因果箭头只允许出现在 decision trace / live accessor 支持的节点之间；
-#   2. 只有当前数值的需求/情绪进入“当前上下文”区（无箭头，不冒充原因）；
-#   3. 无 delta/trend 数据时禁止“升高/下降”措辞；
-#   4. simulation 已记录的 trace.reason 以“决策理由”优先展示，不用 UI 自选的最高需求取代。
+# 规则（UI-R2 R1.1 收紧）：
+#   1. 节点只来自 decision trace / live accessor / actor 公开状态（真实存在）；
+#   2. 节点之间的箭头全部是 Presentation 按排列顺序自建 → 一律 [推导] PRESENTATION_LINK
+#      （节点同屏存在不构成记录级因果证据；显式因果字段出现前不升级为记录级边）；
+#   3. 只有当前数值的需求/情绪进入“当前上下文”区（无箭头，不冒充原因）；
+#   4. 无 delta/trend 数据时禁止“升高/下降”措辞；
+#   5. simulation 记录的 trace.reason 以“决策理由[主观]”优先展示。
 
 static func _why(sim, a: Dictionary, built: Dictionary) -> Dictionary:
 	var trace: Dictionary = a.get("last_decision_trace", {})
@@ -539,19 +604,11 @@ static func _why(sim, a: Dictionary, built: Dictionary) -> Dictionary:
 		nodes.append({"label": "当前行动：%s" % str(a["activity"]),
 			"provenance": PROV_OBJECTIVE, "source_kind": "ACTOR_STATE",
 			"source_ref": "activity"})
-	# 链接：相邻节点均为 trace/live 支持时为记录级链接[主观]；
-	# 末端“→当前行动”无直接 trace 字段佐证，显式标 [推导]（PRESENTATION_LINK）。
+	# 链接（R1.1 fail-closed）：Presentation 按排列顺序自建的一切箭头一律 [推导]——
+	# 节点同屏存在不构成记录级因果证据。仅当未来 simulation 提供 cause_seq /
+	# parent identity / explicit relation 字段时才允许升级为记录级边。
 	for i in range(nodes.size() - 1):
-		var link := {"from": i, "to": i + 1}
-		if str(nodes[i + 1].get("source_kind", "")) == "ACTOR_STATE":
-			link["provenance"] = PROV_DERIVED
-			link["source_kind"] = "PRESENTATION_LINK"
-			link["source_ref"] = "activity（执行系统维护，Presentation 无直接 trace 字段）"
-		else:
-			link["provenance"] = PROV_SUBJECTIVE
-			link["source_kind"] = "DECISION_TRACE"
-			link["source_ref"] = str(nodes[i + 1].get("source_ref", ""))
-		links.append(link)
+		links.append(_make_derived_link(i, i + 1, "presentation 顺序排列（无显式因果证据字段）"))
 	return {
 		"provenance": PROV_DERIVED,
 		"derived_note": "因果链由 presentation 从决策留痕/公开状态确定性串联",
@@ -560,6 +617,11 @@ static func _why(sim, a: Dictionary, built: Dictionary) -> Dictionary:
 		"links": links,
 		"context": context,
 	}
+
+## UI 自建链接统一构造：全部 derived / PRESENTATION_LINK，source_ref 必填
+static func _make_derived_link(from_i: int, to_i: int, reason: String) -> Dictionary:
+	return {"from": from_i, "to": to_i, "provenance": PROV_DERIVED,
+		"source_kind": "PRESENTATION_LINK", "source_ref": reason}
 
 static func actor_id_of(built: Dictionary) -> String:
 	return str(built.get("id", ""))

@@ -135,7 +135,9 @@ presentation-only，只读不写）从模拟一次构建；每个字段带 prove
 （如 fatigue = 1000 - energy）。决策页候选效用直接渲染决策留痕
 `trace.top_candidates`（softmax 输入），UI 不自算 utility；认知页的他人持有判断
 （`has_item:*` 谓词、置信度、证据 tick、最后目击）来自 P7.2B holder evidence
-真实数据。Why chain 为确定性串联（无 LLM），节点各自带 provenance。
+真实数据。计划页区分「当前执行 LIVE」（`agency_plan_run`，root goal 只来自 live run）与
+「上次决策快照」（decision trace）；社会页将持有者情报（`holder_information_*`）与
+资源来源情报（`source_information_*`）分桶显示。Why chain 为确定性串联（无 LLM），节点各自带 provenance。
 
 ```bash
 # 正式观察（island 认知岛模拟 + 2D 像素世界 + 七页大脑 Inspector/时间线）

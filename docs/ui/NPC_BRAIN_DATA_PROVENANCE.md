@@ -26,7 +26,7 @@ HUD 用颜色徽章渲染：[事实]=金 / [主观]=蓝 / [推导]=灰。真实 
 | plan.goal | trace.active_goal/goal_desc（enrich） | subjective | — | yes | — |
 | plan.intention | intentions.current_intention | subjective | — | yes | — |
 | plan.execution / decision_snapshot | trace.agency_execution（决策时单步留痕快照） | subjective | — | yes | 状态图标为展示 |
-| plan.live_run | sim.agency_plan_run（公开只读 accessor；run_id/state/current_step_id/steps） | subjective（actor 的计划，引擎簿记） | yes（run 本体） | — | steps 非当前步标 UNKNOWN（GAP-1a）；run state/reason_code 原样 |
+| plan.live（root_goal/run/steps/attached_information_goal） | sim.agency_plan_run + sim.agency_information_goal（公开只读） | subjective（actor 的计划，引擎簿记） | yes（run 本体） | — | LIVE 区 root goal 只来自 live_run.root_goal；信息目标仅在 parent_run_id==run_id（blocker_step_id 存在时==current_step_id）时附着，否则独立显示；steps 非当前步标 UNKNOWN（GAP-1a） |
 | plan.live_information_goal | sim.agency_information_goal（公开只读；字段 **state**） | subjective | yes | — | LIVE 语义；决策时刻另存 decision_snapshot.agency_information_goal |
 | mind.open_questions | actor.open_questions{about,kind,entropy,stakes,tick} | subjective | — | yes | — |
 | mind.primary_question | open_questions 按 stakes 降序→tick 降序选出的当前最重要问题 | derived（选择为聚合） | — | — | yes |
@@ -44,8 +44,8 @@ HUD 用颜色徽章渲染：[事实]=金 / [主观]=蓝 / [推导]=灰。真实 
 | memories.rows.day | tick/24+1 | derived（显式标注） | — | — | yes |
 | memories.rows.derived_importance | abs(appraisal_goal_congruence) | derived（HUD 标注，非模拟字段→GAP-5） | — | — | yes |
 | social.commitments | island_sim.obligations 只读过滤（debtor/creditor==selected） | objective | yes | — | 过滤为展示 |
-| social.recent_requests / holder_events / recent_social_events | island_sim.events 尾部 ≤300 扫描派生，**仅收选中 NPC 直接参与的事件**（_event_relevant_to_actor：actor_id/requester_id/target_id/to_id/debtor_id/creditor_id/reporter_id/actor_ids 命中；reported_holder_id 不算参与） | objective（事件流为事实） | yes | — | 分组/截断/相关性过滤为展示 |
-| why | {provenance: derived, decision_reason, nodes[], links[], context[]}——因果箭头只连 decision trace / live accessor 支持的节点；末端→activity 显式 derived link；需求/情绪只进 context（无箭头） | 整体 derived；节点各随其源 | — | — | 串联本身 derived；无 LLM |
+| social.recent_requests / holder_events / source_information_events / recent_social_events | island_sim.events 尾部 ≤300 扫描派生，**仅收选中 NPC 直接参与的事件**（_event_relevant_to_actor：actor_id/requester_id/target_id/to_id/debtor_id/creditor_id/reporter_id/actor_ids 命中；reported_holder_id 不算参与）；holder（谁持有 X）与 source（哪里有 X）**分桶** | objective（事件流为事实） | yes | — | 分组/截断/相关性过滤为展示 |
+| why | {provenance: derived, decision_reason, nodes[], links[], context[]}——节点只来自 trace/live/公开状态；**节点间箭头全部为 presentation 自建 [推导] PRESENTATION_LINK**（节点同屏存在不构成记录级因果证据；显式因果字段出现前不升级记录级边）；trace.reason 保持 [主观]；需求/情绪只进 context（无箭头） | 整体 derived；节点各随其源；链接一律 derived | — | — | 串联本身 derived；无 LLM |
 
 ## 硬规则落点
 

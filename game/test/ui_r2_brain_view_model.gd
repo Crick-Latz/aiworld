@@ -197,7 +197,7 @@ func _run_all_tests() -> void:
 		"current_step_id": "s2", "state": "ACTIVE", "started_tick": 10,
 		"last_progress_tick": 12, "reason_code": ""}
 	fs.info_goal = {"query_kind": "HOLDER", "state": "ACTIVE", "item_id": "wood",
-		"information_goal_id": "g1"}
+		"information_goal_id": "g1", "parent_run_id": "npc_weila#1", "blocker_step_id": "s2"}
 	var fb := NpcBrainViewModel.build(fs, "npc_weila")
 	var lr: Dictionary = fb["plan"]["live_run"]
 	_check("live_plan_uses_public_agency_plan_run",
@@ -256,6 +256,85 @@ func _run_all_tests() -> void:
 	_check("why_fake_sim_reason_used",
 		str((fb3["why"]["decision_reason"] as Dictionary).get("text", "")) == "营地需要警戒")
 
+	# —— 9c2. R1.1：Plan LIVE/snapshot 真分区 + 信息目标身份校验 ——
+	# A：trace root=HUNGER、live run root=SHELTER → LIVE 区只显示 SHELTER；HUNGER 只在快照区
+	var fsp := FakeSim.new()
+	fsp.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "觅食", "active_goal": "HUNGER",
+		"goal_priority": 0.5, "tick": 30}
+	fsp.plan_run = {"run_id": "run#9", "plan_id": "plan_7", "root_goal": "SHELTER",
+		"steps": [{"step_id": "s1"}], "current_step_id": "s1", "state": "ACTIVE"}
+	var fbp := NpcBrainViewModel.build(fsp, "npc_weila")
+	var live_labels: Array = []
+	var snapshot_labels: Array = []
+	for n in fbp["plan"]["nodes"]:
+		if str(n.get("section", "")) == "live":
+			live_labels.append(str(n.get("label", "")))
+		elif str(n.get("section", "")) == "snapshot":
+			snapshot_labels.append(str(n.get("label", "")))
+	var live_has_shelter := false
+	var live_has_hunger := false
+	for l in live_labels:
+		if l.contains("SHELTER"):
+			live_has_shelter = true
+		if l.contains("觅食") or l.contains("HUNGER"):
+			live_has_hunger = true
+	var snapshot_has_hunger := false
+	for l in snapshot_labels:
+		if l.contains("觅食") or l.contains("HUNGER"):
+			snapshot_has_hunger = true
+	_check("plan_live_snapshot_separated",
+		live_has_shelter and not live_has_hunger and snapshot_has_hunger)
+	# B：parent_run_id 不匹配 → 不附着（独立显示，无箭头接入）
+	var fsm := FakeSim.new()
+	fsm.plan_run = {"run_id": "run#9", "plan_id": "plan_7", "root_goal": "SHELTER",
+		"steps": [{"step_id": "s1"}], "current_step_id": "s1", "state": "ACTIVE"}
+	fsm.info_goal = {"query_kind": "HOLDER", "state": "ACTIVE", "parent_run_id": "run#OTHER"}
+	var fbm := NpcBrainViewModel.build(fsm, "npc_weila")
+	var independent_goal := {}
+	for n in fbm["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL":
+			independent_goal = n
+	_check("plan_goal_attach_identity_mismatch",
+		(fbm["plan"]["live"]["attached_information_goal"] as Dictionary).is_empty()
+		and not independent_goal.is_empty() and bool(independent_goal.get("no_arrow_in", false))
+		and str(independent_goal.get("label", "")).contains("当前信息目标"))
+	# C：parent_run_id 匹配（+blocker_step_id 匹配 current）→ 附着在 run 流内
+	var fsa := FakeSim.new()
+	fsa.plan_run = {"run_id": "run#9", "plan_id": "plan_7", "root_goal": "SHELTER",
+		"steps": [{"step_id": "s1"}, {"step_id": "s2"}], "current_step_id": "s2", "state": "ACTIVE"}
+	fsa.info_goal = {"query_kind": "HOLDER", "state": "ACTIVE",
+		"parent_run_id": "run#9", "blocker_step_id": "s2"}
+	var fba := NpcBrainViewModel.build(fsa, "npc_weila")
+	var attached_goal := {}
+	for n in fba["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL" and str(n.get("section", "")) == "live":
+			attached_goal = n
+	_check("plan_goal_attach_identity_match",
+		not (fba["plan"]["live"]["attached_information_goal"] as Dictionary).is_empty()
+		and not attached_goal.is_empty() and not bool(attached_goal.get("no_arrow_in", true))
+		and str(attached_goal.get("label", "")).contains("信息目标"))
+	# D：无 live run → 决策快照作为主计划（snapshot section 正常）
+	var fsd := FakeSim.new()
+	fsd.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "觅食", "active_goal": "HUNGER",
+		"goal_priority": 0.5, "tick": 30}
+	var fbd := NpcBrainViewModel.build(fsd, "npc_weila")
+	var snapshot_nodes := 0
+	for n in fbd["plan"]["nodes"]:
+		if str(n.get("section", "")) == "snapshot":
+			snapshot_nodes += 1
+	_check("plan_snapshot_fallback_without_live_run", snapshot_nodes > 0 and (fbd["plan"]["live"] as Dictionary).is_empty())
+
+	# —— 9e2. R1.1：Why 边全部为 presentation 自建 [推导] ——
+	var all_links_derived := true
+	for l in fb3["why"]["links"]:
+		if str(l.get("provenance", "")) != "derived" or str(l.get("source_kind", "")) != "PRESENTATION_LINK" \
+				or str(l.get("source_ref", "")) == "":
+			all_links_derived = false
+	_check("why_all_links_derived", all_links_derived)
+	if not (fb3["why"]["decision_reason"] as Dictionary).is_empty():
+		_check("why_decision_reason_stays_subjective",
+			str(fb3["why"]["decision_reason"].get("provenance", "")) == "subjective")
+
 	# —— 9f. primary question / dominant emotion ——
 	var fs4 := FakeSim.new()
 	fs4.actors["npc_weila"]["open_questions"] = [
@@ -287,24 +366,37 @@ func _run_all_tests() -> void:
 	sim.events.append({"seq": 900005, "tick": sim.tick, "day": 2, "type": "COMMITMENT_CREATED",
 		"actor_id": "npc_oun", "debtor_id": "npc_weila", "to_id": "npc_kadga",
 		"text": "薇拉 的承诺事件", "commitment_id": "cD2"})
+	sim.events.append({"seq": 900006, "tick": sim.tick, "day": 2, "type": "source_information_shared",
+		"actor_id": "npc_oun", "to_id": "npc_weila", "target_id": "npc_weila",
+		"text": "欧恩 告诉 薇拉：北滩有浮木来源"})
+	sim.events.append({"seq": 900007, "tick": sim.tick, "day": 2, "type": "source_information_shared",
+		"actor_id": "npc_oun", "to_id": "npc_kadga", "target_id": "npc_kadga",
+		"text": "欧恩 告诉 卡德加（与薇拉无关）"})
 	var fsocial := NpcBrainViewModel.build(sim, actor_id)
 	var req_seqs: Array = []
 	var holder_seqs: Array = []
+	var source_seqs: Array = []
 	var all_seqs: Array = []
 	for row in fsocial["social"]["recent_requests"]:
 		req_seqs.append(int(row["seq"]))
 	for row in fsocial["social"]["holder_events"]:
 		holder_seqs.append(int(row["seq"]))
-	for bucket in ["recent_requests", "holder_events", "recent_social_events"]:
+	for row in fsocial["social"]["source_information_events"]:
+		source_seqs.append(int(row["seq"]))
+	for bucket in ["recent_requests", "holder_events", "source_information_events", "recent_social_events"]:
 		for row in fsocial["social"][bucket]:
 			all_seqs.append(int(row["seq"]))
 	_check("unrelated_social_event_filtered", not all_seqs.has(900001))
 	_check("selected_target_social_event_included", holder_seqs.has(900002))
-	_check("lowercase_holder_information_recognized",
-		holder_seqs.has(900002) and holder_seqs.has(900002))
+	_check("lowercase_holder_information_recognized", holder_seqs.has(900002))
 	_check("reported_holder_alone_not_direct_participant", not all_seqs.has(900003))
 	_check("social_relevance_fields_recognized",
 		req_seqs.has(900004) and all_seqs.has(900005))
+	# R1.1：holder（谁持有）与 source（哪里有）分桶，互不混入；无关 source 事件被过滤
+	_check("social_holder_source_separated",
+		holder_seqs.has(900002) and not holder_seqs.has(900006)
+		and source_seqs.has(900006) and not source_seqs.has(900002))
+	_check("social_unrelated_source_filtered", not all_seqs.has(900007))
 	sim.events.resize(ev_base)
 
 	# —— 10. 守卫扫描：私有 tracker 访问（§57）——
