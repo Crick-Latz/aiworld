@@ -183,6 +183,8 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 					{"day": 2, "seq": 41, "type": "MATERIAL_REQUEST_ACCEPTED", "text": "卡德加 接受 薇拉 的请求"}],
 				"holder_events": [
 					{"day": 2, "seq": 46, "type": "holder_information_shared", "text": "卡德加 回答 薇拉 的持有询问"}],
+				"source_information_events": [
+					{"day": 2, "seq": 48, "type": "source_information_shared", "text": "欧恩 告诉 薇拉：北滩有浮木来源"}],
 				"recent_social_events": [
 					{"day": 2, "seq": 47, "type": "COMMITMENT_CREATED", "text": "薇拉 承诺：交付 卡德加 shell×2"},
 					{"day": 1, "seq": 30, "type": "shared_food", "text": "卡德加 主动分给 薇拉 一份烤鱼"}],
