@@ -234,7 +234,7 @@
     {
       "name": "p7_2b_holder_evidence_hardening",
       "script": "res://test/p7_2b_holder_evidence_hardening.gd",
-      "expected": 65
+      "expected": 73
     },
     {
       "name": "p7_2b_runtime_chain",

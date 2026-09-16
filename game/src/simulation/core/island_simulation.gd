@@ -668,18 +668,61 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			if latest_obs_tick >= 0:
 				_holder_diag_inc("latest_positive_observed_tick_sum", tick - latest_obs_tick)
 				_holder_diag_inc("latest_positive_observed_tick_count")
-			# distributed knowledge audit。
+			# P7.2C-R2-R1.2 distributed knowledge audit（拆 general vs actual-holder）。
+			# general：网络中任何 non-requester 对任何 peer 有 positive has_item:X belief。
 			_holder_diag_inc("non_requester_positive_holder_belief_count", other_knows)
-			_holder_diag_inc("visible_peer_knows_actual_holder_ticks",
-				1 if visible_peer_knows > 0 else 0)
-			_holder_diag_inc("last_seen_peer_knows_actual_holder_ticks",
-				1 if last_seen_peer_knows > 0 else 0)
-			if pos_belief_peers > 0:
-				_holder_diag_inc("requester_knows_actual_holder_ticks")
-			elif other_knows > 0:
-				_holder_diag_inc("knowledge_exists_elsewhere_ticks")
-			else:
-				_holder_diag_inc("social_knowledge_none_ticks")
+			_holder_diag_inc("network_has_any_positive_holder_belief_ticks",
+				1 if other_knows > 0 else 0)
+			_holder_diag_inc("network_has_no_positive_holder_belief_ticks",
+				1 if other_knows == 0 else 0)
+			# actual-holder attribution（objective diagnostic only——行为绝不读取）。
+			var actual_holders: Array = []
+			for other_id in actors:
+				var aoid := str(other_id)
+				if aoid != id and int(actors[other_id].get("inventory", {}).get(item_id_str, 0)) > 0:
+					actual_holders.append(aoid)
+			var network_knows_actual := false
+			var visible_carrier_knows_actual := false
+			var ls_carrier_knows_actual := false
+			if not actual_holders.is_empty():
+				for other_id in actors:
+					var oid := str(other_id)
+					if oid == id or oid == "":
+						continue
+					var other_tom2: TheoryOfMind = actors[other_id].get("tom", null)
+					if other_tom2 == null:
+						continue
+					for hid in actual_holders:
+						if other_tom2.belief_about(str(hid),
+								TheoryOfMind.possession_predicate(item_id_str)) > 0.05:
+							network_knows_actual = true
+							if req_tom != null and not req_tom.last_seen_of(oid).is_empty():
+								ls_carrier_knows_actual = true
+							for pv in (diag_view.get("others_visible", []) as Array):
+								if str((pv as Dictionary).get("id", "")) == oid:
+									visible_carrier_knows_actual = true
+									break
+							break
+					if network_knows_actual:
+						break
+			_holder_diag_inc("network_knows_actual_holder_ticks",
+				1 if network_knows_actual else 0)
+			_holder_diag_inc("visible_knowledge_carrier_knows_actual_holder_ticks",
+				1 if visible_carrier_knows_actual else 0)
+			_holder_diag_inc("last_seen_knowledge_carrier_knows_actual_holder_ticks",
+				1 if ls_carrier_knows_actual else 0)
+			# R2-R1.2：requester 侧同样做客观归因——"有正向信念"已由
+			# holder_ticks_with_any_positive_possession_belief 覆盖；这里补
+			# 决策相关的真值覆盖：信念指向的 peer 是否真是 actual holder。
+			var req_belief_hits_actual := false
+			if not actual_holders.is_empty() and req_tom != null:
+				for hid in actual_holders:
+					if req_tom.belief_about(str(hid),
+							TheoryOfMind.possession_predicate(item_id_str)) > 0.05:
+						req_belief_hits_actual = true
+						break
+			_holder_diag_inc("requester_belief_points_at_actual_holder_ticks",
+				1 if req_belief_hits_actual else 0)
 			var diag_candidates := InformationActionPolicy.build(diag_view, information_goal, tick)
 			# P7.2C-R1：诊断层按 action 字段拆分 ask / seek——seek 绝不
 			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
@@ -3226,8 +3269,13 @@ func _emit(type: String, actor_id: String, text: String, extra: Dictionary) -> i
 		var close_enough := absi(ev_actor_tile.x - a["tile"].x) + absi(ev_actor_tile.y - a["tile"].y) <= 3
 		# P7.2C-R2-R1.1 K1：拆 visual / audible_close —— possession observation
 		# 要求 visual（LOS 可见）；听觉贴近只是旧事件目击资格，不能读库存。
-		var visual: bool = id == actor_id or SpatialPerception.can_see(map_query,
-				int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
+		# R2-R1.2 性能：flag 关闭时保持旧短路求值（close_enough 即不再调
+		# can_see），visual 仅在 possession 观测开启时才做精确 LOS 判定——
+		# flag 关闭时 visual 无任何消费者，不精确不改变行为。
+		var visual: bool = id == actor_id
+		if not visual and (not close_enough or agency_holder_possession_observation_enabled):
+			visual = SpatialPerception.can_see(map_query,
+					int(world_time.get("hour", 12)), str(world.get("weather", "clear")), a["tile"], ev_actor_tile)
 		var spatial: bool = visual or close_enough
 		# P7.2A：承诺直接当事方通道——债权人（to_id）无需目击即可得知自己的承诺结局
 		#（到期未收款本身就是债权人的直接证据）；但非空间目击时不得经 see_at 获得

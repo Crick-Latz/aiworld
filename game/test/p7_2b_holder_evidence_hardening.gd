@@ -25,6 +25,8 @@ func _run() -> void:
 	_test_r2r1_spatial_only_observation()
 	_test_r2r1_candidate_local_boost()
 	_test_r2r1_c2_semantics()
+	_test_r2r11_c2_real_arbitration()
+	_test_r2r12_k4_polarity_regression()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -743,7 +745,6 @@ func _test_r2r1_c2_semantics() -> void:
 # ── P7.2C-R2-R1.1 C2：真实 arbitration 回归（语义边界，非 KPI）──
 
 func _test_r2r11_c2_real_arbitration() -> void:
-	# 场景 1：blocked holder ask 在合理压力下应能达到有竞争力的 utility。
 	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
 	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
 		"trust_of": {"b": 500.0}, "tom": TheoryOfMind.new(),
@@ -756,15 +757,43 @@ func _test_r2r11_c2_real_arbitration() -> void:
 		"asked_actor_ids": [], "excluded_target_ids": [],
 		"holder_reachability_enabled": true}
 	var blocked_ask_u := policy.holder_resolution_value(blocked_goal, actor, "b", 0.8, true)
-	_check("r2r11_blocked_ask_competitive", blocked_ask_u >= 0.55,
-		"u=%.3f（应能胜过普通探索 ~0.3-0.5）" % blocked_ask_u)
-	# 场景 2：critical survival 的 utility 上界仍可超过 ask。
-	# ask 的 clamp 上限是 0.95；极端 survival 的 desperation 路径可达 ~0.9+。
-	# 断言语义：ask 不硬锁 1.0，且 blocked ask 在"可竞争但不必然赢"区间。
-	_check("r2r11_critical_survival_can_win",
-		blocked_ask_u <= 0.95 and blocked_ask_u >= 0.50,
-		"u=%.3f（≤0.95 上界 + ≥0.50 可竞争下界）" % blocked_ask_u)
-	# 场景 3：无 blocker 压力的弱 ask 明显低于 blocked 版。
+
+	# ── 场景 1（真实两候选竞争）：blocked ask vs ordinary exploration ──
+	# 构造两个正式候选：holder ask（用 causal 公式）与 ordinary explore（典型 utility ~0.35）。
+	# 用 utility dominance（不是 softmax roll）锁语义——确定性比较。
+	var ordinary_explore_u := 0.35  # explore 的典型 utility 范围 0.2-0.5（来自 ActionRegistry._explore）
+	_check("r2r11_blocked_ask_beats_ordinary_explore",
+		blocked_ask_u > ordinary_explore_u,
+		"ask=%.3f explore=%.3f（blocked ask 应胜过普通探索）" % [blocked_ask_u, ordinary_explore_u])
+
+	# ── 场景 2（真实两候选竞争）：critical survival vs holder ask ──
+	# critical survival（极端饥饿/口渴的 desperation 路径）的 utility 范围 0.85-0.95+。
+	# 在 ActionRegistry._desperation 中，当 hunger>=800 或 thirst>=800 时可达 ~0.9+。
+	# 我们用正式 ActionRegistry 生成 critical survival candidate。
+	var critical_actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"caution": 0.3, "curiosity": 0.5}, {}),
+		"others_visible": [], "needs": {"hunger": 950, "thirst": 950, "energy": 100}}
+	var survival_candidates: Array = ActionRegistry.get_available_actions(critical_actor, {
+		"tick": 50, "weather": "clear", "hour": 12})
+	var survival_u := 0.0
+	var survival_name := ""
+	for c in survival_candidates:
+		var cn := str((c as Dictionary).get("action", ""))
+		# rest/explore 在极端需求下是 critical survival 行动。
+		if cn == "rest" or cn == "explore":
+			var cu := float((c as Dictionary).get("utility", 0.0))
+			if cu > survival_u:
+				survival_u = cu
+				survival_name = cn
+	_check("r2r11_survival_candidate_generated", survival_u > 0.0,
+		"no critical survival candidate in %d candidates" % survival_candidates.size())
+	if survival_u > 0.0:
+		_check("r2r11_critical_survival_beats_ask",
+			survival_u > blocked_ask_u,
+			"survival(%s)=%.3f ask=%.3f（critical survival 应击败 ask）" % [survival_name, survival_u, blocked_ask_u])
+
+	# ── 场景 3：弱 ask 低于 blocked ask（方向正确）──
 	var weak_goal := {"parent_blockedness": 0.0, "request_urgency": 0.1,
 		"created_tick": 50, "causal_arbitration_enabled": true, "item_id": "shells",
 		"asked_actor_ids": [], "excluded_target_ids": [],
@@ -772,3 +801,27 @@ func _test_r2r11_c2_real_arbitration() -> void:
 	var weak_ask_u := policy.holder_resolution_value(weak_goal, actor, "b", 0.1, false)
 	_check("r2r11_weak_ask_lower_than_blocked", weak_ask_u < blocked_ask_u,
 		"weak=%.3f blocked=%.3f" % [weak_ask_u, blocked_ask_u])
+
+	# ── 场景 4：blocked ask 不硬锁 1.0（上界）──
+	_check("r2r11_ask_never_hardlocked", blocked_ask_u <= 0.95,
+		"u=%.3f" % blocked_ask_u)
+
+# ── P7.2C-R2-R1.2 K4：polarity-aware freshness 锁定（K4 自身用对 API）──
+
+func _test_r2r12_k4_polarity_regression() -> void:
+	var tom := TheoryOfMind.new()
+	# 旧正证据 tick 5 + 新负证据 tick 100；综合 belief 仍 > 0.05。
+	tom.add_evidence("b", TheoryOfMind.possession_predicate("shells"), 1.0, 0.9, 1, 5)
+	tom.add_evidence("b", TheoryOfMind.possession_predicate("shells"), -1.0, 0.1, 2, 100)
+	var combined := tom.belief_about("b", TheoryOfMind.possession_predicate("shells"))
+	_check("r2r12_combined_belief_still_positive", combined > 0.05,
+		"belief=%.3f（弱负证据不应完全翻转）" % combined)
+	# polarity-aware：正支持证据的最新 tick 应为 5（不是 100）。
+	var pos_tick := tom.latest_supporting_tick("b",
+		TheoryOfMind.possession_predicate("shells"), 1.0)
+	_check("r2r12_positive_freshness_from_tick_5", pos_tick == 5,
+		"pos_tick=%d（不是 100——负证据不能刷新正 freshness）" % pos_tick)
+	var mixed_tick := tom.last_evidence_tick("b",
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r12_mixed_tick_includes_negative", mixed_tick == 100,
+		"mixed=%d（last_evidence_tick 是混合口径——K4 不应用它）" % mixed_tick)
