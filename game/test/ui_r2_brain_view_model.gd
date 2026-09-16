@@ -324,6 +324,62 @@ func _run_all_tests() -> void:
 			snapshot_nodes += 1
 	_check("plan_snapshot_fallback_without_live_run", snapshot_nodes > 0 and (fbd["plan"]["live"] as Dictionary).is_empty())
 
+	# —— 9c3. R1.2：无 live run 但有当前 live 信息目标——绝不落入 snapshot 区 ——
+	var fsn := FakeSim.new()
+	fsn.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "旧的觅食目标", "active_goal": "HUNGER",
+		"goal_priority": 0.5, "tick": 30,
+		"agency_execution": {"plan_id": "plan_old", "step_id": "step_old",
+			"blocker_reason": "", "selected": false, "decision_tick": 30}}
+	fsn.info_goal = {"query_kind": "HOLDER", "state": "ACTIVE",
+		"information_goal_id": "INFO:npc_weila:3", "parent_run_id": "", "item_id": "shell"}
+	var fbn := NpcBrainViewModel.build(fsn, "npc_weila")
+	var live_info_node := {}
+	var snapshot_kinds: Array = []
+	for n in fbn["plan"]["nodes"]:
+		if str(n.get("section", "")) == "snapshot":
+			snapshot_kinds.append(str(n.get("kind", "")))
+		if str(n["kind"]) == "SUBGOAL" and str(n.get("source_kind", "")) == "LIVE_ACCESSOR":
+			live_info_node = n
+	_check("live_goal_without_live_run_is_not_snapshot",
+		not live_info_node.is_empty() and str(live_info_node.get("section", "")) != "snapshot")
+	_check("live_goal_without_live_run_is_live_info",
+		not live_info_node.is_empty() and str(live_info_node.get("section", "")) == "live_info")
+	_check("live_goal_without_live_run_has_no_arrow_in",
+		not live_info_node.is_empty() and bool(live_info_node.get("no_arrow_in", false)))
+	# 有 live run 但身份不匹配 → 也必须是 live_info 独立区
+	var live_goal_sections: Array = []
+	for n in fbm["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL" and str(n.get("source_kind", "")) == "LIVE_ACCESSOR":
+			live_goal_sections.append(str(n.get("section", "")))
+	_check("live_goal_mismatched_run_uses_live_info_section",
+		not live_goal_sections.is_empty() and live_goal_sections.has("live_info")
+		and not live_goal_sections.has("snapshot"))
+	# 匹配时仍附着 live run（现有 C 例复核 + section==live）
+	var attach_sections: Array = []
+	for n in fba["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL" and str(n.get("section", "")) == "live":
+			attach_sections.append(str(n.get("source_kind", "")))
+	_check("matched_live_goal_stays_attached_to_live_run", attach_sections.has("LIVE_ACCESSOR"))
+	# 决策快照内的旧信息目标仍留在 snapshot 区
+	var fss := FakeSim.new()
+	fss.actors["npc_weila"]["last_decision_trace"] = {"goal_desc": "旧的觅食目标",
+		"agency_information": {"goal": {"kind": "SOURCE", "status": "ACTIVE"}}}
+	var fbs := NpcBrainViewModel.build(fss, "npc_weila")
+	var snap_sub := {}
+	for n in fbs["plan"]["nodes"]:
+		if str(n["kind"]) == "SUBGOAL" and str(n.get("source_kind", "")) == "DECISION_TRACE":
+			snap_sub = n
+	_check("snapshot_information_goal_stays_snapshot",
+		not snap_sub.is_empty() and str(snap_sub.get("section", "")) == "snapshot")
+	# 不变量：LIVE_ACCESSOR 节点绝不允许出现在 snapshot 区（扫全部已构建案例）
+	var live_in_snapshot := 0
+	for built_model in [fbn, fbm, fba, fbs, fbd, fbp]:
+		for n in built_model["plan"]["nodes"]:
+			if str(n.get("source_kind", "")) == "LIVE_ACCESSOR" and str(n.get("section", "")) == "snapshot":
+				live_in_snapshot += 1
+	_check("no_live_accessor_node_in_snapshot", live_in_snapshot == 0,
+		"violations=%d" % live_in_snapshot)
+
 	# —— 9e2. R1.1：Why 边全部为 presentation 自建 [推导] ——
 	var all_links_derived := true
 	for l in fb3["why"]["links"]:

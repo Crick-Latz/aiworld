@@ -122,6 +122,11 @@ UI-R2 R1 起作为 LIVE goal 正式接入（决策时刻快照另走 trace.agenc
 steps[], current_step_id, state(ACTIVE/SUSPENDED/终态), started_tick, last_progress_tick,
 reason_code, ...}`。UI-R2 R1 起作为 LIVE run 正式接入（计划页）；**run.steps 不保存每步
 独立终态**，故非 current 步骤 UI 标 UNKNOWN（残余缺口 GAP-1a）。
+**R1.2 时间语义**：`agency_information_goal` 返回的当前信息目标有三态——attached-to-live-run
+（parent_run_id==run_id 且 blocker_step_id 匹配）/ independent-live-info（无 run 或身份不匹配
+→ 独立 live_info 区，no_arrow_in）/ absent；**LIVE accessor 数据绝不落入 snapshot 区**
+（InformationSubgoalTracker.prepare() 不要求先有 active run，"有当前信息目标而无 live run"
+是合法状态）。决策时刻目标（trace.agency_information.goal）永远只在 snapshot 区。
 
 ## 11. island_sim.events（OBJECTIVE 事件流）
 

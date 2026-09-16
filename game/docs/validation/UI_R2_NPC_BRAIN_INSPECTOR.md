@@ -1,5 +1,23 @@
 # UI-R2 NPC 大脑观察器 —— 本地验证记录
 
+## R1.2 Final Time-Semantics Closeout（2026-09-16，GPT R1.1 复审返修补轮）
+
+R1.1 复审判 UI_R2_FINAL_SEMANTIC_EDGE_CASE_NEEDS_FIX（三主 blocker 关闭），一个边界修复：
+
+- **无 live run 时的当前 live 信息目标**：原实现落入 section=snapshot（HUD 显示在
+  「上次决策快照」下并与旧快照节点画推导箭头），违反 LIVE/snapshot 时间语义。
+  红绿证据：新增测试先复现 5 项 FAIL（`live_goal_without_live_run_is_not_snapshot` 等，
+  `.tmp` red log），修复后 69/69 绿。
+- **修复**：三态规则——attached-to-live-run（parent_run_id==run_id 且 blocker_step_id
+  匹配时附着 live 区）/ independent-live-info（无 run 或身份不匹配 → 独立
+  `section=live_info`，`no_arrow_in`，HUD「── 当前信息目标 LIVE ── [主观]」）/ absent；
+  决策时刻目标（trace.agency_information.goal）永远只在 snapshot 区。
+  **不变量：LIVE_ACCESSOR 节点绝不允许 section=snapshot**（测试扫全部构建案例锁定）。
+- 顺手（K7）：计划页总标题「── 计划流 ── [主观]」→「── 计划状态 ── [推导]」
+  （整页排版是 presentation，各节点/箭头已分别标注）。
+- fixtures 21 → **22**（新增 BRAIN_PLAN_LIVE_INFO_NO_RUN：旧快照 + 当前 live HOLDER
+  goal + 无 run，两区同屏不混合）；targeted 62 → **69**。
+
 ## R1.1 Semantic Closeout（2026-09-16，GPT R1 复审返修补轮）
 
 R1 复审判 UI_R2_SEMANTIC_CLOSEOUT_NEEDS_FIX（原四 blocker 关闭），三个收尾 blocker 全修：

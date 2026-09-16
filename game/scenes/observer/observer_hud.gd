@@ -360,7 +360,7 @@ func _render_decision(sel: Dictionary) -> void:
 func _render_plan(sel: Dictionary) -> void:
 	var p: Dictionary = sel.get("plan", {})
 	var nodes: Array = p.get("nodes", [])
-	var lines: Array = ["[color=%s]── 计划流 ──[/color] %s" % [C_GOLD, _prov("subjective")]]
+	var lines: Array = ["[color=%s]── 计划状态 ──[/color] %s" % [C_GOLD, _prov("derived")]]
 	if nodes.is_empty():
 		lines.append("[color=%s]暂无计划/执行留痕（无 live run，也无 decision trace）[/color]" % C_DIM)
 	var current_section := ""
@@ -372,6 +372,8 @@ func _render_plan(sel: Dictionary) -> void:
 				lines.append("")
 				if section == "live":
 					lines.append("[color=%s]── 当前执行 LIVE ──[/color] %s" % [C_ACTIVE, _prov("subjective")])
+				elif section == "live_info":
+					lines.append("[color=%s]── 当前信息目标 LIVE ──[/color] %s" % [C_ACTIVE, _prov("subjective")])
 				elif section == "snapshot":
 					lines.append("[color=%s]── 上次决策快照 ──[/color] %s" % [C_GRAY, _prov("subjective")])
 			current_section = section

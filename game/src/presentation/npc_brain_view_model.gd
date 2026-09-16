@@ -236,14 +236,16 @@ static func _plan(sim, a: Dictionary, actor_id: String) -> Dictionary:
 			nodes.append(_subgoal_node(live_goal, "live", false, "LIVE_ACCESSOR"))
 		# —— 快照区（与 LIVE 并列显示，独立 section）——
 		_append_snapshot_nodes(nodes, snapshot)
-		# —— 未附着身份的 live 信息目标：独立显示，不接 run 流 ——
+		# —— 未附着身份的 live 信息目标：独立 LIVE INFO 区（无 run 身份证据，不接箭头）——
 		if not live_goal.is_empty() and attached.is_empty():
-			nodes.append(_subgoal_node(live_goal, "live", true, "LIVE_ACCESSOR"))
+			nodes.append(_subgoal_node(live_goal, "live_info", true, "LIVE_ACCESSOR"))
 	else:
-		# —— 无 live run：决策快照作为主计划（fallback） ——
+		# —— 无 live run：决策快照作为主计划（fallback）——
 		_append_snapshot_nodes(nodes, snapshot)
+		# 当前 live 信息目标（无 run 可附着）仍是 CURRENT 状态——独立 LIVE INFO 区，
+		# 绝不落入 snapshot 区（LIVE accessor 数据禁止 section=snapshot）
 		if not live_goal.is_empty():
-			nodes.append(_subgoal_node(live_goal, "snapshot", false, "LIVE_ACCESSOR"))
+			nodes.append(_subgoal_node(live_goal, "live_info", true, "LIVE_ACCESSOR"))
 	# 意图兜底（两者皆空）
 	if nodes.is_empty() and not intention.is_empty():
 		nodes.append({"kind": "INTENTION", "label": str(intention.get("desc", intention.get("action", ""))),

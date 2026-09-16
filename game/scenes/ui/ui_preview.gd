@@ -9,9 +9,10 @@ const HUD_SCENE := preload("res://scenes/observer/observer_hud.tscn")
 const FIXTURES := ["DEFAULT", "NPC_SELECTED", "NO_SELECTION", "LONG_EVENT_LOG", "PAUSED",
 	"WARNING", "MEMORY_FILLED", "DECISION_FILLED", "RELATIONS_FILLED",
 	"BRAIN_OVERVIEW_FULL", "BRAIN_DECISION_FULL", "BRAIN_DECISION_NO_TRACE",
-	"BRAIN_PLAN_BLOCKED", "BRAIN_TOM_HOLDER_EVIDENCE", "BRAIN_RELATION_ASYMMETRIC",
-	"BRAIN_MEMORY_LONG", "BRAIN_SOCIAL_COMMITMENT", "BRAIN_NO_SOCIAL_DATA",
-	"BRAIN_OPEN_QUESTIONS", "BRAIN_TRUTH_VS_SUBJECTIVE", "BRAIN_SOCIAL_UNRELATED_FILTER"]
+	"BRAIN_PLAN_BLOCKED", "BRAIN_PLAN_LIVE_INFO_NO_RUN", "BRAIN_TOM_HOLDER_EVIDENCE",
+	"BRAIN_RELATION_ASYMMETRIC", "BRAIN_MEMORY_LONG", "BRAIN_SOCIAL_COMMITMENT",
+	"BRAIN_NO_SOCIAL_DATA", "BRAIN_OPEN_QUESTIONS", "BRAIN_TRUTH_VS_SUBJECTIVE",
+	"BRAIN_SOCIAL_UNRELATED_FILTER"]
 
 func _ready() -> void:
 	get_tree().root.content_scale_size = Vector2i(480, 270) # 与正式观察同一像素画布
@@ -136,6 +137,41 @@ static func fixture_model(fixture_name := "DEFAULT") -> Dictionary:
 						"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
 				"provenance": "subjective"}
 			model["selected_actor"] = sel5
+		"BRAIN_PLAN_LIVE_INFO_NO_RUN":
+			# R1.2 关键边界：无 live run + 当前 live HOLDER goal + 旧决策快照。
+			# live goal 必须在独立 LIVE INFO 区（当前信息目标 LIVE），绝不落入快照区。
+			var sel5b := _brain_full()
+			sel5b["plan"] = {
+				"goal": {"desc": "旧的觅食目标", "priority": 0.55, "provenance": "subjective"},
+				"intention": {"action": "forage", "commitment": 0.6, "started_tick": 200,
+					"target": Vector2i(12, 8), "desc": "在草地觅食"},
+				"execution": {"run_id": "run_31", "plan_id": "plan_4", "step_id": "step_1",
+					"blocker_reason": "缺少 food ×1", "selected": false, "decision_tick": 300},
+				"live": {},
+				"live_run": {},
+				"live_information_goal": {"query_kind": "HOLDER", "state": "ACTIVE",
+					"information_goal_id": "INFO:npc_weila:3", "parent_run_id": "", "item_id": "shell"},
+				"decision_snapshot": {
+					"goal": {"desc": "旧的觅食目标", "priority": 0.55},
+					"execution": {"run_id": "run_31", "plan_id": "plan_4", "step_id": "step_1",
+						"blocker_reason": "缺少 food ×1", "selected": false, "decision_tick": 300},
+					"information_goal": {}},
+				"nodes": [
+					{"kind": "SUBGOAL", "section": "live_info", "no_arrow_in": true,
+						"label": "当前信息目标 HOLDER", "value": "状态 ACTIVE", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "LIVE_ACCESSOR",
+						"source_ref": "agency_information_goal"},
+					{"kind": "ROOT_GOAL", "section": "snapshot", "label": "旧的觅食目标",
+						"value": "优先级 0.55", "status": "ACTIVE",
+						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
+					{"kind": "STEP", "section": "snapshot", "label": "步骤 step_1",
+						"value": "缺少 food ×1", "status": "BLOCKED",
+						"provenance": "subjective", "source_kind": "DECISION_TRACE"},
+					{"kind": "BLOCKER", "section": "snapshot", "label": "缺少 food ×1",
+						"value": "", "status": "BLOCKED",
+						"provenance": "subjective", "source_kind": "DECISION_TRACE"}],
+				"provenance": "subjective"}
+			model["selected_actor"] = sel5b
 		"BRAIN_TOM_HOLDER_EVIDENCE":
 			var sel6 := _brain_full()
 			sel6["mind"]["tom_subjects"] = [

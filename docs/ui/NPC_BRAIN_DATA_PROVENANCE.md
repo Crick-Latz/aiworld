@@ -26,8 +26,8 @@ HUD 用颜色徽章渲染：[事实]=金 / [主观]=蓝 / [推导]=灰。真实 
 | plan.goal | trace.active_goal/goal_desc（enrich） | subjective | — | yes | — |
 | plan.intention | intentions.current_intention | subjective | — | yes | — |
 | plan.execution / decision_snapshot | trace.agency_execution（决策时单步留痕快照） | subjective | — | yes | 状态图标为展示 |
-| plan.live（root_goal/run/steps/attached_information_goal） | sim.agency_plan_run + sim.agency_information_goal（公开只读） | subjective（actor 的计划，引擎簿记） | yes（run 本体） | — | LIVE 区 root goal 只来自 live_run.root_goal；信息目标仅在 parent_run_id==run_id（blocker_step_id 存在时==current_step_id）时附着，否则独立显示；steps 非当前步标 UNKNOWN（GAP-1a） |
-| plan.live_information_goal | sim.agency_information_goal（公开只读；字段 **state**） | subjective | yes | — | LIVE 语义；决策时刻另存 decision_snapshot.agency_information_goal |
+| plan.live（root_goal/run/steps/attached_information_goal） | sim.agency_plan_run + sim.agency_information_goal（公开只读） | subjective（actor 的计划，引擎簿记） | yes（run 本体） | — | LIVE 区 root goal 只来自 live_run.root_goal；信息目标仅在 parent_run_id==run_id（blocker_step_id 存在时==current_step_id）时附着；steps 非当前步标 UNKNOWN（GAP-1a） |
+| plan.live_information_goal（section=live_info） | sim.agency_information_goal（公开只读；字段 **state**） | subjective | yes | — | 当前 live 信息目标三态：attached-to-live-run / independent-live-info（无 run 或身份不匹配，no_arrow_in 独立区「当前信息目标 LIVE」）/ absent；**LIVE accessor 数据绝不进 snapshot 区**（不变量由测试锁定）；决策时刻目标另存 decision_snapshot.information_goal（仅 snapshot 区） |
 | mind.open_questions | actor.open_questions{about,kind,entropy,stakes,tick} | subjective | — | yes | — |
 | mind.primary_question | open_questions 按 stakes 降序→tick 降序选出的当前最重要问题 | derived（选择为聚合） | — | — | yes |
 | emotions.rows | personality.emotions 原始值 | subjective | — | yes | — |

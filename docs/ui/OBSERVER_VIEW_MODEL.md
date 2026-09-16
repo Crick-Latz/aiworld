@@ -48,7 +48,7 @@ HUD 组件只实现 `render(model: Dictionary)`（或组件级 render 子调用�
 | personality.traits[{key,label,value}]×10 / personality.beliefs[{text,weight}] | 0..1 特质 / 信念（weight 真实 schema） |
 | decision.{chosen,reason,current_action,blocker,next_step,considered_count,dominant_interpretation,decision_tick} | 决策留痕（subjective；current_action 为 objective） |
 | decision.candidates[{action,utility,chosen}] | **真实 softmax 候选效用表**（trace.top_candidates；无决策 tick 时为空） |
-| plan.nodes[{kind,label,value,status,source_kind,section,no_arrow_in?}] | 计划流真分区（R1.1）：section=live（当前执行 LIVE，root goal 只来自 live_run.root_goal，trace.goal_desc 禁入）/snapshot（上次决策快照）；live 信息目标仅 parent_run_id==run_id（blocker_step_id 存在时还需==current_step_id）时附着，否则 no_arrow_in 独立显示 |
+| plan.nodes[{kind,label,value,status,source_kind,section,no_arrow_in?}] | 计划状态分区（R1.1/R1.2）：section=live（当前执行 LIVE，root goal 只来自 live_run.root_goal，trace.goal_desc 禁入）/live_info（当前信息目标 LIVE——无 run 可附着或身份不匹配的当前 live 信息目标，no_arrow_in，**LIVE accessor 数据绝不落入 snapshot**）/snapshot（上次决策快照）；live 信息目标仅 parent_run_id==run_id（blocker_step_id 存在时还需==current_step_id）时附着 run 流。当前信息目标三态：attached-to-live-run / independent-live-info / absent；决策时刻信息目标永远只在 snapshot |
 | plan.live{root_goal,run{run_id,plan_id,state,reason_code,current_step_id},steps[],attached_information_goal?}（兼容平铺键 live_run） | **LIVE**：`sim.agency_plan_run(actor_id)` 公开只读 accessor（他现在正在执行什么） |
 | plan.live_information_goal / plan.decision_snapshot | LIVE 信息目标（`sim.agency_information_goal`，字段 **state**）与决策时刻快照（trace.agency_execution / trace.agency_information.goal）两时间语义分离 |
 | mind.open_questions[{about_name,kind,entropy,stakes,tick,source_event_ids}] | 未解之问 |
