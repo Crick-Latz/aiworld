@@ -370,3 +370,125 @@ material request lifetime   ~26.9 ticks（n=68/55） ← 知识使用窗口本�
 ```
 压缩来源=goals 69→55（非 decision/goal 下降）；主导终止原因是父计划变更。
 附加信号：即使知识存在，~27 tick 的 request 生命周期也是硬窗口。
+
+---
+
+# P7.2C Round 3 Encounter Ecology（E1 社会回流 + E2 锚点 fallback）
+
+GPT R1.3 direction gate PASS 后授权的首个行为轮。设计约束：request 生命周期
+~27 tick + PARENT_RUN_CHANGED ~71% → 主方案必须是 PRE-request 社会共现。
+
+## 实现
+
+- **flag `holder_encounter_ecology`**（默认 false；bootstrap 依赖
+  holder_reachability fail-closed：ENCOUNTER_ECOLOGY_REQUIRES_HOLDER_REACHABILITY；
+  LIVE_BRIDGE 要求清单同步）。新 profile：holder_encounter（C3b ON/C2 OFF/E ON）、
+  holder_full_ecology（全 ON）→ 与既有 profile 构成 2×2（C3b 固定 ON）。
+- **E1 `visit_social_anchor`**（ActionRegistry，flag 经 actor view 注入——
+  flag-off 时键不存在，候选表逐位不变）：sociability + social 需求积累
+  （=距上次有意义接触时间代理）驱动回访自己【见过】的火堆（主观
+  known_resources，key "x,y"，fail-closed）。dist 4-40 才生成；utility
+  (0.12+soc*0.22+social*0.30)*dp，夜×0.85/暴风×0.7/fear>0.5×0.6；≤0.64 档
+  （critical survival ~0.9 自然压制）。到场发 social_anchor_visited 事件
+  （目击者经 _emit 路径刷新 last_seen + possession 观察）。
+- **E2 `seek_social_anchor`**（InformationActionPolicy）：HOLDER goal +
+  无 visible eligible + 无任何 last_seen 目标（seek_holder 也空）时，去最近
+  主观火堆（dist≤30）。utility 0.10+pressure*0.22+soc*0.10（fallback 档）。
+  到场有伴 → social_anchor_arrived（下一 tick others_visible 驱动 ask）；
+  没人 → social_anchor_empty（自然失败）。非 goal 终态。
+- **诊断加固（R1.3 遗留缺口）**：encounter scanner 每 tick 构建有效 pair 集，
+  扫描后对集合外的开放 episode 立即自然闭合（holder 耗尽/actor 消失也触发）
+  ——duration 不再跨越 non-holder gap，不等 fingerprint censor。
+  outside 键改名 event_time_observation_outside_preaction_episode_<item>
+  （时点差语义澄清：事件时刻观察 vs 行动前 episode 采样）。
+- 新诊断键（write-only）：E1/E2 selected/completed/arrived/missed +
+  holder_seek_social_candidates_emitted。
+- 行为零真值：E1/E2 只读 known_resources（主观）+ ToM/人格/需求；执行层
+  到场裁决与其他 seek 同构（执行证据层合法）。
+
+## 测试
+
+- hardening 86→91（episode lifecycle：sweep 自然闭合/重获新 episode/
+  duration 不跨 gap/真实 holder 耗尽下一 tick 闭合）。
+- runtime chain 38→60：+13 Round3（flag 默认关/两新 profile 依赖链/E1 候选
+  与效用档位/fail-closed 三态/E2 目标=主观火堆/距离上限）+9 **R1 遗留 dead
+  test 接线**（_test_r1_found_then_ask_full_chain / _test_r1_real_arbitration_
+  semantics 定义后从未被调用——Round3 自查发现，接线后全过）。
+- strict_suites 1439→1466。
+
+## DEFERRED_FINDINGS（本轮登记，未修）
+
+- **`_sit_by_fire` 解析缺陷（预存，main 行为线）**：known_resources["fires"]
+  键格式为 "x,y"，但 _sit_by_fire 按 "(x, y)" split(", ") 解析 → 永远解析
+  失败返回 null。20 个自然 run（1000 tick×10 seed×2 臂）中 fire_lit=166 而
+  sat_by_fire=0——"营地=社交心脏"机制从未生效。修复会改变所有旧行为 profile
+  的轨迹，需单独授权；E1/E2 用正确解析（"x,y"），不依赖该函数。
+
+## 验证（strict8 / compat / ablation 于计数器缩进修复后的最终源码）
+
+```text
+strict8:   STRICT_REGRESSION PASS 45/1466/27  source_unchanged=true
+           （--timeout 1200 = LOCAL VALIDATION OPERATIONAL OVERRIDE，门槛未变）
+compat:    九 profile FINGERPRINT-IDENTICAL
+           framework/information/material_request/commitment vs d693a2f
+           holder_evidence/holder_reachability vs R1.3
+           holder_possession/arbitration/ecology vs R1.3 natural（61004）
+ablation:  5 臂 × 10 seed 全 replay verified；旧臂与 R1.3 natural 同 seed
+           轨迹一致（flag-off 零行为改动的再次证明）
+hardening: 91/91   runtime_chain: 60/60（defs=calls 全接线）
+```
+
+## Round3 消融漏斗（10 seed 池化；enc=holder_encounter，full=holder_full_ecology）
+
+```text
+                                reach  possess ecol(C2)  enc(E)  full(E+C2)
+decision ticks                   804     804      624     537      529
+goals                             69      69      55      54       53
+holder exists ticks               111     111     111      88       88
+holder visual to REQUESTER          0       0       0       0        0
+holder visual to any peer           6       6       6      29       29
+encounter episodes (sh+wd)        302     302     370     272      272
+K1 observation writes               0    1498    1382    1209     1209
+episodes with observation           0     203     236     200      200
+pre-req requester saw holder        0       0       0       0        0
+pre-req ANY actor saw holder        1       1       1       9        9
+requester any-belief ticks          0       0       0       0        0
+network knows actual                0       7       7      88       88
+carrier visible / last_seen       0/0     0/0     0/0     0/0      0/0
+E1 visits selected/completed        -       -       -    26/26    26/26
+E2 seeks selected/completed         -       -       -     2/2      2/2
+E2 arrived with peer / missed       -       -       -     1/1      1/1
+ask selected                       16      16      10       9        6
+seek_person selected                 5       5       5       3        2
+seek found                           2       2       4       3        2
+HOLDER RESOLVED / OFFERED          0/0     0/0     0/0     0/0      0/0
+request lifetime (同 R1.3 口径)   26.9    26.9    25.9    23.2     23.2
+```
+
+## Round3 判读（诚实陈述，两段式）
+
+**机制生效（自然非零信号 ✓）**：E1 26 次营地回访全部完成；E2 2 次锚点
+seek（1 次到场有伴=自然机会、1 次扑空=自然失败保留）。网络层知识大幅改善：
+decision tick 网络知情 7→88（12.6×）、pre-request 任一 actor 见过当前持有者
+1→9（9×）、holder 对任一 peer 可见 6→29（~5×）。
+
+** requester 侧接触通道仍未打开（诚实限制）**：holder visual to REQUESTER
+仍 0/88；requester any-belief 仍 0；知识携带者对 requester 可见/last_seen
+仍 0/0。E1 制造的网络知识停留在"别人知道"，requester 与知情者/持有者在
+决策 tick 仍未共位。ask_known_target=0、RESOLVED=0、OFFERED=0——产品链
+未闭合。
+
+结构性原因（推断，供下轮决策）：
+1. E1 是个体短访（duration 2、utility ≤0.64、~2.6 次/seed/1000tick）；
+   3 个 actor 同时在营地的联合概率仍低。
+2. sit_by_fire 死码（DEFERRED）意味着没有"停留/聚集"机制——到营地的人
+   下一 tick 就被 explore 拉走。
+3. E 臂 decision ticks 804→537/goals 69→54：轨迹变化压缩了机会数
+   （与 C2 压缩同向；SIDE EFFECT UNDER OBSERVATION 延续）。
+
+## 验证补记
+
+- 计数器缩进事故：E1/E2 selected 计数初版被误嵌进 ask if 块（seek 计数
+  一并失活）。strict7+59 run 后发现同轨迹下 holder_seek_actions_selected
+  从 1 变 0 → 修复缩进 → strict8 + compat/ablation 全部重跑（本节数据
+  均来自修复后源码）。

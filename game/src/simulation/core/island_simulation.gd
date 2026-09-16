@@ -62,6 +62,11 @@ var agency_holder_reachability_enabled := false
 var agency_holder_possession_observation_enabled := false
 # P7.2C-R2 C2：持有行动因果仲裁（blocker 解除价值 + 探索相关性）。默认 false。
 var agency_holder_causal_arbitration_enabled := false
+# P7.2C Round3：Encounter Ecology——pre-request 社会回流（E1 回访已知营地锚点）
+# + request-time social fallback（E2 去已知社会锚点找可问的人）。默认 false；
+# 依赖 holder_reachability fail-closed。行为只读主观锚点（自己见过的火堆），
+# 绝不读他人库存/真值 holder 集。
+var agency_holder_encounter_ecology_enabled := false
 # P7.2C C-0B：objective material-availability audit —— 只存在于诊断层的
 # 真实世界持有者统计（行为系统绝不读取）；write-only，不入 state 编码。
 var _objective_material_audit := {}
@@ -484,6 +489,13 @@ func _tick_actor(id: String, a: Dictionary, new_events: Array) -> void:
 	if agency_holder_reachability_enabled \
 			and str(decision.get("action", "")) == "seek_holder_person":
 		_holder_diag_inc("holder_seek_actions_selected")
+	# P7.2C Round3：E1/E2 选中计数（write-only）。
+	if agency_holder_encounter_ecology_enabled:
+		var _enc_action := str(decision.get("action", ""))
+		if _enc_action == "visit_social_anchor":
+			_holder_diag_inc("encounter_anchor_visits_selected")
+		elif _enc_action == "seek_social_anchor":
+			_holder_diag_inc("encounter_anchor_seeks_selected")
 	# P7.2C-R1：ask/seek 仲裁分离——只读已产生的 decision；write-only；
 	# probe 为空字典时（无对应候选）不记录，seek 胜不进 ask loss。
 	if agency_holder_reachability_enabled:
@@ -589,6 +601,7 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			diag_view["now_tick"] = tick
 			information_goal["holder_reachability_enabled"] = agency_holder_reachability_enabled
 			information_goal["causal_arbitration_enabled"] = agency_holder_causal_arbitration_enabled
+			information_goal["encounter_ecology_enabled"] = agency_holder_encounter_ecology_enabled
 			var asked_ids: Array = information_goal.get("asked_actor_ids", [])
 			var excluded_ids: Array = information_goal.get("excluded_target_ids", [])
 			var visible_count := 0
@@ -779,13 +792,18 @@ func _agency_prepare(id: String, a: Dictionary) -> Dictionary:
 			# 计入 ask funnel（此前 85/272 的"ask candidate"实为 seek）。
 			var diag_asks: Array = []
 			var diag_seeks: Array = []
+			var diag_anchor_seeks: Array = []
 			for dc in diag_candidates:
-				if str((dc as Dictionary).get("action", "")) == "seek_holder_person":
+				var dc_action := str((dc as Dictionary).get("action", ""))
+				if dc_action == "seek_holder_person":
 					diag_seeks.append(dc)
+				elif dc_action == "seek_social_anchor":
+					diag_anchor_seeks.append(dc)
 				else:
 					diag_asks.append(dc)
 			_holder_diag_inc("holder_ask_candidates_emitted", diag_asks.size())
 			_holder_diag_inc("holder_seek_candidates_emitted", diag_seeks.size())
+			_holder_diag_inc("holder_seek_social_candidates_emitted", diag_anchor_seeks.size())
 			# P7.2C-R2-R1 K4：known-holder ASK/SEEK funnel（纯诊断）。
 			var ask_known := 0
 			var ask_unknown := 0
@@ -1595,9 +1613,13 @@ func _append_residence_sample(item_id: String, duration: int) -> void:
 ## 严格 SpatialPerception.can_see（视野+LOS）——不用 distance<=3 / spatial /
 ## audible。episode 定义：observer 对 holder 上一 tick visual=false、当前 tick
 ## visual=true → episode start；持续看见同一 episode；离开后重见开新 episode。
+## Round3 加固：本 tick 有效 pair 集合之外的开放 episode 当 tick 自然闭合
+##（holder 消耗完材料/actor 消失也触发），不再挂到 fingerprint censor——
+## episode duration 不得跨越 non-holder gap。
 func _record_visual_holder_encounter_ticks() -> void:
 	var hour := int(world_time.get("hour", 12))
 	var weather := str(world.get("weather", "clear"))
+	var active_pairs := {}
 	for item_id in ["wood", "shells"]:
 		for holder_id in actors:
 			if int(actors[holder_id].get("inventory", {}).get(item_id, 0)) <= 0:
@@ -1610,7 +1632,21 @@ func _record_visual_holder_encounter_ticks() -> void:
 					continue
 				var visual := SpatialPerception.can_see(map_query, hour, weather,
 					actors[observer_id]["tile"], holder_tile)
+				active_pairs[oid + "|" + hid + "|" + item_id] = true
 				_visual_pair_tick(oid, hid, item_id, visual)
+	_sweep_stale_encounter_episodes(active_pairs)
+
+## 本 tick 扫描结束后：probe 里未出现在有效 pair 集合的开放 episode 立即
+## 自然闭合（非 censored——那是 run 结束导出的语义）。闭合条件涵盖
+## visual=false、holder 不再持有该 item、holder/observer 消失。
+func _sweep_stale_encounter_episodes(active_pairs: Dictionary) -> void:
+	for pair in _visual_encounter_probe.keys().duplicate():
+		if active_pairs.has(pair):
+			continue
+		var parts := str(pair).split("|")
+		if parts.size() != 3:
+			continue
+		_close_visual_encounter_episode(str(pair), str(parts[2]), false)
 
 func _visual_pair_tick(observer_id: String, holder_id: String, item_id: String, visual: bool) -> void:
 	var pair := observer_id + "|" + holder_id + "|" + item_id
@@ -1652,8 +1688,10 @@ func _close_visual_encounter_episode(pair: String, item_id: String, censored: bo
 	_visual_encounter_probe.erase(pair)
 
 ## R1.3-C：K1 visual possession 观察写入时的机制记账（诊断；不得写 evidence，
-## 只观察现有机制）。观察发生在事件时刻，可能与本 tick 的 encounter 采样存在
-## 时点差——episode 未开放时的观察单独计数（sampling-gap 证据）。
+## 只观察现有机制）。观察发生在事件时刻（行动后），encounter episode 采样在
+## 感知后行动前——本 tick 内先获得材料的人天然不在 pre-action episode 里
+##（获得即刻被旁观者看见是合法时序，不是缺口）。episode 未开放时的观察
+## 单独计数（时点差分类，不回塞进前一个 episode）。
 func _record_possession_observation(observer_id: String, holder_id: String, item_id: String) -> void:
 	var pair := observer_id + "|" + holder_id + "|" + item_id
 	_possession_observation_last_tick[pair] = tick
@@ -1664,7 +1702,7 @@ func _record_possession_observation(observer_id: String, holder_id: String, item
 		hist["last_tick"] = tick
 		hist["count"] = int(hist.get("count", 0)) + 1
 	if not _visual_encounter_probe.has(pair):
-		_obj_inc("possession_observation_outside_visual_episode_" + item_id)
+		_obj_inc("event_time_observation_outside_preaction_episode_" + item_id)
 
 ## R1.3-D：HOLDER goal 新建时点的 pre-request 历史回溯（诊断）。
 ## 历史按 actor+item 键控；只统计"当前真实持有者"作为被观察对象——曾看过
@@ -2129,6 +2167,10 @@ func _complete_action(id: String, a: Dictionary, new_events: Array) -> void:
 			_do_ask_item_holder(id, a, action, new_events)
 		"seek_holder_person":
 			_do_seek_holder_person(id, a, action, new_events)
+		"visit_social_anchor":
+			_do_visit_social_anchor(id, a, action, new_events)
+		"seek_social_anchor":
+			_do_seek_social_anchor(id, a, action, new_events)
 		"ask_reason":
 			_do_ask_reason(id, a, action, new_events)
 		"observe_person":
@@ -2894,6 +2936,42 @@ func _do_seek_holder_person(id: String, a: Dictionary, action: Dictionary, ev: A
 				"item_id": item_id, "target_id": target_id,
 			})
 
+## P7.2C Round3 E1 执行：到达已知营地锚点——发事件，在场者经 _emit 目击
+## 路径自然刷新 last_seen / possession 观察机会。非 goal 行为，无终态语义。
+func _do_visit_social_anchor(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	if agency_holder_reachability_enabled:
+		_holder_diag_inc("encounter_anchor_visits_completed")
+	_emit("social_anchor_visited", id, "%s 回营地看了看" % a["display_name"], {
+		"anchor": "fire", "pos": str(a["tile"]),
+	})
+
+## Round3 E2 执行：到达社会锚点。到场有伴 = 自然机会（下一决策 tick
+## others_visible 驱动 ask）；没人 = 自然失败。均不构成 HOLDER goal 终态。
+func _do_seek_social_anchor(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
+	var goal_id := str(action.get("information_goal_id", ""))
+	var item_id := str(action.get("item_id", ""))
+	if agency_holder_reachability_enabled:
+		_holder_diag_inc("encounter_anchor_seeks_completed")
+	var any_peer := false
+	for other_id in actors:
+		if str(other_id) != id and _is_nearby(a["tile"], actors[other_id]["tile"]):
+			any_peer = true
+			break
+	if any_peer:
+		if agency_holder_reachability_enabled:
+			_holder_diag_inc("encounter_anchor_seek_arrived_with_peer")
+		_emit("social_anchor_arrived", id, "%s 到了营地，正好有人在" % a["display_name"], {
+			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+			"item_id": item_id,
+		})
+	else:
+		if agency_holder_reachability_enabled:
+			_holder_diag_inc("encounter_anchor_seek_missed")
+		_emit("social_anchor_empty", id, "%s 到了营地，却没有人" % a["display_name"], {
+			"information_goal_id": goal_id, "source_request_id": str(action.get("source_request_id", "")),
+			"item_id": item_id,
+		})
+
 func _do_ask_item_holder(id: String, a: Dictionary, action: Dictionary, ev: Array) -> void:
 	var target_id := str(action.get("target_actor", ""))
 	var goal_id := str(action.get("information_goal_id", ""))
@@ -3237,7 +3315,7 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 			others_all.append({"id": other_id, "tile": ls2["tile"], "stale_tick": int(ls2["tick"])})  # 记忆位置（可能过时——扑空是真实的）
 		if other_id in world.get("nearby_" + id, []):
 			others_nearby.append({"id": other_id, "tile": otile})
-	return {
+	var view := {
 		"id": id,
 		"tile": a["tile"],
 		"personality": a["personality"],
@@ -3270,6 +3348,10 @@ func _build_actor_view(id: String, a: Dictionary) -> Dictionary:
 		"known_resources": _known_resources_view(a),
 		"appears_hungry_nearby": bool(world.get("appears_hungry_" + id, false)),
 	}
+	# P7.2C Round3：E1 开关注入——flag-off 时键不存在，视图与旧行为逐位一致。
+	if agency_holder_encounter_ecology_enabled:
+		view["encounter_ecology_enabled"] = true
+	return view
 
 ## P6.3A：主观已知配方 refs（经世界包知识 ∩ RecipeCatalog——AgencyContextBuilder 同源）
 func _known_recipe_refs_view(a: Dictionary) -> Array:

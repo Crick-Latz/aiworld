@@ -57,6 +57,9 @@ static func get_available_actions(actor: Dictionary, world: Dictionary) -> Array
 	if a16 != null: actions.append(a16)
 	var a17 = _sit_by_fire(p, needs, pos, world, actor)
 	if a17 != null: actions.append(a17)
+	# P7.2C Round3 E1：社会回流（flag off 时返回 null——候选表逐位不变）。
+	var a23 = _visit_social_anchor(p, needs, pos, world, actor)
+	if a23 != null: actions.append(a23)
 	var a15 = _keep_distance(p, actor)
 	if a15 != null: actions.append(a15)
 	var a14 = _eat(p, needs, inv)
@@ -667,3 +670,51 @@ static func _pick_unvisited(pos: Vector2i, visited: Dictionary, wide: bool = fal
 			if fallback.x < 0:
 				fallback = t  # 都走过时退而求其次（配合 0.55 的习惯化衰减，不是禁止）
 	return fallback
+
+## P7.2C Round3 E1：pre-request 社会回流。有一定 sociability、较久没有社会
+## 接触（social 需求积累量 = "距上次有意义接触的时间"代理）、非高压生存态
+##（softmax 里 critical survival ~0.9 自然压制本档 ≤0.64）时，有机会回访
+## 自己【见过】的火堆营地。锚点只读主观 known_resources["fires"]
+##（fail-closed；key 格式 "x,y"——注意 _sit_by_fire 的 "(x, y)" 解析是
+## 预存缺陷，见 DEFERRED_FINDINGS，本函数不复用它）。绝不读世界真值
+## fires/shelters、绝不读任何人库存或坐标；火灭信念滞后 → 回访扑空真实。
+static func _visit_social_anchor(p: PersonalityProfile, needs: Dictionary, pos: Vector2i, world: Dictionary, actor: Dictionary):
+	if not bool(actor.get("encounter_ecology_enabled", false)):
+		return null
+	var kr: Dictionary = actor.get("known_resources", {})
+	if not kr.has("fires"):
+		return null
+	var fires: Dictionary = kr["fires"]
+	if fires.is_empty():
+		return null
+	var anchor := Vector2i(-1, -1)
+	var best_d := -1
+	var keys: Array = fires.keys()
+	keys.sort()
+	for key in keys:
+		var parts: Array = str(key).replace("(", "").replace(")", "").split(",")
+		if parts.size() != 2:
+			continue
+		var ft := Vector2i(int(str(parts[0]).strip_edges()), int(str(parts[1]).strip_edges()))
+		var d := absi(pos.x - ft.x) + absi(pos.y - ft.y)
+		if best_d < 0 or d < best_d:
+			best_d = d
+			anchor = ft
+	if anchor.x < 0:
+		return null
+	if best_d < 4:
+		return null  # 已在营地——无需回访旅行
+	if best_d > 40:
+		return null  # 超出自然回流半径
+	var sociability := p.effective_trait("sociability", needs)
+	var social := _n(needs.get("social", 0), 250, 650)
+	var fear: float = p.emotions.get("fear", 0.0)
+	var score := (0.12 + sociability * 0.22 + social * 0.30) * _dp(pos, anchor)
+	if bool(world.get("is_night", false)):
+		score *= 0.85
+	if str(world.get("weather", "clear")) == "storm":
+		score *= 0.7
+	if fear > 0.5:
+		score *= 0.6
+	return {"action": "visit_social_anchor", "target": anchor, "utility": score,
+		"desc": "回营地看看有没有人", "duration": 2}

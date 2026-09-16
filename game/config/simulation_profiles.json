@@ -157,6 +157,34 @@
       "holder_reachability": true,
       "holder_possession_observation": true,
       "holder_causal_arbitration": true
+    },
+    "holder_encounter": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": false,
+      "holder_encounter_ecology": true
+    },
+    "holder_full_ecology": {
+      "agency_mode": "LIVE_BRIDGE",
+      "plan_execution": true,
+      "causal_step_value": true,
+      "plan_adoption": true,
+      "information_subgoals": true,
+      "material_requests": true,
+      "commitment_consequences": true,
+      "holder_evidence_reachability": true,
+      "holder_reachability": true,
+      "holder_possession_observation": true,
+      "holder_causal_arbitration": true,
+      "holder_encounter_ecology": true
     }
   }
 }

@@ -250,7 +250,67 @@ static func _build_holder_asks(actor: Dictionary, goal: Dictionary) -> Array:
 	var seek := _build_seek_holder(actor, goal, pressure, urgency)
 	if not seek.is_empty():
 		out.append(seek)
+		return out
+	# P7.2C Round3 E2：request-time social fallback——无可问的人、也没有任何
+	# last_seen 目标可找时，去自己【见过】的社会锚点（火堆营地）碰运气。
+	# 只读主观 known_resources；远锚点不生成（26-27 tick 请求窗口内不现实）；
+	# 到场不是 goal 终态——之后 others_visible 自然驱动 ask；营地没人则自然失败。
+	if bool(goal.get("encounter_ecology_enabled", false)):
+		var anchor_seek := _build_seek_social_anchor(actor, goal, maxf(pressure, urgency))
+		if not anchor_seek.is_empty():
+			out.append(anchor_seek)
 	return out
+
+## Round3 E2：找社会锚点候选——目标 = 请求者自己见过的最近火堆（主观
+## known_resources["fires"]，key "x,y"）。utility 是 fallback 档（低于
+## blocked ask 与 known-holder seek，与普通探索竞争）。
+static func _build_seek_social_anchor(actor: Dictionary, goal: Dictionary,
+		pressure_urgency: float) -> Dictionary:
+	var kr: Dictionary = actor.get("known_resources", {})
+	if not kr.has("fires"):
+		return {}
+	var fires: Dictionary = kr["fires"]
+	if fires.is_empty():
+		return {}
+	var origin: Vector2i = actor.get("tile", Vector2i.ZERO)
+	var anchor := Vector2i(-1, -1)
+	var best_d := -1
+	var keys: Array = fires.keys()
+	keys.sort()
+	for key in keys:
+		var parts: Array = str(key).replace("(", "").replace(")", "").split(",")
+		if parts.size() != 2:
+			continue
+		var ft := Vector2i(int(str(parts[0]).strip_edges()), int(str(parts[1]).strip_edges()))
+		var d := absi(ft.x - origin.x) + absi(ft.y - origin.y)
+		if best_d < 0 or d < best_d:
+			best_d = d
+			anchor = ft
+	if anchor.x < 0 or best_d < 0:
+		return {}
+	if best_d > 30:
+		return {}
+	var p: PersonalityProfile = actor.get("personality", null)
+	var sociability := 0.5
+	if p != null:
+		sociability = p.effective_trait("sociability", actor.get("needs", {}))
+	var utility := clampf(0.10 + pressure_urgency * 0.22 + sociability * 0.10, 0.06, 0.75)
+	return {
+		"action": "seek_social_anchor",
+		"target": anchor,
+		"target_anchor": "fire",
+		"utility": utility,
+		"duration": maxi(1, best_d - 8),
+		"desc": "回营地碰碰运气——也许有人知道谁有%s" % str(goal.get("item_id", "")),
+		"information_goal_id": str(goal.get("goal_id", "")),
+		"information_action": true,
+		"information_kind": "SEEK_ANCHOR",
+		"query_kind": "HOLDER",
+		"parent_plan_id": str(goal.get("parent_plan_id", "")),
+		"item_id": str(goal.get("item_id", "")),
+		"holder_predicate": TheoryOfMind.possession_predicate(str(goal.get("item_id", ""))),
+		"source_request_id": str(goal.get("source_request_id", "")),
+	}
 
 ## P7.2C C1：找人候选——目标从请求者自己的 ToM last_seen 记忆里选（主观），
 ## 排序用 trust/reliability/sociability/last_seen 新鲜度/距离信念/请求紧迫度。

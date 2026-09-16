@@ -19,6 +19,10 @@ func _run() -> void:
 	_test_refusal_then_second_round()
 	_test_c1_seek_holder_person()
 	_test_c2_inquiry_utility_semantics()
+	# R1 遗留 dead test 接线（Round3 自查：8 定义 vs 6 调用）。
+	_test_r1_found_then_ask_full_chain()
+	_test_r1_real_arbitration_semantics()
+	_test_r3_encounter_ecology()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -533,3 +537,107 @@ func _test_r1_real_arbitration_semantics() -> void:
 			weak_u = float((c as Dictionary).get("utility", 0.0))
 	_check("r1_unblocked_weak_ask_lower", weak_u < ask_u,
 		"weak=%.3f blocked=%.3f" % [weak_u, ask_u])
+
+# ── P7.2C Round3：Encounter Ecology（E1 回访锚点 / E2 锚点 fallback）──
+
+func _r3_actor(enc_on: bool, fires: Dictionary) -> Dictionary:
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"personality": PersonalityProfile.new({"sociability": 0.7}, {}),
+		"needs": {"social": 500, "hunger": 300, "thirst": 300, "energy": 700},
+		"known_resources": {"fires": fires},
+		"others_visible": [], "visited_tiles": {}, "inventory": {}, "trust_of": {},
+		"tom": TheoryOfMind.new()}
+	if enc_on:
+		actor["encounter_ecology_enabled"] = true
+	return actor
+
+func _r3_goal(enc_on: bool) -> Dictionary:
+	var goal := {"query_kind": "HOLDER", "state": "ACTIVE", "item_id": "shells",
+		"goal_id": "G1", "holder_reachability_enabled": true,
+		"asked_actor_ids": [], "excluded_target_ids": [], "sought_actor_ids": [],
+		"root_goal": "HUNGER", "request_urgency": 0.5, "parent_blockedness": 0.5,
+		"created_tick": 40}
+	if enc_on:
+		goal["encounter_ecology_enabled"] = true
+	return goal
+
+func _test_r3_encounter_ecology() -> void:
+	# flag 默认关；新 profile 依赖链正确。
+	var plain := SimulationBootstrap.create(78201, "framework")
+	_check("r3_flag_default_off",
+		not (plain["sim"] as IslandSimulation).agency_holder_encounter_ecology_enabled)
+	var enc := SimulationBootstrap.create(78202, "holder_encounter")
+	var enc_sim: IslandSimulation = enc["sim"]
+	_check("r3_holder_encounter_profile",
+		bool(enc.get("ok", false))
+		and enc_sim.agency_holder_encounter_ecology_enabled
+		and enc_sim.agency_holder_possession_observation_enabled
+		and not enc_sim.agency_holder_causal_arbitration_enabled
+		and enc_sim.agency_holder_reachability_enabled)
+	var full := SimulationBootstrap.create(78203, "holder_full_ecology")
+	var full_sim: IslandSimulation = full["sim"]
+	_check("r3_holder_full_ecology_profile",
+		bool(full.get("ok", false))
+		and full_sim.agency_holder_encounter_ecology_enabled
+		and full_sim.agency_holder_possession_observation_enabled
+		and full_sim.agency_holder_causal_arbitration_enabled)
+	var world := {"tick": 50, "is_night": false, "weather": "clear", "hour": 12}
+	# E1：flag on + 已知火堆（dist 5）→ visit_social_anchor 候选，档位合理。
+	var actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {"15,10": true}), world)
+	var visit := {}
+	for c in actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			visit = c
+	_check("r3_e1_candidate_when_enabled", not visit.is_empty(), str(actions.size()))
+	if not visit.is_empty():
+		var vu := float(visit.get("utility", 0.0))
+		_check("r3_e1_utility_reasonable_band",
+			vu > 0.0 and vu <= 0.65,
+			"u=%.3f（fallback 档：低于 critical survival，与探索竞争）" % vu)
+	# E1 fail-closed：flag off / 未知火堆 / 太近 / 太远 → 无候选。
+	var off_actions: Array = ActionRegistry.get_available_actions(_r3_actor(false, {"15,10": true}), world)
+	var off_has := false
+	for c in off_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			off_has = true
+	_check("r3_e1_absent_when_flag_off", not off_has)
+	var nofire_actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {}), world)
+	var nofire_has := false
+	for c in nofire_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			nofire_has = true
+	_check("r3_e1_absent_without_known_fire", not nofire_has)
+	var far_actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {"60,10": true}), world)
+	var far_has := false
+	for c in far_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			far_has = true
+	_check("r3_e1_absent_beyond_natural_radius", not far_has)
+	# E2：无 eligible / 无 last_seen / flag on + 已知火堆（dist 3）→ anchor 候选。
+	var cands: Array = InformationActionPolicy.build(_r3_actor(true, {"13,10": true}), _r3_goal(true), 50)
+	var anchor_seek := {}
+	for c in cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			anchor_seek = c
+	_check("r3_e2_candidate_when_no_target_no_witness",
+		not anchor_seek.is_empty(), str(cands.size()))
+	if not anchor_seek.is_empty():
+		_check("r3_e2_target_is_subjective_fire",
+			str(anchor_seek.get("target_anchor", "")) == "fire"
+			and (anchor_seek.get("target", Vector2i.ZERO) is Vector2i)
+			and (anchor_seek["target"] as Vector2i) == Vector2i(13, 10),
+			str(anchor_seek.get("target")))
+	# E2 fail-closed：goal flag off → 无 anchor 候选（也不产生其他新行为）。
+	var off_cands: Array = InformationActionPolicy.build(_r3_actor(true, {"13,10": true}), _r3_goal(false), 50)
+	var off_anchor := false
+	for c in off_cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			off_anchor = true
+	_check("r3_e2_absent_when_goal_flag_off", not off_anchor)
+	# E2 距离上限：火堆 dist 35 > 30 → 不生成（26-27 tick 窗口内不现实）。
+	var far_cands: Array = InformationActionPolicy.build(_r3_actor(true, {"45,10": true}), _r3_goal(true), 50)
+	var far_anchor := false
+	for c in far_cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			far_anchor = true
+	_check("r3_e2_absent_beyond_request_window", not far_anchor)

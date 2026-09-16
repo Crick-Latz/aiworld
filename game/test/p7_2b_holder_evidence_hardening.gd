@@ -30,6 +30,7 @@ func _run() -> void:
 	_test_r1r3_visual_encounter_and_conversion()
 	_test_r1r3_pre_request_attribution()
 	_test_r1r3_actual_holder_visual_coverage_keys()
+	_test_r3_episode_lifecycle_hardening()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -878,7 +879,7 @@ func _test_r1r3_visual_encounter_and_conversion() -> void:
 	sim._record_possession_observation("a", "b", "wood")
 	obj = sim.agency_objective_material_audit()
 	_check("r1r3_observation_outside_episode_counted",
-		int(obj.get("possession_observation_outside_visual_episode_wood", 0)) == 1,
+		int(obj.get("event_time_observation_outside_preaction_episode_wood", 0)) == 1,
 		str(obj))
 	# write-only：probe/history 不进 state hash；导出时闭合开放 episode。
 	var censored_before := int(obj.get("visual_holder_encounter_censored_wood", 0))
@@ -963,3 +964,55 @@ func _test_r1r3_actual_holder_visual_coverage_keys() -> void:
 		"exists %d->%d visual %d->%d" % [exists_before,
 			int(diag.get("actual_holder_exists_ticks", 0)), visual_before,
 			int(diag.get("actual_holder_visual_to_requester_ticks", 0))])
+
+# ── P7.2C Round3：episode 生命周期加固（holder 耗尽 → 下一 tick 自然闭合）──
+
+func _test_r3_episode_lifecycle_hardening() -> void:
+	var pair := _pair(76814)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	# unit：开放 episode 在 sweep（无效 pair 集）时自然闭合——非 censored。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim.tick += 3
+	sim._sweep_stale_encounter_episodes({})
+	var obj := sim.agency_objective_material_audit()
+	_check("r3_episode_sweep_natural_close",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 1
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 1
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0
+		and int(obj.get("visual_encounter_duration_sum_wood", 0)) == 3,
+		str(obj))
+	# 重新持有 + 再次可见 → 新 episode（duration 不跨越 non-holder gap）。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._sweep_stale_encounter_episodes({"a|b|wood": true})
+	obj = sim.agency_objective_material_audit()
+	_check("r3_active_pair_keeps_episode_open",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 2
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 1,
+		str(obj))
+	sim._sweep_stale_encounter_episodes({})
+	obj = sim.agency_objective_material_audit()
+	_check("r3_second_gap_second_natural_close",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 2
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 2
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0,
+		str(obj))
+	# 集成：真实 actor——holder 消耗完最后一单位 → 下一 tick 扫描自然闭合。
+	var giver_id := str(pair["giver_id"])
+	var requester_id := str(pair["requester_id"])
+	(pair["requester"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["inventory"] = {"wood": 2}
+	sim._record_visual_holder_encounter_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("r3_scan_opens_episode_for_real_pair",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 3,
+		str(obj))
+	(pair["giver"] as Dictionary)["inventory"] = {"wood": 0}
+	sim._record_visual_holder_encounter_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("r3_holder_exhausted_closed_next_scan",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 3
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 3
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0,
+		str(obj))

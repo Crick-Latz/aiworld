@@ -32,13 +32,16 @@ static func configure(sim: IslandSimulation, profile: String = "") -> Dictionary
 		return {"ok": false, "error": "POSSESSION_OBSERVATION_REQUIRES_HOLDER_REACHABILITY"}
 	if bool(config.get("holder_causal_arbitration", false)) and not bool(config.get("holder_reachability", false)):
 		return {"ok": false, "error": "CAUSAL_ARBITRATION_REQUIRES_HOLDER_REACHABILITY"}
+	if bool(config.get("holder_encounter_ecology", false)) and not bool(config.get("holder_reachability", false)):
+		return {"ok": false, "error": "ENCOUNTER_ECOLOGY_REQUIRES_HOLDER_REACHABILITY"}
 	if (bool(config.get("plan_execution", false)) or bool(config.get("causal_step_value", false)) \
 			or bool(config.get("information_subgoals", false)) or bool(config.get("material_requests", false)) \
 			or bool(config.get("commitment_consequences", false)) \
 			or bool(config.get("holder_evidence_reachability", false)) \
 			or bool(config.get("holder_reachability", false)) \
 			or bool(config.get("holder_possession_observation", false)) \
-			or bool(config.get("holder_causal_arbitration", false))) \
+			or bool(config.get("holder_causal_arbitration", false)) \
+			or bool(config.get("holder_encounter_ecology", false))) \
 			and str(config["agency_mode"]) != "LIVE_BRIDGE":
 		return {"ok": false, "error": "EXECUTION_REQUIRES_LIVE_BRIDGE"}
 	sim.agency_mode = str(config["agency_mode"])
@@ -52,6 +55,7 @@ static func configure(sim: IslandSimulation, profile: String = "") -> Dictionary
 	sim.agency_holder_reachability_enabled = bool(config.get("holder_reachability", false))
 	sim.agency_holder_possession_observation_enabled = bool(config.get("holder_possession_observation", false))
 	sim.agency_holder_causal_arbitration_enabled = bool(config.get("holder_causal_arbitration", false))
+	sim.agency_holder_encounter_ecology_enabled = bool(config.get("holder_encounter_ecology", false))
 	return {"ok": true, "profile": profile, "config": config.duplicate(true)}
 
 static func create(seed_value: int, profile: String = "") -> Dictionary:
