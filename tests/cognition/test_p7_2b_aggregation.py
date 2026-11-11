@@ -6,6 +6,7 @@ Locks the two aggregation bugs found in review:
 2. unique asked actors must be a global set union, never a per-run sum
    (run A asks {B,C}, run B asks {B} -> global unique 2, never 3).
 """
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -89,6 +90,22 @@ class TestHolderAttribution(unittest.TestCase):
         self.assertEqual(s["created"], 1)
         self.assertEqual(s["lifetimes"], [4])
         self.assertEqual(dict(s["cancel_reasons"]), {"PARENT_RUN_CHANGED": 1})
+
+
+class TestP90NearestRank(unittest.TestCase):
+    def test_two_samples_p90_is_max(self):
+        """[20, 91] -> p90 = 91, not 20 (old off-by-one returned min)."""
+        stats = az.lifetime_stats([20, 91])
+        self.assertEqual(stats["p90"], 91)
+
+    def test_ten_samples_p90(self):
+        stats = az.lifetime_stats([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertEqual(stats["p90"], 9)
+
+    def test_wood_like_distribution(self):
+        """185 samples with max=521: nearest-rank p90 should be ~79 not 75."""
+        stats = az.lifetime_stats(list(range(4, 189)))
+        self.assertEqual(stats["p90"], list(range(4, 189))[math.ceil(0.9 * 185) - 1])
 
 
 if __name__ == "__main__":

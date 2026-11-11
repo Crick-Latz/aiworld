@@ -73,7 +73,7 @@ def main() -> int:
     report["source_unchanged"] = before == report["source_sha256_after"]
     report["passed_assertions"] = sum(max(row.get("passed", 0), 0) for row in report["suites"])
     report["ok"] = (len(report["suites"]) == len(suites) and all(row["ok"] for row in report["suites"] + report["gates"])
-                    and report["source_unchanged"] and report["python_tests"] == 24 and python_ok)
+                    and report["source_unchanged"] and report["python_tests"] == 27 and python_ok)
     (evidence / "summary.json").write_text(json.dumps(report, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
     print(f"STRICT_REGRESSION {'PASS' if report['ok'] else 'FAIL'} suites={len(report['suites'])} assertions={report['passed_assertions']} python_tests={report['python_tests']} evidence={evidence}", flush=True)
     return 0 if report["ok"] else 1

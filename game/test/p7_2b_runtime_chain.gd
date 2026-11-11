@@ -17,6 +17,12 @@ func _run() -> void:
 	_test_three_role_report_chain()
 	_test_self_absent_and_unknown()
 	_test_refusal_then_second_round()
+	_test_c1_seek_holder_person()
+	_test_c2_inquiry_utility_semantics()
+	# R1 遗留 dead test 接线（Round3 自查：8 定义 vs 6 调用）。
+	_test_r1_found_then_ask_full_chain()
+	_test_r1_real_arbitration_semantics()
+	_test_r3_encounter_ecology()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -264,3 +270,374 @@ func _test_refusal_then_second_round() -> void:
 	_check("refusal_round_never_reoffers_refused",
 		str(after.get("status", "")) != "WAITING_RESPONSE",
 		str(after.get("status", "")) + "/target=" + str(after.get("target_id", "")))
+
+# ── P7.2C C1：主观找人——last_seen 驱动、允许扑空、到场后询问自然发生 ──
+func _test_c1_seek_holder_person() -> void:
+	var created := SimulationBootstrap.create(78001, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(40, 40)  # 远处——不可见
+	giver["inventory"] = {"shells": 2}
+	giver["personality"] = PersonalityProfile.new(
+		{"altruism": 0.9, "empathy": 0.9, "caution": 0.1, "sociability": 0.9}, {})
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	# 请求者记得 giver 的位置（last_seen=旧位置）。
+	(requester["tom"] as TheoryOfMind).see_at(giver_id, Vector2i(38, 38), 1)
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 500)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 500)
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("c1_holder_goal_created", str(goal.get("query_kind", "")) == "HOLDER")
+	# 无可见合格同伴 + flag 开 → seek 候选（目标=last_seen 位置，不读真实坐标）。
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var candidates: Array = InformationActionPolicy.build(view, goal, sim.tick)
+	var seeks: Array = []
+	for c in candidates:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seeks.append(c)
+	_check("c1_seek_candidate_emitted", seeks.size() == 1,
+		str(seeks.size()))
+	if seeks.is_empty():
+		return
+	var seek: Dictionary = seeks[0]
+	_check("c1_seek_targets_last_seen_not_truth",
+		str(seek.get("target_actor", "")) == giver_id
+		and (seek.get("target", Vector2i.ZERO) as Vector2i) == Vector2i(38, 38),
+		str(seek.get("target", "")))
+	# 扑空：giver 真实位置与 last_seen 不同 → 执行后 found 不产生。
+	requester["current_action"] = seek
+	sim._complete_action(requester_id, requester, [])
+	_check("c1_stale_last_seen_misses", _count(sim, "holder_seek_person_not_found") >= 1
+		or _count(sim, "holder_seek_found_person") == 0)
+	# 到场：giver 在 last_seen 位置，请求者真实抵达（travel 由决策流逐 tick 完成，
+	# 此处模拟抵达后的完成回调——与 _tick_actor 到达后触发 _complete_action 同构）。
+	giver["tile"] = Vector2i(38, 38)
+	requester["tile"] = Vector2i(37, 38)
+	requester["current_action"] = seek
+	var ev_before := sim.events.size()
+	sim._complete_action(requester_id, requester, [])
+	var found := false
+	for e in sim.events.slice(ev_before):
+		if str((e as Dictionary).get("type", "")) == "holder_seek_found_person":
+			found = true
+	_check("c1_seek_finds_when_present", found)
+	# flag 关 → 无 seek 候选（旧 holder_evidence 行为不变）。
+	goal["holder_reachability_enabled"] = false
+	var view2 := sim._build_actor_view(requester_id, requester)
+	view2["now_tick"] = sim.tick
+	var candidates2: Array = InformationActionPolicy.build(view2, goal, sim.tick)
+	var seeks2 := 0
+	for c in candidates2:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seeks2 += 1
+	_check("c1_flag_off_no_seek", seeks2 == 0)
+
+# ── P7.2C C2：询问效用语义（blockedness 单调；信任/回避方向；生存仍可压过）──
+func _test_c2_inquiry_utility_semantics() -> void:
+	var created := SimulationBootstrap.create(78002, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {}
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("c2_fixture_goal", str(goal.get("query_kind", "")) == "HOLDER")
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var _utility_of := func(g: Dictionary) -> float:
+		var cands: Array = InformationActionPolicy.build(view, g, sim.tick)
+		for c in cands:
+			if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+					and str((c as Dictionary).get("target_actor", "")) == giver_id:
+				return float((c as Dictionary).get("utility", 0.0))
+		return -1.0
+	# 1) blockedness 单调不降。
+	goal["parent_blockedness"] = 0.2
+	var low_blocked: float = _utility_of.call(goal)
+	goal["parent_blockedness"] = 0.9
+	var high_blocked: float = _utility_of.call(goal)
+	_check("c2_blockedness_monotone", high_blocked >= low_blocked and low_blocked > 0.0,
+		"low=%.3f high=%.3f" % [low_blocked, high_blocked])
+	# 2) urgency 单调不降。
+	goal["parent_blockedness"] = 0.5
+	goal["request_urgency"] = 0.1
+	var low_urg: float = _utility_of.call(goal)
+	goal["request_urgency"] = 0.95
+	var high_urg: float = _utility_of.call(goal)
+	_check("c2_urgency_monotone", high_urg >= low_urg,
+		"low=%.3f high=%.3f" % [low_urg, high_urg])
+	# 3) 信任方向：高信任 ≥ 低信任。
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 900)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 900)
+	view = sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	var high_trust: float = _utility_of.call(goal)
+	_check("c2_high_trust_not_lower", high_trust >= low_urg - 0.001,
+		"trust=%.3f" % high_trust)
+	# 4) 生存压制语义：中等竞争行动下 blockedness=1 的 ask 应有现实竞争力
+	#    （utility 落在可竞争区间），但不锁死——用区间断言而非固定选择率。
+	goal["parent_blockedness"] = 1.0
+	goal["request_urgency"] = 0.9
+	var competitive: float = _utility_of.call(goal)
+	_check("c2_blocked_ask_competitive", competitive >= 0.5,
+		"u=%.3f" % competitive)
+	_check("c2_ask_not_locked_over_survival", competitive <= 0.95,
+		"u=%.3f（不应硬锁压过一切）" % competitive)
+
+# ── P7.2C-R1 C1：seek found → ask 完整链（bookkeeping 不阻断）──
+
+func _test_r1_found_then_ask_full_chain() -> void:
+	var created := SimulationBootstrap.create(78101, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(38, 38)
+	giver["inventory"] = {"shells": 2}
+	giver["personality"] = PersonalityProfile.new(
+		{"altruism": 0.9, "empathy": 0.9, "caution": 0.1, "sociability": 0.9}, {})
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	(requester["tom"] as TheoryOfMind).see_at(giver_id, Vector2i(38, 38), 1)
+	sim.relationships.adjust(requester_id, giver_id, "benevolence", 500)
+	sim.relationships.adjust(requester_id, giver_id, "reliability", 500)
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	_check("r1c_fixture", str(goal.get("query_kind", "")) == "HOLDER")
+	# 1) 无可见同伴 → seek 候选
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	var cands: Array = InformationActionPolicy.build(view, goal, sim.tick)
+	var seek: Dictionary = {}
+	for c in cands:
+		if str((c as Dictionary).get("action", "")) == "seek_holder_person":
+			seek = c
+	_check("r1c_seek_emitted", not seek.is_empty())
+	if seek.is_empty():
+		return
+	# 2) 到场找到（giver 在记忆位置；requester 模拟抵达）
+	requester["tile"] = Vector2i(37, 38)
+	requester["current_action"] = seek
+	sim._complete_action(requester_id, requester, [])
+	_check("r1c_found_emitted", _count(sim, "holder_seek_found_person") == 1)
+	# 3) bookkeeping：B ∉ asked，B ∈ sought，asks=0，seeks=1
+	goal = sim._information_tracker().current_goal(requester_id)
+	_check("r1c_bookkeeping_clean",
+		not (goal.get("asked_actor_ids", []) as Array).has(giver_id)
+		and (goal.get("sought_actor_ids", []) as Array).has(giver_id)
+		and int(goal.get("asks", 0)) == 0
+		and int(goal.get("seeks", 0)) == 1)
+	# 4) 下一决策：giver 现在可见 → ask_item_holder(giver) 候选必须出现
+	var view2 := sim._build_actor_view(requester_id, requester)
+	view2["now_tick"] = sim.tick
+	var cands2: Array = InformationActionPolicy.build(view2, goal, sim.tick)
+	var ask_c: Dictionary = {}
+	for c in cands2:
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			ask_c = c
+	_check("r1c_found_person_askable_after_seek", not ask_c.is_empty(),
+		str(cands2.size()))
+	# 5) 完成 ask：B ∈ asked，asks=1，真实 response，goal/request 身份不变
+	if ask_c.is_empty():
+		return
+	var seed_rng := RandomNumberGenerator.new()
+	seed_rng.seed = 0
+	sim._information_rngs[giver_id] = seed_rng
+	requester["current_action"] = ask_c
+	sim._complete_action(requester_id, requester, [])
+	goal = sim._information_tracker().current_goal(requester_id)
+	_check("r1c_ask_after_found_works",
+		(goal.get("asked_actor_ids", []) as Array).has(giver_id)
+		and int(goal.get("asks", 0)) == 1
+		and (_count(sim, "holder_information_shared") == 1
+			or _count(sim, "holder_information_self_absent") == 1
+			or _count(sim, "holder_information_refused") == 1))
+	_check("r1c_identity_preserved",
+		str(goal.get("goal_id", "")) != ""
+		and str(sim.agency_material_request(request_id).get("request_id", "")) == request_id)
+
+# ── P7.2C-R1 §8：真实仲裁语义（不锁 softmax 比率，锁边界方向）──
+
+func _test_r1_real_arbitration_semantics() -> void:
+	var created := SimulationBootstrap.create(78102, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var requester_id := str(ids[0])
+	var giver_id := str(ids[1])
+	var requester: Dictionary = sim.actors[requester_id]
+	var giver: Dictionary = sim.actors[giver_id]
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {}
+	requester["inventory"] = {}
+	requester["needs"]["hunger"] = 800
+	var pair := {"requester_id": requester_id, "requester": requester}
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(requester_id, requester, [])
+	var goal := sim._information_tracker().current_goal(requester_id)
+	var view := sim._build_actor_view(requester_id, requester)
+	view["now_tick"] = sim.tick
+	goal["holder_reachability_enabled"] = true
+	# 场景 A：普通竞争（低 urgency explore）vs 完全 blocked ask → ask 可胜。
+	goal["parent_blockedness"] = 1.0
+	goal["request_urgency"] = 0.95
+	var ask_u := -1.0
+	for c in InformationActionPolicy.build(view, goal, sim.tick):
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			ask_u = float((c as Dictionary).get("utility", 0.0))
+	# ActionRegistry 的一般 explore 候选 utility 通常在 0.2-0.5 区间；
+	# 断言语义而非固定选择率：blocked ask 的 utility 必须达到"有现实竞争力"水平。
+	_check("r1_blocked_ask_competitive", ask_u >= 0.55, "u=%.3f" % ask_u)
+	# 场景 B：critical survival utility 必须仍能超过 ask 的上限。
+	# 现有 SURVIVAL 类别最高 utility（鱼叉捕鱼的 desperation 路径可达 ~0.9）。
+	# ask 的 clamp 上限是 0.95——断言存在一个"ask 上限不可达"的水平
+	# 与"critical 生存行动可达该水平"的组合约束：ask 不硬锁（< 1.0），
+	# 且公式上限 + critical 场景的实际效用均 < 1.0 → 两者在 softmax 中真实竞争。
+	_check("r1_ask_never_hardlocked", ask_u < 1.0 and ask_u <= 0.95,
+		"u=%.3f" % ask_u)
+	# 场景 C：极低 blockedness + 低 urgency 的 ask 明显弱于 blocked 版（方向正确）。
+	goal["parent_blockedness"] = 0.0
+	goal["request_urgency"] = 0.1
+	var weak_u := -1.0
+	for c in InformationActionPolicy.build(view, goal, sim.tick):
+		if str((c as Dictionary).get("action", "")) == "ask_item_holder" \
+				and str((c as Dictionary).get("target_actor", "")) == giver_id:
+			weak_u = float((c as Dictionary).get("utility", 0.0))
+	_check("r1_unblocked_weak_ask_lower", weak_u < ask_u,
+		"weak=%.3f blocked=%.3f" % [weak_u, ask_u])
+
+# ── P7.2C Round3：Encounter Ecology（E1 回访锚点 / E2 锚点 fallback）──
+
+func _r3_actor(enc_on: bool, fires: Dictionary) -> Dictionary:
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"personality": PersonalityProfile.new({"sociability": 0.7}, {}),
+		"needs": {"social": 500, "hunger": 300, "thirst": 300, "energy": 700},
+		"known_resources": {"fires": fires},
+		"others_visible": [], "visited_tiles": {}, "inventory": {}, "trust_of": {},
+		"tom": TheoryOfMind.new()}
+	if enc_on:
+		actor["encounter_ecology_enabled"] = true
+	return actor
+
+func _r3_goal(enc_on: bool) -> Dictionary:
+	var goal := {"query_kind": "HOLDER", "state": "ACTIVE", "item_id": "shells",
+		"goal_id": "G1", "holder_reachability_enabled": true,
+		"asked_actor_ids": [], "excluded_target_ids": [], "sought_actor_ids": [],
+		"root_goal": "HUNGER", "request_urgency": 0.5, "parent_blockedness": 0.5,
+		"created_tick": 40}
+	if enc_on:
+		goal["encounter_ecology_enabled"] = true
+	return goal
+
+func _test_r3_encounter_ecology() -> void:
+	# flag 默认关；新 profile 依赖链正确。
+	var plain := SimulationBootstrap.create(78201, "framework")
+	_check("r3_flag_default_off",
+		not (plain["sim"] as IslandSimulation).agency_holder_encounter_ecology_enabled)
+	var enc := SimulationBootstrap.create(78202, "holder_encounter")
+	var enc_sim: IslandSimulation = enc["sim"]
+	_check("r3_holder_encounter_profile",
+		bool(enc.get("ok", false))
+		and enc_sim.agency_holder_encounter_ecology_enabled
+		and enc_sim.agency_holder_possession_observation_enabled
+		and not enc_sim.agency_holder_causal_arbitration_enabled
+		and enc_sim.agency_holder_reachability_enabled)
+	var full := SimulationBootstrap.create(78203, "holder_full_ecology")
+	var full_sim: IslandSimulation = full["sim"]
+	_check("r3_holder_full_ecology_profile",
+		bool(full.get("ok", false))
+		and full_sim.agency_holder_encounter_ecology_enabled
+		and full_sim.agency_holder_possession_observation_enabled
+		and full_sim.agency_holder_causal_arbitration_enabled)
+	var world := {"tick": 50, "is_night": false, "weather": "clear", "hour": 12}
+	# E1：flag on + 已知火堆（dist 5）→ visit_social_anchor 候选，档位合理。
+	var actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {"15,10": true}), world)
+	var visit := {}
+	for c in actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			visit = c
+	_check("r3_e1_candidate_when_enabled", not visit.is_empty(), str(actions.size()))
+	if not visit.is_empty():
+		var vu := float(visit.get("utility", 0.0))
+		_check("r3_e1_utility_reasonable_band",
+			vu > 0.0 and vu <= 0.65,
+			"u=%.3f（fallback 档：低于 critical survival，与探索竞争）" % vu)
+	# E1 fail-closed：flag off / 未知火堆 / 太近 / 太远 → 无候选。
+	var off_actions: Array = ActionRegistry.get_available_actions(_r3_actor(false, {"15,10": true}), world)
+	var off_has := false
+	for c in off_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			off_has = true
+	_check("r3_e1_absent_when_flag_off", not off_has)
+	var nofire_actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {}), world)
+	var nofire_has := false
+	for c in nofire_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			nofire_has = true
+	_check("r3_e1_absent_without_known_fire", not nofire_has)
+	var far_actions: Array = ActionRegistry.get_available_actions(_r3_actor(true, {"60,10": true}), world)
+	var far_has := false
+	for c in far_actions:
+		if str((c as Dictionary).get("action", "")) == "visit_social_anchor":
+			far_has = true
+	_check("r3_e1_absent_beyond_natural_radius", not far_has)
+	# E2：无 eligible / 无 last_seen / flag on + 已知火堆（dist 3）→ anchor 候选。
+	var cands: Array = InformationActionPolicy.build(_r3_actor(true, {"13,10": true}), _r3_goal(true), 50)
+	var anchor_seek := {}
+	for c in cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			anchor_seek = c
+	_check("r3_e2_candidate_when_no_target_no_witness",
+		not anchor_seek.is_empty(), str(cands.size()))
+	if not anchor_seek.is_empty():
+		_check("r3_e2_target_is_subjective_fire",
+			str(anchor_seek.get("target_anchor", "")) == "fire"
+			and (anchor_seek.get("target", Vector2i.ZERO) is Vector2i)
+			and (anchor_seek["target"] as Vector2i) == Vector2i(13, 10),
+			str(anchor_seek.get("target")))
+	# E2 fail-closed：goal flag off → 无 anchor 候选（也不产生其他新行为）。
+	var off_cands: Array = InformationActionPolicy.build(_r3_actor(true, {"13,10": true}), _r3_goal(false), 50)
+	var off_anchor := false
+	for c in off_cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			off_anchor = true
+	_check("r3_e2_absent_when_goal_flag_off", not off_anchor)
+	# E2 距离上限：火堆 dist 35 > 30 → 不生成（26-27 tick 窗口内不现实）。
+	var far_cands: Array = InformationActionPolicy.build(_r3_actor(true, {"45,10": true}), _r3_goal(true), 50)
+	var far_anchor := false
+	for c in far_cands:
+		if str((c as Dictionary).get("action", "")) == "seek_social_anchor":
+			far_anchor = true
+	_check("r3_e2_absent_beyond_request_window", not far_anchor)

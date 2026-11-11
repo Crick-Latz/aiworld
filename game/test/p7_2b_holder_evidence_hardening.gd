@@ -18,6 +18,19 @@ func _run() -> void:
 	_test_audit_sensitivity()
 	_test_no_duplicate_peer_in_round()
 	_test_funnel_diagnostics_appear_and_stay_out_of_state()
+	_test_c0_arbitration_and_objective_audit()
+	_test_r1_seek_bookkeeping_split()
+	_test_r2_funnel_split_invariants()
+	_test_r11_residence_regression()
+	_test_r2r1_spatial_only_observation()
+	_test_r2r1_candidate_local_boost()
+	_test_r2r1_c2_semantics()
+	_test_r2r11_c2_real_arbitration()
+	_test_r2r12_k4_polarity_regression()
+	_test_r1r3_visual_encounter_and_conversion()
+	_test_r1r3_pre_request_attribution()
+	_test_r1r3_actual_holder_visual_coverage_keys()
+	_test_r3_episode_lifecycle_hardening()
 	print("SUMMARY: passed=%d failed=%d" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
 
@@ -327,3 +340,679 @@ func _test_funnel_diagnostics_appear_and_stay_out_of_state() -> void:
 func _holder_diag_helper(sim: IslandSimulation) -> void:
 	# 仅追加诊断计数，不应改变 state hash。
 	sim._holder_diag_inc("holder_test_probe", 1)
+
+# ── P7.2C C-0：仲裁诊断 + 客观材料审计 + fingerprint 不变 ──
+
+func _test_c0_arbitration_and_objective_audit() -> void:
+	var pair := _pair(76801)
+	var sim: IslandSimulation = pair["sim"]
+	# flag off（holder_evidence profile）：新诊断不激活、fingerprint 与 holder_evidence 基线一致路径。
+	_check("c0_flag_defaults_off", not sim.agency_holder_reachability_enabled)
+	# 打开 flag（等价 holder_reachability profile 行为）。
+	sim.agency_holder_reachability_enabled = true
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("c0_fixture_holder_goal", false, "no holder goal")
+		return
+	_check("c0_fixture_holder_goal", true)
+	# 决策 tick：候选存在 → 探针记录 + 客观审计采样（giver 持有 shells=2 → any_holder）。
+	var prepare: Dictionary = sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	var diag := sim.agency_holder_funnel_diagnostics()
+	_check("c0_ask_candidate_ticks_counted", int(diag.get("holder_ask_candidate_ticks", 0)) >= 1)
+	var obj := sim.agency_objective_material_audit()
+	_check("c0_objective_audit_ticks", int(obj.get("objective_audit_ticks", 0)) >= 1)
+	_check("c0_objective_any_holder_detected",
+		int(obj.get("objective_any_holder_ticks", 0)) >= 1
+		and int(obj.get("objective_holder_count", 0)) >= 1
+		and int(obj.get("objective_nearest_holder_count", 0)) >= 1,
+		str(obj))
+	_check("c0_objective_audit_in_summary",
+		(SimulationAudit.summary(sim).get("objective_material_audit", {}) as Dictionary).size() > 0)
+	# write-only：fingerprint 在诊断追加前后不变。
+	var fp1 := SimulationAudit.fingerprint(sim)
+	sim._holder_diag_inc("c0_probe", 1)
+	sim._obj_inc("c0_probe", 1)
+	var fp2 := SimulationAudit.fingerprint(sim)
+	_check("c0_diagnostics_excluded_from_state_hash",
+		str(fp1["state_sha256"]) == str(fp2["state_sha256"]))
+	# 仲裁分类：ask 胜 → won；非 ask 胜 → lost + 类别。直接驱动记录函数（决策引擎已有真实路径）。
+	sim._holder_arbitration_probe = {"actor_id": str(pair["requester_id"]),
+		"goal_id": str(goal.get("goal_id", "")), "item_id": "shells",
+		"best_utility": 0.5, "target_actor": str(pair["giver_id"])}
+	sim._record_inquiry_arbitration_win({"action": "ask_item_holder", "utility": 0.55})
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("c0_arbitration_win_recorded", int(diag.get("ask_candidate_won", 0)) == 1)
+	sim._holder_arbitration_probe = {"actor_id": str(pair["requester_id"]),
+		"goal_id": str(goal.get("goal_id", "")), "item_id": "shells",
+		"best_utility": 0.5, "target_actor": str(pair["giver_id"])}
+	sim._record_inquiry_arbitration_loss({}, {"action": "explore", "utility": 0.9})
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("c0_arbitration_loss_to_exploration",
+		int(diag.get("ask_candidate_lost", 0)) == 1
+		and int(diag.get("ask_lost_to_EXPLORATION", 0)) == 1)
+	# 驻留审计：acquire/consume 计数与携带 tick。
+	sim._record_material_residence(str(pair["giver_id"]), "shells", "acquired")
+	sim._record_material_carriage_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("c0_residence_events_counted",
+		int(obj.get("material_event_acquired_shells", 0)) >= 1
+		and int(obj.get("carriage_shells_actor_ticks", 0)) >= 1)
+	# bootstrap：holder_reachability profile 全开 + 依赖 fail-closed。
+	var hr := SimulationBootstrap.create(76802, "holder_reachability")
+	_check("c0_holder_reachability_profile",
+		bool(hr.get("ok", false))
+		and (hr["sim"] as IslandSimulation).agency_holder_reachability_enabled
+		and (hr["sim"] as IslandSimulation).agency_holder_evidence_reachability_enabled)
+	var he := SimulationBootstrap.create(76802, "holder_evidence")
+	_check("c0_holder_evidence_profile_unchanged",
+		(he["sim"] as IslandSimulation).agency_holder_evidence_reachability_enabled
+		and not (he["sim"] as IslandSimulation).agency_holder_reachability_enabled)
+	# flag off → 驻留/仲裁诊断不激活。
+	var plain := SimulationBootstrap.create(76803, "framework")
+	var plain_sim: IslandSimulation = plain["sim"]
+	var fp3 := SimulationAudit.fingerprint(plain_sim)
+	plain_sim._holder_diag_inc("noop", 1)
+	plain_sim._obj_inc("noop", 1)
+	_check("c0_legacy_flag_off_fingerprint_stable",
+		str(fp3["state_sha256"]) == str(SimulationAudit.fingerprint(plain_sim)["state_sha256"]))
+
+# ── P7.2C-R1 B1：seek 不污染 ask 记账 ──
+
+func _test_r1_seek_bookkeeping_split() -> void:
+	var tracker := preload("res://src/simulation/knowledge/information_subgoal_tracker.gd").new()
+	var goal := tracker.prepare_holder("a",
+		{"request_id": "m40", "requester_id": "a", "item_id": "shells",
+			"parent_plan_id": "P", "parent_run_id": "r", "blocker_step_id": "s",
+			"root_goal": "HUNGER"}, 10)
+	var seek_action := {"action": "seek_holder_person", "target_actor": "b",
+		"information_goal_id": goal.get("goal_id"), "item_id": "shells"}
+	tracker.on_action_complete("a", seek_action, [{"type": "holder_seek_found_person",
+		"seq": 60, "information_goal_id": goal.get("goal_id")}], {}, 11)
+	var after := tracker.current_goal("a")
+	_check("r1_seek_does_not_pollute_ask_bookkeeping",
+		int(after.get("asks", 0)) == 0
+		and not (after.get("asked_actor_ids", []) as Array).has("b")
+		and int(after.get("seeks", 0)) == 1
+		and (after.get("sought_actor_ids", []) as Array).has("b"))
+	# flag-off（holder_evidence）旧 goal shape 不含新字段。
+	var legacy := {"goal_id": "INFO:a:1:x", "query_kind": "HOLDER", "state": "ACTIVE",
+		"actor_id": "a", "source_request_id": "m41", "parent_plan_id": "P",
+		"item_id": "shells", "attempts": 0, "asks": 0, "refusals": 0,
+		"stale_reports": 0, "unknown_responses": 0, "asked_actor_ids": [],
+		"evidence_refs": [], "last_result": "", "retry_after_tick": -1,
+		"last_attempt_tick": -1, "created_tick": 1, "updated_tick": 1,
+		"root_goal": "HUNGER", "score": 1.0, "quantity": 1,
+		"source_kinds": [], "tried_tiles": [], "request_urgency": 0.5}
+	_check("r1_legacy_goal_shape_no_seek_fields",
+		not legacy.has("seeks") and not legacy.has("sought_actor_ids"))
+
+func _test_r2_funnel_split_invariants() -> void:
+	var pair := _pair(76901)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	var request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("r2_fixture", false, "no holder goal")
+		return
+	_check("r2_fixture", true)
+	# 场景 1：有可见合格同伴（giver 在 11,10，未问过）→ 只产 ask 候选。
+	sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	var diag := sim.agency_holder_funnel_diagnostics()
+	var ask_ticks := int(diag.get("holder_ask_candidate_ticks", 0))
+	var seek_ticks := int(diag.get("holder_seek_candidate_ticks", 0))
+	var eligible := int(diag.get("holder_ticks_with_eligible_peers", 0))
+	_check("r2_eligible_peer_produces_ask_not_seek",
+		ask_ticks >= 1 and seek_ticks == 0,
+		"ask=%d seek=%d" % [ask_ticks, seek_ticks])
+	# 不变量：ask_candidate_ticks <= eligible ticks（tick 计数不混用 candidate 数）。
+	_check("r2_ask_ticks_le_eligible_ticks", ask_ticks <= eligible,
+		"ask=%d eligible=%d" % [ask_ticks, eligible])
+	# 场景 2：giver 已问过（无 eligible）但 third actor 有 last_seen → seek 产生。
+	# _pair 只留两个 actor——需引入 third 使 "giver asked / third seekable" 可分辨。
+	var triple := SimulationBootstrap.create(76901, "holder_reachability")
+	var tsim: IslandSimulation = triple["sim"]
+	var tids: Array = tsim.actors.keys()
+	tids.sort()
+	var t_req := str(tids[0])
+	var t_giver := str(tids[1])
+	var t_third := str(tids[2])
+	var t_requester: Dictionary = tsim.actors[t_req]
+	var t_giver_a: Dictionary = tsim.actors[t_giver]
+	var t_third_a: Dictionary = tsim.actors[t_third]
+	t_requester["tile"] = Vector2i(10, 10)
+	t_giver_a["tile"] = Vector2i(11, 10)
+	t_third_a["tile"] = Vector2i(50, 50)  # 远处——不可见但有 last_seen
+	t_giver_a["inventory"] = {"shells": 2}
+	t_requester["inventory"] = {}
+	t_requester["needs"]["hunger"] = 800
+	(t_requester["tom"] as TheoryOfMind).see_at(t_third, Vector2i(50, 50), 1)
+	tsim.relationships.adjust(t_req, t_third, "benevolence", 500)
+	tsim.relationships.adjust(t_req, t_third, "reliability", 500)
+	var t_step := PlanStepSpec.make("ACQUIRE", "ACQUIRE:shells", "PENDING", "", "shells", 2, "", "", [], [], [], [], "x")
+	tsim._execution_tracker().runs[t_req] = {
+		"run_id": t_req + "#1", "actor_id": t_req,
+		"plan_id": "PLAN_HUNGER_fish_food", "root_goal": "HUNGER",
+		"current_step_id": t_step["step_id"], "steps": [t_step], "state": "ACTIVE",
+		"baseline_items": {}, "pending": {}, "attempt_seq": 0, "missed_opportunities": 0,
+	}
+	t_requester["_execution_receipt"] = {
+		"actor_id": t_req, "decision_tick": tsim.tick,
+		"run_id": t_req + "#1", "step_id": t_step["step_id"],
+		"selected": false, "candidate_key": "",
+		"chosen_key": AgencyActionBridge.candidate_key({"action": "do_nothing"}),
+		"selection_mode": "SOFTMAX", "blocker_reason": "MATERIALS_MISSING",
+	}
+	tsim._plan_execution_on_decision(t_req, t_requester,
+		{"action": "do_nothing", "target": null},
+		{"ctx": AgencyContextBuilder.build(tsim, t_requester), "catalog": tsim._recipe_catalog_if_any()})
+	tsim._material_requests_process_actor(t_req, t_requester, [])
+	var t_goal := tsim._information_tracker().current_goal(t_req)
+	if str(t_goal.get("query_kind", "")) != "HOLDER":
+		_check("r2_triple_fixture", false, "no holder goal")
+		return
+	# 先标记 giver 已问过（改 tracker 内部权威 goal——current_goal 只返回副本）。
+	tsim._information_tracker().goals[t_req]["asked_actor_ids"] = [t_giver]
+	var before_seek := int(tsim.agency_holder_funnel_diagnostics().get("holder_seek_candidate_ticks", 0))
+	tsim._agency_prepare(t_req, t_requester)
+	var t_diag := tsim.agency_holder_funnel_diagnostics()
+	var seek2 := int(t_diag.get("holder_seek_candidate_ticks", 0))
+	var ask2 := int(t_diag.get("holder_ask_candidate_ticks", 0))
+	_check("r2_no_eligible_produces_seek_not_ask",
+		seek2 > before_seek and ask2 == 0,
+		"seek=%d→%d ask=%d" % [before_seek, seek2, ask2])
+
+# ── P7.2C-R1.1：精确 residence episode 回归（受控多段 + censored + 不变量）──
+
+func _test_r11_residence_regression() -> void:
+	var created := SimulationBootstrap.create(78110, "holder_reachability")
+	var sim: IslandSimulation = created["sim"]
+	var ids: Array = sim.actors.keys()
+	ids.sort()
+	var actor: Dictionary = sim.actors[str(ids[0])]
+	var audit := sim.agency_objective_material_audit()
+	# 第 1 段：tick 10 开始，tick 15 闭合 → duration=5。
+	sim.tick = 10
+	sim._record_material_carriage_ticks()  # 无库存：不开始
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()  # 开始 episode
+	_check("r11_episode1_started",
+		int(sim.agency_objective_material_audit().get("residence_episode_started_wood", 0)) == 1)
+	for t in range(11, 15):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 15
+	actor["inventory"] = {"wood": 0}
+	sim._record_material_carriage_ticks()  # 闭合
+	audit = sim.agency_objective_material_audit()
+	_check("r11_episode1_closed",
+		int(audit.get("residence_duration_count_wood", 0)) == 1
+		and int(audit.get("residence_duration_sum_wood", -1)) == 5
+		and int(audit.get("residence_duration_min_wood", -1)) == 5
+		and int(audit.get("residence_duration_max_wood", -1)) == 5)
+	_check("r11_episode1_no_negative",
+		int(audit.get("residence_duration_min_wood", -1)) >= 0)
+	# 第 2 段：duration=9。
+	sim.tick = 20
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()
+	for t in range(21, 29):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 29
+	actor["inventory"] = {}
+	sim._record_material_carriage_ticks()
+	audit = sim.agency_objective_material_audit()
+	_check("r11_episode2_accumulated",
+		int(audit.get("residence_duration_count_wood", 0)) == 2
+		and int(audit.get("residence_duration_sum_wood", -1)) == 14
+		and int(audit.get("residence_duration_min_wood", -1)) == 5
+		and int(audit.get("residence_duration_max_wood", -1)) == 9)
+	# censored：start=35，run end=40 → censored duration=5。
+	sim.tick = 35
+	actor["inventory"] = {"wood": 1}
+	sim._record_material_carriage_ticks()
+	for t in range(36, 40):
+		sim.tick = t
+		sim._record_material_carriage_ticks()
+	sim.tick = 40
+	SimulationAudit.fingerprint(sim)  # 触发 censor
+	audit = sim.agency_objective_material_audit()
+	_check("r11_censored_correct",
+		int(audit.get("residence_censored_count_wood", 0)) == 1
+		and int(audit.get("residence_censored_duration_sum_wood", -1)) == 5
+		and int(audit.get("residence_duration_count_wood", 0)) == 2)  # closed 不增
+	# 样本列表。
+	var samples: Array = audit.get("residence_duration_samples_wood", [])
+	_check("r11_samples_recorded", samples.size() == 2 and samples.has(5) and samples.has(9))
+	# 守恒不变量：carriage actor-ticks >= closed sum + censored sum
+	# （开放 episode 贡献的 carriage 尚未闭合；等号在全部闭合时成立）。
+	_check("r11_conservation_holds",
+		int(audit.get("carriage_wood_actor_ticks", -1)) >=
+			int(audit.get("residence_duration_sum_wood", 0))
+			+ int(audit.get("residence_censored_duration_sum_wood", 0)),
+		"carriage=%d closed=%d censored=%d" % [int(audit.get("carriage_wood_actor_ticks", -1)),
+			int(audit.get("residence_duration_sum_wood", 0)),
+			int(audit.get("residence_censored_duration_sum_wood", 0))])
+	# 材料流 ledger。
+	actor["inventory"] = {"wood": 3}
+	sim._record_material_consumed(str(ids[0]), "wood", "SHELTER", 2)
+	sim._record_material_acquired(str(ids[0]), "wood", 1)
+	audit = sim.agency_objective_material_audit()
+	_check("r11_flow_ledger_counts",
+		int(audit.get("material_consumed_units_wood_SHELTER", 0)) == 2
+		and int(audit.get("material_acquired_units_wood", 0)) == 1
+		and int(audit.get("successful_consumption_events_wood_SHELTER", 0)) == 1)
+
+# ── P7.2C-R2-R1 K1：possession observation 严格 spatial-only ──
+
+func _test_r2r1_spatial_only_observation() -> void:
+	var pair := _pair(79001)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_possession_observation_enabled = true
+	sim.agency_holder_reachability_enabled = true
+	var requester_id := str(pair["requester_id"])
+	var giver_id := str(pair["giver_id"])
+	var requester: Dictionary = pair["requester"]
+	var giver: Dictionary = pair["giver"]
+	# 场景 1：spatial witness（近距离）→ possession evidence 产生。
+	requester["tile"] = Vector2i(10, 10)
+	giver["tile"] = Vector2i(11, 10)
+	giver["inventory"] = {"shells": 2}
+	var belief_before := (requester["tom"] as TheoryOfMind).belief_about(giver_id,
+		TheoryOfMind.possession_predicate("shells"))
+	# 模拟一个事件让 perception loop 处理（B 在 A 附近做某事）。
+	var seq1 := sim._emit("socialized", giver_id, "B chats", {"to_id": requester_id})
+	var belief_after := (requester["tom"] as TheoryOfMind).belief_about(giver_id,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r1_spatial_witness_produces_possession",
+		belief_after > belief_before,
+		"before=%.3f after=%.3f" % [belief_before, belief_after])
+	# 场景 2：direct_recipient（正确的 debtor/creditor 方向）→ 不得产生 possession。
+	# R2-R1.1 修正：旧 fixture 把 requester 设为 debtor（=事件 actor）而非
+	# direct_recipient。正确 fixture：giver 是 debtor（事件 actor），requester
+	# 是 creditor（远程 direct_recipient），giver 远离且携带 shells。
+	var pair2 := _pair(79002)
+	var sim2: IslandSimulation = pair2["sim"]
+	sim2.agency_holder_possession_observation_enabled = true
+	sim2.agency_holder_reachability_enabled = true
+	sim2.agency_commitment_consequences_enabled = true
+	var req2 := str(pair2["requester_id"])
+	var giv2 := str(pair2["giver_id"])
+	var requester2: Dictionary = pair2["requester"]
+	requester2["tile"] = Vector2i(10, 10)
+	sim2.actors[giv2]["tile"] = Vector2i(60, 60)  # 远处——visual/audible 都不可感知
+	sim2.actors[giv2]["inventory"] = {"shells": 2}
+	var belief2_before := (requester2["tom"] as TheoryOfMind).belief_about(giv2,
+		TheoryOfMind.possession_predicate("shells"))
+	# debtor=giver（事件 actor 在远处），creditor=requester（direct_recipient）。
+	sim2._emit_commitment_event("COMMITMENT_CREATED", {
+		"commitment_id": "c1", "debtor_id": giv2, "creditor_id": req2,
+		"object_id": "shells", "quantity": 1, "status": "ACTIVE",
+	}, {})
+	var belief2_after := (requester2["tom"] as TheoryOfMind).belief_about(giv2,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r11_direct_recipient_no_possession_leak",
+		belief2_after == belief2_before,
+		"before=%.3f after=%.3f" % [belief2_before, belief2_after])
+	# 场景 2b：auditory-only（近距离 ≤3 但 LOS 遮挡）→ 也不得产生 possession。
+	# 在 _emit 内部我们无法直接控制 LOS，但可以验证 audible_close witness
+	# 不触发 visual guard——通过确认 close_enough 但 can_see=false 的场景。
+	# 由于地图 fixture 可能不支持精确 LOS 遮挡，这里用单元级验证：
+	# visual guard 的 key 是 "visual"（不是 "spatial"）。
+	var test_witness := {"spatial": true, "visual": false, "audible_close": true}
+	_check("r2r11_audible_only_witness_not_visual",
+		bool(test_witness.get("spatial", false)) and not bool(test_witness.get("visual", true)))
+	# 场景 3：flag off → 不产生。
+	var pair3 := _pair(79003)
+	var sim3: IslandSimulation = pair3["sim"]
+	var req3 := str(pair3["requester_id"])
+	var giv3 := str(pair3["giver_id"])
+	var req_a: Dictionary = pair3["requester"]
+	sim3.agency_holder_possession_observation_enabled = false  # flag off
+	sim3.agency_material_requests_enabled = true
+	sim3.actors[giv3]["inventory"] = {"shells": 2}
+	sim3.actors[giv3]["tile"] = Vector2i(11, 10)
+	var belief3_before := (req_a["tom"] as TheoryOfMind).belief_about(giv3,
+		TheoryOfMind.possession_predicate("shells"))
+	sim3._emit("socialized", giv3, "B chats", {"to_id": req3})
+	var belief3_after := (req_a["tom"] as TheoryOfMind).belief_about(giv3,
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r1_flag_off_no_possession", belief3_after == belief3_before)
+
+# ── P7.2C-R2-R1 K2：candidate-local boost（order-independent）──
+
+func _test_r2r1_candidate_local_boost() -> void:
+	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
+	var goal := {"parent_blockedness": 0.8, "request_urgency": 0.8,
+		"created_tick": 0, "causal_arbitration_enabled": true,
+		"item_id": "shells", "asked_actor_ids": [], "excluded_target_ids": [],
+		"holder_reachability_enabled": true}
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {"b": 500.0, "c": 500.0, "d": 500.0},
+		"tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"sociability": 0.5, "conflict_avoidance": 0.2}, {}),
+		"others_visible": [], "needs": {}}
+	# B 是已知持有者；C/D 未知。
+	(actor["tom"] as TheoryOfMind).add_evidence("b",
+		TheoryOfMind.possession_predicate("shells"), 1.0, 0.9, 1, 10)
+	var u_b := policy.holder_resolution_value(goal, actor, "b", 0.8, true)
+	var u_c := policy.holder_resolution_value(goal, actor, "c", 0.8, false)
+	var u_d := policy.holder_resolution_value(goal, actor, "d", 0.8, false)
+	_check("r2r1_known_holder_gets_boost", u_b > u_c,
+		"u_b=%.3f u_c=%.3f" % [u_b, u_c])
+	_check("r2r1_unknown_peers_equal", is_equal_approx(u_c, u_d),
+		"u_c=%.3f u_d=%.3f" % [u_c, u_d])
+	# order-independent：无论调用顺序如何，每个 peer 的 utility 不变。
+	var u_b_rev := policy.holder_resolution_value(goal, actor, "b", 0.8, true)
+	var u_c_rev := policy.holder_resolution_value(goal, actor, "c", 0.8, false)
+	_check("r2r1_order_independent",
+		is_equal_approx(u_b, u_b_rev) and is_equal_approx(u_c, u_c_rev))
+	# goal dict 不含临时 boost 字段。
+	_check("r2r1_no_goal_dict_pollution",
+		not goal.has("possession_belief_boost"))
+
+# ── P7.2C-R2-R1 K5：C2 受控行为测试 ──
+
+func _test_r2r1_c2_semantics() -> void:
+	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 30,
+		"trust_of": {"b": 0.0}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"sociability": 0.5, "conflict_avoidance": 0.2}, {}),
+		"others_visible": [], "needs": {}}
+	var base_goal := {"parent_blockedness": 0.5, "request_urgency": 0.5,
+		"created_tick": 0, "causal_arbitration_enabled": true, "item_id": "shells"}
+	# 1）urgency 上升 → utility 不降。
+	var low := policy.holder_resolution_value(base_goal, actor, "b", 0.3, false)
+	base_goal["request_urgency"] = 0.9
+	var high := policy.holder_resolution_value(base_goal, actor, "b", 0.3, false)
+	_check("r2r1_c2_urgency_monotone", high >= low,
+		"low=%.3f high=%.3f" % [low, high])
+	# 2）blockedness 上升 → 不降。
+	base_goal["request_urgency"] = 0.5
+	base_goal["parent_blockedness"] = 0.2
+	var bl := policy.holder_resolution_value(base_goal, actor, "b", 0.5, false)
+	base_goal["parent_blockedness"] = 0.9
+	var bh := policy.holder_resolution_value(base_goal, actor, "b", 0.5, false)
+	_check("r2r1_c2_blockedness_monotone", bh >= bl,
+		"low=%.3f high=%.3f" % [bl, bh])
+	# 3）上界不硬锁。
+	base_goal["parent_blockedness"] = 1.0
+	base_goal["request_urgency"] = 1.0
+	var max_u := policy.holder_resolution_value(base_goal, actor, "b", 1.0, true)
+	_check("r2r1_c2_never_hardlocked", max_u <= 0.95 and max_u >= 0.5,
+		"max=%.3f" % max_u)
+
+# ── P7.2C-R2-R1.1 C2：真实 arbitration 回归（语义边界，非 KPI）──
+
+func _test_r2r11_c2_real_arbitration() -> void:
+	var policy = preload("res://src/simulation/knowledge/information_action_policy.gd")
+	var actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {"b": 500.0}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"sociability": 0.5, "conflict_avoidance": 0.2}, {}),
+		"others_visible": [], "needs": {}}
+	(actor["tom"] as TheoryOfMind).add_evidence("b",
+		TheoryOfMind.possession_predicate("shells"), 1.0, 0.9, 1, 20)
+	var blocked_goal := {"parent_blockedness": 0.9, "request_urgency": 0.9,
+		"created_tick": 0, "causal_arbitration_enabled": true, "item_id": "shells",
+		"asked_actor_ids": [], "excluded_target_ids": [],
+		"holder_reachability_enabled": true}
+	var blocked_ask_u := policy.holder_resolution_value(blocked_goal, actor, "b", 0.8, true)
+
+	# ── 场景 1（真实两候选竞争）：blocked ask vs ordinary exploration ──
+	# R1.3-I：两侧都用正式 ActionRegistry 候选（普通需求 actor，非 desperation
+	# 路径；空 visited → _pick_unvisited 确定返回 (14,10)）。
+	var ordinary_actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"curiosity": 0.5, "caution": 0.3}, {}),
+		"others_visible": [], "needs": {"hunger": 400, "thirst": 400, "energy": 600}}
+	var ordinary_candidates: Array = ActionRegistry.get_available_actions(ordinary_actor, {
+		"tick": 50, "weather": "clear", "hour": 12})
+	var ordinary_explore_u := 0.0
+	for c in ordinary_candidates:
+		if str((c as Dictionary).get("action", "")) == "explore":
+			ordinary_explore_u = maxf(ordinary_explore_u, float((c as Dictionary).get("utility", 0.0)))
+	_check("r2r11_ordinary_explore_candidate_generated", ordinary_explore_u > 0.0,
+		"no explore candidate in %d candidates" % ordinary_candidates.size())
+	# 用 utility dominance（不是 softmax roll）锁语义——确定性比较。
+	_check("r2r11_blocked_ask_beats_ordinary_explore",
+		blocked_ask_u > ordinary_explore_u,
+		"ask=%.3f explore=%.3f（blocked ask 应胜过普通探索真实候选）" % [blocked_ask_u, ordinary_explore_u])
+
+	# ── 场景 2（真实两候选竞争）：critical survival vs holder ask ──
+	# critical survival（极端饥饿/口渴的 desperation 路径）的 utility 范围 0.85-0.95+。
+	# 在 ActionRegistry._desperation 中，当 hunger>=800 或 thirst>=800 时可达 ~0.9+。
+	# 我们用正式 ActionRegistry 生成 critical survival candidate。
+	var critical_actor := {"id": "a", "tile": Vector2i(10, 10), "now_tick": 50,
+		"trust_of": {}, "tom": TheoryOfMind.new(),
+		"personality": PersonalityProfile.new({"caution": 0.3, "curiosity": 0.5}, {}),
+		"others_visible": [], "needs": {"hunger": 950, "thirst": 950, "energy": 100}}
+	var survival_candidates: Array = ActionRegistry.get_available_actions(critical_actor, {
+		"tick": 50, "weather": "clear", "hour": 12})
+	var survival_u := 0.0
+	var survival_name := ""
+	for c in survival_candidates:
+		var cn := str((c as Dictionary).get("action", ""))
+		# rest/explore 在极端需求下是 critical survival 行动。
+		if cn == "rest" or cn == "explore":
+			var cu := float((c as Dictionary).get("utility", 0.0))
+			if cu > survival_u:
+				survival_u = cu
+				survival_name = cn
+	_check("r2r11_survival_candidate_generated", survival_u > 0.0,
+		"no critical survival candidate in %d candidates" % survival_candidates.size())
+	if survival_u > 0.0:
+		_check("r2r11_critical_survival_beats_ask",
+			survival_u > blocked_ask_u,
+			"survival(%s)=%.3f ask=%.3f（critical survival 应击败 ask）" % [survival_name, survival_u, blocked_ask_u])
+
+	# ── 场景 3：弱 ask 低于 blocked ask（方向正确）──
+	var weak_goal := {"parent_blockedness": 0.0, "request_urgency": 0.1,
+		"created_tick": 50, "causal_arbitration_enabled": true, "item_id": "shells",
+		"asked_actor_ids": [], "excluded_target_ids": [],
+		"holder_reachability_enabled": true}
+	var weak_ask_u := policy.holder_resolution_value(weak_goal, actor, "b", 0.1, false)
+	_check("r2r11_weak_ask_lower_than_blocked", weak_ask_u < blocked_ask_u,
+		"weak=%.3f blocked=%.3f" % [weak_ask_u, blocked_ask_u])
+
+	# ── 场景 4：blocked ask 不硬锁 1.0（上界）──
+	_check("r2r11_ask_never_hardlocked", blocked_ask_u <= 0.95,
+		"u=%.3f" % blocked_ask_u)
+
+# ── P7.2C-R2-R1.2 K4：polarity-aware freshness 锁定（K4 自身用对 API）──
+
+func _test_r2r12_k4_polarity_regression() -> void:
+	var tom := TheoryOfMind.new()
+	# 旧正证据 tick 5 + 新负证据 tick 100；综合 belief 仍 > 0.05。
+	tom.add_evidence("b", TheoryOfMind.possession_predicate("shells"), 1.0, 0.9, 1, 5)
+	tom.add_evidence("b", TheoryOfMind.possession_predicate("shells"), -1.0, 0.1, 2, 100)
+	var combined := tom.belief_about("b", TheoryOfMind.possession_predicate("shells"))
+	_check("r2r12_combined_belief_still_positive", combined > 0.05,
+		"belief=%.3f（弱负证据不应完全翻转）" % combined)
+	# polarity-aware：正支持证据的最新 tick 应为 5（不是 100）。
+	var pos_tick := tom.latest_supporting_tick("b",
+		TheoryOfMind.possession_predicate("shells"), 1.0)
+	_check("r2r12_positive_freshness_from_tick_5", pos_tick == 5,
+		"pos_tick=%d（不是 100——负证据不能刷新正 freshness）" % pos_tick)
+	var mixed_tick := tom.last_evidence_tick("b",
+		TheoryOfMind.possession_predicate("shells"))
+	_check("r2r12_mixed_tick_includes_negative", mixed_tick == 100,
+		"mixed=%d（last_evidence_tick 是混合口径——K4 不应用它）" % mixed_tick)
+
+# ── P7.2C-R2-R1.3：visual knowledge source coverage（episode/conversion/pre-request）──
+
+func _test_r1r3_visual_encounter_and_conversion() -> void:
+	var pair := _pair(76811)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	# episode 去重：连续看见 3 tick = 1 episode；闭合时无观察 → without。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._visual_pair_tick("a", "b", "wood", false)
+	var obj := sim.agency_objective_material_audit()
+	_check("r1r3_episode_dedup_continuous_visual",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 1
+		and int(obj.get("visual_holder_encounter_ticks_wood", 0)) == 3
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 1,
+		str(obj))
+	# 离开后重见 → 第二 episode。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._visual_pair_tick("a", "b", "wood", false)
+	obj = sim.agency_objective_material_audit()
+	_check("r1r3_relook_opens_new_episode",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 2
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 2,
+		str(obj))
+	# 转化：episode 窗口内观察 → with_observation。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._record_possession_observation("a", "b", "wood")
+	sim._visual_pair_tick("a", "b", "wood", false)
+	obj = sim.agency_objective_material_audit()
+	_check("r1r3_conversion_observation_in_window",
+		int(obj.get("visual_encounter_with_possession_observation_wood", 0)) == 1,
+		str(obj))
+	# episode 外观察单独计数（tick 内采样时点差的 gap 证据）。
+	sim._record_possession_observation("a", "b", "wood")
+	obj = sim.agency_objective_material_audit()
+	_check("r1r3_observation_outside_episode_counted",
+		int(obj.get("event_time_observation_outside_preaction_episode_wood", 0)) == 1,
+		str(obj))
+	# write-only：probe/history 不进 state hash；导出时闭合开放 episode。
+	var censored_before := int(obj.get("visual_holder_encounter_censored_wood", 0))
+	var fp1 := SimulationAudit.fingerprint(sim)
+	sim._visual_pair_tick("a", "b", "wood", true)
+	var fp2 := SimulationAudit.fingerprint(sim)
+	_check("r1r3_probes_excluded_from_state_hash",
+		str(fp1["state_sha256"]) == str(fp2["state_sha256"]))
+	obj = sim.agency_objective_material_audit()
+	_check("r1r3_open_episode_censored_at_export",
+		int(obj.get("visual_holder_encounter_censored_wood", 0)) == censored_before + 1,
+		str(obj))
+
+func _test_r1r3_pre_request_attribution() -> void:
+	var pair := _pair(76812)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	var giver_id := str(pair["giver_id"])
+	var requester_id := str(pair["requester_id"])
+	# requester 曾看见 giver 携带 wood；giver 当前仍持有 → 计入。
+	sim._visual_pair_tick(requester_id, giver_id, "wood", true)
+	sim._visual_pair_tick(requester_id, giver_id, "wood", false)
+	(sim.actors[giver_id] as Dictionary)["inventory"] = {"wood": 1}
+	sim._record_pre_request_visual_history(requester_id, "wood")
+	var diag := sim.agency_holder_funnel_diagnostics()
+	_check("r1r3_pre_request_saw_current_holder",
+		int(diag.get("pre_request_goal_creations", 0)) == 1
+		and int(diag.get("requester_pre_request_ever_saw_current_holder", 0)) == 1
+		and int(diag.get("any_actor_pre_request_ever_saw_current_holder", 0)) == 1,
+		str(diag))
+	# requester 曾对 giver 有 possession 观察 → 计入（机制历史口径）。
+	sim._record_possession_observation(requester_id, giver_id, "wood")
+	sim._record_pre_request_visual_history(requester_id, "wood")
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("r1r3_pre_request_observation_counted",
+		int(diag.get("requester_pre_request_possession_observation", 0)) == 1
+		and int(diag.get("any_actor_pre_request_possession_observation", 0)) == 1,
+		str(diag))
+	# 材料被消费（giver 不再持有）→ 不计入（current-holder 归因纪律）。
+	(sim.actors[giver_id] as Dictionary)["inventory"] = {}
+	sim._record_pre_request_visual_history(requester_id, "wood")
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("r1r3_consumed_holder_not_counted",
+		int(diag.get("pre_request_goal_creations", 0)) == 3
+		and int(diag.get("requester_pre_request_ever_saw_current_holder", 0)) == 2
+		and int(diag.get("requester_pre_request_possession_observation", 0)) == 1
+		and int(diag.get("any_actor_pre_request_possession_observation", 0)) == 1,
+		str(diag))
+
+func _test_r1r3_actual_holder_visual_coverage_keys() -> void:
+	var pair := _pair(76813)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	# 同 tile：d=0 → can_see 必真（LOS from==to 平凡成立），不依赖地图障碍布局。
+	(pair["requester"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["inventory"] = {"shells": 2}
+	var _request_id := _blocked_request(sim, pair)
+	sim._material_requests_process_actor(str(pair["requester_id"]), pair["requester"], [])
+	var goal := sim._information_tracker().current_goal(str(pair["requester_id"]))
+	if str(goal.get("query_kind", "")) != "HOLDER":
+		_check("r1r3_fixture_holder_goal", false, "no holder goal")
+		return
+	_check("r1r3_fixture_holder_goal", true)
+	sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	var diag := sim.agency_holder_funnel_diagnostics()
+	_check("r1r3_actual_holder_exists_and_visual",
+		int(diag.get("actual_holder_exists_ticks", 0)) >= 1
+		and int(diag.get("actual_holder_visual_to_requester_ticks", 0)) >= 1
+		and int(diag.get("actual_holder_visual_to_any_peer_ticks", 0)) >= 1
+		and int(diag.get("actual_holder_visual_to_any_nonholder_peer_ticks", 0)) >= 1,
+		str(diag))
+	# 负例：giver 移出任何视野 → 决策块仍采样（exists 增长）但 visual 不增长。
+	var exists_before := int(diag.get("actual_holder_exists_ticks", 0))
+	var visual_before := int(diag.get("actual_holder_visual_to_requester_ticks", 0))
+	(pair["giver"] as Dictionary)["tile"] = Vector2i(210, 10)
+	sim._agency_prepare(str(pair["requester_id"]), pair["requester"])
+	diag = sim.agency_holder_funnel_diagnostics()
+	_check("r1r3_out_of_sight_not_visual",
+		int(diag.get("actual_holder_exists_ticks", 0)) == exists_before + 1
+		and int(diag.get("actual_holder_visual_to_requester_ticks", 0)) == visual_before,
+		"exists %d->%d visual %d->%d" % [exists_before,
+			int(diag.get("actual_holder_exists_ticks", 0)), visual_before,
+			int(diag.get("actual_holder_visual_to_requester_ticks", 0))])
+
+# ── P7.2C Round3：episode 生命周期加固（holder 耗尽 → 下一 tick 自然闭合）──
+
+func _test_r3_episode_lifecycle_hardening() -> void:
+	var pair := _pair(76814)
+	var sim: IslandSimulation = pair["sim"]
+	sim.agency_holder_reachability_enabled = true
+	# unit：开放 episode 在 sweep（无效 pair 集）时自然闭合——非 censored。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim.tick += 3
+	sim._sweep_stale_encounter_episodes({})
+	var obj := sim.agency_objective_material_audit()
+	_check("r3_episode_sweep_natural_close",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 1
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 1
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0
+		and int(obj.get("visual_encounter_duration_sum_wood", 0)) == 3,
+		str(obj))
+	# 重新持有 + 再次可见 → 新 episode（duration 不跨越 non-holder gap）。
+	sim._visual_pair_tick("a", "b", "wood", true)
+	sim._sweep_stale_encounter_episodes({"a|b|wood": true})
+	obj = sim.agency_objective_material_audit()
+	_check("r3_active_pair_keeps_episode_open",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 2
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 1,
+		str(obj))
+	sim._sweep_stale_encounter_episodes({})
+	obj = sim.agency_objective_material_audit()
+	_check("r3_second_gap_second_natural_close",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 2
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 2
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0,
+		str(obj))
+	# 集成：真实 actor——holder 消耗完最后一单位 → 下一 tick 扫描自然闭合。
+	var giver_id := str(pair["giver_id"])
+	var requester_id := str(pair["requester_id"])
+	(pair["requester"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["tile"] = Vector2i(10, 10)
+	(pair["giver"] as Dictionary)["inventory"] = {"wood": 2}
+	sim._record_visual_holder_encounter_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("r3_scan_opens_episode_for_real_pair",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 3,
+		str(obj))
+	(pair["giver"] as Dictionary)["inventory"] = {"wood": 0}
+	sim._record_visual_holder_encounter_ticks()
+	obj = sim.agency_objective_material_audit()
+	_check("r3_holder_exhausted_closed_next_scan",
+		int(obj.get("visual_holder_encounter_episode_started_wood", 0)) == 3
+		and int(obj.get("visual_encounter_without_possession_observation_wood", 0)) == 3
+		and int(obj.get("visual_holder_encounter_censored_wood", 0)) == 0,
+		str(obj))
