@@ -480,7 +480,7 @@ func _find_spawn_near(poi_id: String) -> Vector2i:
 
 func _refresh_hud() -> void:
 	var model := {
-		"view_schema_version": "0.2",
+		"view_schema_version": "0.3",
 		"state_revision": island_sim.tick if island_sim != null else 0,
 		"paused": sim_paused,
 		"speed_multiplier": speed_multiplier,
@@ -615,140 +615,11 @@ func _island_goal_text(a: Dictionary) -> String:
 	return "思考中..."
 
 ## UI-R1：island 选中角色的结构化 ViewModel（presentation adapter 组装，HUD 只渲染）。
-## 字段定义见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.2）。
-const TRAIT_LABELS := {
-	"resilience": "韧性", "curiosity": "好奇", "action_bias": "行动", "caution": "谨慎",
-	"empathy": "共情", "sociability": "社交", "altruism": "利他", "expressiveness": "表达",
-	"conflict_avoidance": "避冲突", "pragmatism": "务实",
-}
-
+## 字段定义见 docs/ui/OBSERVER_VIEW_MODEL.md（view_schema_version 0.3）。
 func _build_island_selected(a: Dictionary) -> Dictionary:
-	var p: PersonalityProfile = a["personality"]
-	var trace: Dictionary = a.get("last_decision_trace", {})
-	var needs: Dictionary = a["needs"]
-	var intentions: IntentionManager = a.get("intentions", null)
-	var intention: Dictionary = intentions.current_intention if intentions != null and intentions.has_intention() else {}
-	var sel := {
-		"id": selected_actor_id,
-		"display_name": a["display_name"],
-		"status_text": str(a["activity"]),
-		"activity_text": str(a["activity"]),
-		"goal_text": _island_goal_text(a),
-		"location_text": "(%d, %d)" % [a["tile"].x, a["tile"].y],
-		"inventory_text": _inv_text(a["inventory"]),
-		"needs_text": "饿%d/渴%d/累%d/孤独%d" % [
-			int(needs.get("hunger", 0)), int(needs.get("thirst", 0)),
-			1000 - int(needs.get("energy", 1000)), int(needs.get("social", 0)),
-		],
-	}
-	var inv_items: Array = []
-	for item in a["inventory"]:
-		var n: int = int(a["inventory"][item])
-		if n > 0:
-			inv_items.append({"id": str(item), "count": n})
-	sel["inventory_items"] = inv_items
-	var reason := str(trace.get("reason", ""))
-	sel["decision_text"] = reason
-	sel["decision"] = {
-		"plan": str(intention.get("desc", _island_goal_text(a))),
-		"step": str(a["activity"]),
-		"reason": reason if reason != "" else "—",
-		"blocker": str(trace.get("blocker", "无")),
-		"next_step": str(intention.get("desc", "—")) if not intention.is_empty() else "—",
-	}
-	var memory_items: Array = []
-	for m in a.get("memories", []):
-		memory_items.append({
-			"day": int(m.get("day", 0)), "tick": int(m.get("tick", 0)),
-			"text": str(m.get("text", "")), "type": str(m.get("type", "")),
-			"counterpart": str(m.get("counterpart_id", "")),
-			"importance": float(m.get("appraisal_goal_congruence", 0.0)),
-		})
-	sel["memory_items"] = memory_items
-	var traits: Array = []
-	for key in TRAIT_LABELS:
-		traits.append({"key": key, "label": TRAIT_LABELS[key], "value": float(p.traits.get(key, 0.5))})
-	var emotions: Array = []
-	for key in ["joy", "fear", "anger", "sadness", "guilt"]:
-		var v: float = p.emotions.get(key, 0.0)
-		if absf(v) > 0.05:
-			emotions.append({"key": key, "value": v})
-	var beliefs: Array = []
-	for text in p.beliefs:
-		beliefs.append({"text": str(text), "weight": float(p.beliefs[text]["weight"])})
-	sel["personality"] = {"traits": traits, "emotions": emotions, "beliefs": beliefs}
-	var rel_rows: Array = []
-	var tom: TheoryOfMind = a.get("tom", null)
-	for oid in island_sim.actors:
-		if oid == selected_actor_id:
-			continue
-		# 两层分离（v3）：真实有向关系边（RelationshipStore 四维 + 综合信任）
-		# 与主观心智模型（TheoryOfMind 信念）不得混用
-		var row := {
-			"other_id": oid,
-			"other_name": str(island_sim.actors[oid]["display_name"]),
-			"trust": int(island_sim.relationships.get_trust(selected_actor_id, oid)),
-			"benevolence": int(island_sim.relationships.get_dim(selected_actor_id, oid, "benevolence")),
-			"reliability": int(island_sim.relationships.get_dim(selected_actor_id, oid, "reliability")),
-			"obligation": int(island_sim.relationships.get_dim(selected_actor_id, oid, "obligation")),
-			"fear": int(island_sim.relationships.get_dim(selected_actor_id, oid, "fear")),
-			"change": "",
-		}
-		if tom != null:
-			var m: Dictionary = tom.model_of(oid)
-			row["tom"] = {
-				"has_food": float(m.get("has_food", 0.0)),
-				"generous": float(m.get("generous", 0.0)),
-				"reliable": float(m.get("reliable", 0.0)),
-			}
-		rel_rows.append(row)
-	sel["relationship_rows"] = rel_rows
-	var hist: Array = []
-	var hist_by_seq := {}
-	for i in range(island_sim.events.size() - 1, -1, -1):
-		var e: Dictionary = island_sim.events[i]
-		if str(e.get("actor_id", "")) == selected_actor_id or selected_actor_id in (e.get("actor_ids", []) as Array):
-			hist.append({"day": int(e.get("day", 0)), "seq": int(e.get("seq", 0)), "text": str(e.get("text", ""))})
-			hist_by_seq[int(e.get("seq", 0))] = e
-			if hist.size() >= 12:
-				break
-	sel["history_rows"] = hist
-	var display_name := str(a["display_name"])
-	var hist_dialogue: Array = []
-	for dl in _last_dialogue(6):
-		if str(dl.get("speaker", "")) == display_name:
-			hist_dialogue.append(dl)
-	sel["history_dialogue_rows"] = hist_dialogue
-	sel["history_chain_rows"] = _actor_chain_rows(hist_by_seq)
-	return sel
-
-## History 页第三段：该角色自身带 cause_seq 事件的因果步（无则空，占位由 HUD 显示）。
-func _actor_chain_rows(hist_by_seq: Dictionary) -> Array:
-	var steps: Array = []
-	for seq in hist_by_seq:
-		var e: Dictionary = hist_by_seq[seq]
-		var cause := int(e.get("cause_seq", 0))
-		if cause <= 0 or not hist_by_seq.has(cause):
-			continue
-		var ce: Dictionary = hist_by_seq[cause]
-		steps.append("E%d %s → E%d %s" % [cause, str(ce.get("text", "")), seq, str(e.get("text", ""))])
-	return steps
-
-## 最近 N 条对话转录（与底部对话页同源的轻量复取，不新建状态）。
-func _last_dialogue(n: int) -> Array:
-	var out: Array = []
-	var recent_dlg: Array = island_sim.events.slice(maxi(0, island_sim.events.size() - 30), island_sim.events.size())
-	for e in recent_dlg:
-		var speaker_id := str(e.get("actor_id", ""))
-		if speaker_id == "" or not island_sim.actors.has(speaker_id):
-			continue
-		var sa := SpeechAct.from_event(e, island_sim.actors[speaker_id])
-		if sa.is_empty():
-			continue
-		var utter: Dictionary = TemplateDialogueRenderer.render(sa, str(island_sim.actors[speaker_id]["display_name"]))
-		if bool(utter.get("ok", false)):
-			out.append({"day": int(e.get("day", 1)), "speaker": str(island_sim.actors[speaker_id]["display_name"]), "text": str(utter.get("text", "")), "act": str(sa.get("act_type", "")), "seq": int(e.get("seq", 0))})
-	return out.slice(maxi(0, out.size() - n), out.size())
+	# UI-R2：大脑 ViewModel 组装下沉到 presentation builder（只读、无副作用、带 provenance）。
+	# observer_main 只负责调用与传参——不再在此膨胀组装逻辑。
+	return NpcBrainViewModel.build(island_sim, selected_actor_id)
 
 ## 由最近事件的 cause_seq 派生因果链视图（只读展示派生，不改模拟事件）。
 func _build_causal_chains(events: Array) -> Array:

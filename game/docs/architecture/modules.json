@@ -146,7 +146,8 @@
         "game/src/presentation/npc_2d.gd",
         "game/src/presentation/pixel_tileset.gd",
         "game/src/presentation/world2d_projector.gd",
-        "game/scenes/observer/npc_2d.tscn"
+        "game/scenes/observer/npc_2d.tscn",
+        "game/src/presentation/npc_brain_view_model.gd"
       ],
       "public_entrypoints": [
         "投影/视觉；动画完成不决定故事结果"

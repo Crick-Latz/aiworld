@@ -121,30 +121,43 @@ python3 narrative-learning/compile_cases.py \
 
 现有程序可以在进程内持续推进并输出完整事件记录。长期存档恢复、跨版本迁移和事件归档压缩仍需要专门实现。当前默认案例包为工程测试样本，运行配置不会自动将它注入角色决策。LLM 的后续接入必须经过结构化候选与合法性检查，世界状态继续由规则系统裁决。
 
-## 7. UI 观察模式（UI-R1 2D 像素原型）
+## 7. UI 观察模式（UI-R1 2D 像素原型 + UI-R2 大脑观察器）
 
 观察模式默认进入 2D 俯视像素小地图原型（48×36 六分区舞台；内部渲染 480×270、16×16
 图块、整数倍放大，窗口默认 1920×1080；HUD 为游戏式覆盖——未选中时 Inspector 收起、
 时间线默认收起）。此 48×36 为 observer-only 小世界配置（改变 observer 会话的地图
 输入，不等于 headless/default 世界）。`AIW_UI_MAP=full` 可让观察模式回到 64×64 全图。
 
+选中 NPC 后 Inspector 展开七页（UI-R2）：概览 / 决策 / 计划 / 认知 / 关系 / 记忆 /
+社会。数据由 `game/src/presentation/npc_brain_view_model.gd`（`NpcBrainViewModel.build`，
+presentation-only，只读不写）从模拟一次构建；每个字段带 provenance 徽章——
+`[事实]` 客观世界状态、`[主观]` 角色自己的信念/判断、`[推导]` UI 侧换算
+（如 fatigue = 1000 - energy）。决策页候选效用直接渲染决策留痕
+`trace.top_candidates`（softmax 输入），UI 不自算 utility；认知页的他人持有判断
+（`has_item:*` 谓词、置信度、证据 tick、最后目击）来自 P7.2B holder evidence
+真实数据。计划页区分「当前执行 LIVE」（`agency_plan_run`，root goal 只来自 live run）与
+「上次决策快照」（decision trace）；社会页将持有者情报（`holder_information_*`）与
+资源来源情报（`source_information_*`）分桶显示。Why chain 为确定性串联（无 LLM），节点各自带 provenance。
+
 ```bash
-# 正式观察（island 认知岛模拟 + 2D 像素世界 + Inspector/时间线）
+# 正式观察（island 认知岛模拟 + 2D 像素世界 + 七页大脑 Inspector/时间线）
 tools/Godot_v4.7.2-stable_win64_console.exe --path game
 
-# 离线 HUD 布局预览（无模拟依赖；fixture 见 scenes/ui/ui_preview.gd）
+# 离线 HUD 布局预览（无模拟依赖；20 个 fixture 见 scenes/ui/ui_preview.gd，含 10 个 BRAIN_*）
 tools/Godot_v4.7.2-stable_win64_console.exe --path game res://scenes/ui/ui_preview.tscn
-#   AIW_PREVIEW_FIXTURE=NPC_SELECTED 等可选夹具；AIW_PREVIEW_TAB=memory 可预选页
+#   AIW_PREVIEW_FIXTURE=BRAIN_TRUTH_VS_SUBJECTIVE 等可选夹具；AIW_PREVIEW_TAB=mind 可预选页
 
-# 截图工具（窗口模式）
-tools/Godot_v4.7.2-stable_win64_console.exe --path game res://scenes/observer/ui_capture.tscn --   --mode=observer --select=npc_weila --tab=memory --out=D:/abs/shot.png --frames=240
+# 截图工具（窗口模式；scroll=N 滚动当前 Inspector 页到指定行，dump=lo-hi 转写行到日志）
+tools/Godot_v4.7.2-stable_win64_console.exe --path game res://scenes/observer/ui_capture.tscn --   --mode=observer --select=npc_weila --tab=overview --out=D:/abs/shot.png --frames=320
 
 # 旧 3D 演示模式（wander/story）仍可用：
 AIW_MODE=wander tools/Godot_v4.7.2-stable_win64_console.exe --path game
 ```
 
-ViewModel 契约与字段清单见 `docs/ui/OBSERVER_VIEW_MODEL.md`；像素资产（全部自制占位，
-可再生成）见 `docs/ui/ASSET_MANIFEST.md`；架构与已知限制见 `docs/ui/ui-architecture.md`。
+ViewModel 契约与字段清单见 `docs/ui/OBSERVER_VIEW_MODEL.md`（0.3，七页）；大脑数据
+来源与 provenance 规则见 `docs/ui/NPC_BRAIN_DATA_PROVENANCE.md`；UI 侧数据缺口登记见
+`docs/ui/UI_R2_VIEWMODEL_GAPS.md`；像素资产（全部自制占位，可再生成）见
+`docs/ui/ASSET_MANIFEST.md`；架构与已知限制见 `docs/ui/ui-architecture.md`。
 
 ## 8. GitHub 自动验收
 
